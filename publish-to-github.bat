@@ -18,6 +18,10 @@ git rev-parse --verify HEAD >nul 2>nul || (echo Не удалось создат
 
 echo.
 echo Отправляю на GitHub... Если откроется окно входа — войдите в аккаунт FilonisSF.
+git push -u origin main && goto pushed
+rem GitHub already has files we don't (README/LICENSE made when the repo was created): merge them in, our files win on conflicts
+echo На GitHub уже есть файлы ^(например README^) — объединяю с ними...
+git pull --no-rebase --allow-unrelated-histories -X ours --no-edit origin main
 git push -u origin main || (
   echo.
   echo Не получилось отправить. Проверьте:
@@ -25,6 +29,8 @@ git push -u origin main || (
   echo  2. Вы вошли в окне входа GitHub ^(если окна не было — запустите этот файл ещё раз^).
   pause & exit /b
 )
+:pushed
+echo Готово: https://github.com/FilonisSF/AsteriaLauncher
 
 set /p REL=Выпустить обновление лаунчера %VER% для всех игроков? (y/n):
 if /i "%REL%"=="y" (
