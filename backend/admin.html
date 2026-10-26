@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Asteria — админ-панель</title>
+<style>
+:root{--bg:#040a11;--panel:rgba(12,26,40,.72);--card:rgba(20,42,60,.55);--line:rgba(255,255,255,.08);--text:#e6fbff;--muted:#8fb3c0;--a1:#0ea5e9;--a2:#22d3ee;--ok:#34d399;--warn:#f59e0b;--bad:#f43f5e}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 Inter,Segoe UI,system-ui,sans-serif;color:var(--text);min-height:100vh;background:var(--bg);overflow-x:hidden}
+.aur{position:fixed;inset:-20%;z-index:-1;filter:blur(80px);opacity:.7;pointer-events:none}
+.aur i{position:absolute;border-radius:50%;animation:dr 28s ease-in-out infinite alternate}
+.aur i:nth-child(1){width:45vw;height:45vw;left:2%;top:0;background:radial-gradient(circle,rgba(34,211,238,.35),transparent 65%)}
+.aur i:nth-child(2){width:50vw;height:50vw;right:0;bottom:0;background:radial-gradient(circle,rgba(14,165,233,.3),transparent 65%);animation-delay:-9s}
+.aur i:nth-child(3){width:30vw;height:30vw;left:45%;top:35%;background:radial-gradient(circle,rgba(168,85,247,.25),transparent 65%);animation-delay:-15s}
+@keyframes dr{50%{transform:translate(5vw,4vh) scale(1.1)}100%{transform:translate(-4vw,-2vh)}}
+.wrap{max-width:1240px;margin:0 auto;padding:22px 18px 70px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.logo{width:42px;height:42px;filter:drop-shadow(0 0 14px rgba(34,211,238,.6))}
+h1{font-size:22px;margin:0;font-weight:850}
+h1 b{background:linear-gradient(90deg,var(--a2),var(--a1));-webkit-background-clip:text;color:transparent}
+h2{font-size:16px;margin:0 0 12px;font-weight:800}
+h3{font-size:14px;margin:0 0 8px}
+.muted{color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:18px;backdrop-filter:blur(16px);margin-bottom:16px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px}
+.grid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr) 380px}
+.g2{display:grid;gap:12px;grid-template-columns:1fr 1fr}.g3{display:grid;gap:12px;grid-template-columns:repeat(3,1fr)}
+@media(max-width:960px){.grid,.g2,.g3{grid-template-columns:1fr}}
+input,select,textarea{background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:9px 12px;font:inherit;outline:none;width:100%}
+input:focus,textarea:focus,select:focus{border-color:var(--a2);box-shadow:0 0 0 3px rgba(34,211,238,.18)}
+select option{background:#0b1a26}
+textarea{min-height:72px;resize:vertical}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);font-weight:650}
+label.f>span{letter-spacing:.02em}
+button{font:inherit;font-weight:700;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--text);border-radius:12px;padding:8px 13px;cursor:pointer;transition:.15s;white-space:nowrap}
+button:hover{border-color:var(--a2);transform:translateY(-1px)}
+.primary{background:linear-gradient(135deg,var(--a1),var(--a2));border-color:transparent;color:#fff;box-shadow:0 8px 22px rgba(14,165,233,.3)}
+.danger:hover{border-color:var(--bad);color:var(--bad)}
+.ghost{background:transparent;border-color:transparent}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;padding:4px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid var(--line);margin-bottom:16px;width:fit-content}
+.tabs button{border:0;background:transparent;color:var(--muted);padding:9px 16px}
+.tabs button.on{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;box-shadow:0 6px 18px rgba(14,165,233,.35)}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;text-align:left;color:var(--muted);font-weight:650;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:hover td{background:rgba(255,255,255,.025)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:750;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.07)}
+.prem{background:linear-gradient(135deg,#f59e0b,#ec4899);color:#fff}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:#64748b}.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:11px 18px;border-radius:14px;backdrop-filter:blur(16px);display:none;z-index:9}
+.files div{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.hidden{display:none}
+.login{max-width:440px;margin:12vh auto}
+code{background:rgba(255,255,255,.07);padding:1px 6px;border-radius:6px}
+.items{display:flex;flex-direction:column;gap:10px}
+.item{display:grid;gap:12px;grid-template-columns:150px minmax(0,1fr) auto;align-items:start}
+.thumb{width:150px;height:96px;border-radius:14px;object-fit:cover;background:linear-gradient(135deg,#0e3a4f,#123049);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;overflow:hidden;position:relative}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb .up{position:absolute;inset:auto 6px 6px auto;padding:4px 8px;font-size:11px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 11px;border-radius:999px;background:rgba(34,211,238,.13);font-weight:700;font-size:13px}
+.chip button{padding:0 6px;border:0;background:transparent;color:var(--muted)}
+.lang{display:inline-flex;gap:2px;padding:2px;border-radius:10px;background:rgba(255,255,255,.05)}
+.lang button{border:0;padding:3px 9px;font-size:11px;background:transparent;color:var(--muted)}.lang button.on{background:rgba(34,211,238,.2);color:var(--text)}
+.save{position:sticky;bottom:14px;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.preview{border-radius:18px;overflow:hidden;position:relative;height:150px;background:#0b1a26}
+.preview img{width:100%;height:100%;object-fit:cover}
+.preview .t{position:absolute;inset:auto 0 0 0;padding:12px;color:#fff;font-weight:800;background:linear-gradient(to top,rgba(0,0,0,.85),transparent)}
+.drag{cursor:grab;color:var(--muted);padding:6px}
+</style>
+</head>
+<body>
+<div class="aur"><i></i><i></i><i></i></div>
+<div class="wrap">
+  <header>
+    <svg class="logo" viewBox="0 0 32 32"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a5f3fc"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient></defs><polygon points="16,1 19.5,12.5 31,16 19.5,19.5 16,31 12.5,19.5 1,16 12.5,12.5" fill="url(#g)"/><polygon points="16,1 19.5,12.5 16,16" fill="#fff" opacity=".6"/><polygon points="31,16 19.5,19.5 16,16" fill="#000" opacity=".2"/></svg>
+    <h1><b>Asteria</b> · админ-панель</h1>
+    <span class="muted" style="margin-left:auto" id="who"></span>
+  </header>
+
+  <div id="loginBox" class="panel login">
+    <h2>Вход</h2>
+    <p class="muted">Ключ администратора напечатан в окне бэкенда при запуске и лежит в <code>backend/data/admin-key.txt</code>.</p>
+    <div class="row"><input id="key" type="password" placeholder="Ключ администратора" style="flex:1"><button class="primary" onclick="login()">Войти</button></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="tabs" id="tabs"><button data-t="content" class="on">Содержимое лаунчера</button><button data-t="servers">Серверы</button><button data-t="files">Моды и ключи</button></div>
+
+    <!-- ============ subscriptions -->
+    <section data-p="subs" class="hidden">
+      <div class="panel">
+        <h2>Выдать подписку</h2>
+        <div class="row">
+          <input id="gName" placeholder="Ник игрока" style="flex:1;min-width:160px;width:auto">
+          <select id="gDays" style="width:auto"><option value="7">7 дней</option><option value="30" selected>30 дней</option><option value="90">90 дней</option><option value="365">1 год</option><option value="0">Навсегда</option></select>
+          <button class="primary" onclick="grant(gName.value, +gDays.value)">Выдать PREMIUM</button>
+          <button class="danger" onclick="revoke(gName.value)">Снять</button>
+        </div>
+        <p class="muted" style="margin:10px 0 0">Если у игрока уже есть PREMIUM, дни добавляются к текущему сроку. Лаунчер игрока увидит подписку в течение минуты (или сразу по кнопке «Обновить статус» в профиле); визуалы включатся при следующем нажатии «Играть».</p>
+      </div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Игроки <span class="muted" id="cnt"></span></h2><input id="flt" placeholder="Поиск" oninput="draw()" style="width:220px"></div>
+        <div style="overflow:auto"><table><thead><tr><th></th><th>Ник</th><th>Подписка</th><th>До</th><th>Был в лаунчере</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
+        <p class="muted" id="empty" style="display:none">Пока никого. Игроки появятся после первого запуска игры из лаунчера.</p>
+      </div>
+    </section>
+
+    <!-- ============ launcher content (visual editor) -->
+    <section data-p="content">
+      <div class="grid">
+        <div>
+          <div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Главный сервер</h2><div class="lang" data-lang></div></div>
+            <div class="g3" style="margin-top:10px"><label class="f"><span>Название</span><input data-k="server.name"></label><label class="f"><span>Адрес (IP)</span><input data-k="server.ip"></label><label class="f"><span>Рекомендуемая версия</span><select data-k="server.recommended"></select></label></div>
+            <label class="f" style="margin-top:10px"><span>Описание на главной</span><textarea data-k="about.{L}" rows="3"></textarea></label></div>
+
+          <div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Новости</h2><div class="row"><div class="lang" data-lang></div><button onclick="add('news')">+ Новость</button></div></div>
+            <p class="muted" style="margin:6px 0 12px">Карточки на главной. Картинку можно загрузить или вставить ссылку. Порядок — как в списке (стрелки ↑↓).</p>
+            <div class="items" id="news"></div></div>
+
+          <div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Ивенты сервера</h2><button onclick="add('events')">+ Ивент</button></div>
+            <p class="muted" style="margin:6px 0 10px">Карточки «Ивенты сервера» на главной: название, мир, короткое описание (поле «Коротко») и подробности по клику. Время не показывается.</p>
+            <label class="f" style="margin-bottom:10px"><span>Текст над карточками</span><textarea data-k="eventsIntro.ru" rows="2"></textarea></label>
+            <div class="items" id="events"></div></div>
+
+          <div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Ссылки</h2><button onclick="add('links')">+ Ссылка</button></div>
+            <div class="items" id="links" style="margin-top:10px"></div></div>
+
+          <div class="panel"><h2>Быстрые команды</h2><div class="chips" id="cmds"></div>
+            <div class="row" style="margin-top:10px"><input id="cmdIn" placeholder="/команда" style="flex:1;width:auto"><button onclick="addCmd()">Добавить</button></div></div>
+
+          <div class="panel"><h2>Картинки версий</h2><p class="muted" style="margin-top:0">Пусто — встроенные постеры лаунчера и официальные картинки Mojang.</p><div class="g3" id="vimgs"></div></div>
+
+          <div class="panel"><h2>Discord и сайт</h2><div class="g2">
+            <label class="f"><span>Discord Application ID (статус «Играет на …»)</span><input data-k="discordClientId" placeholder="123456789012345678"></label>
+            <label class="f"><span>Сайт (кнопка в статусе Discord)</span><input data-k="site" placeholder="https://safimine.ru"></label></div>
+            <p class="muted" style="margin-bottom:0">Как получить ID: discord.com/developers → New Application → назовите «AsteriaLauncher» → скопируйте <b>Application ID</b>. Иконку загрузите в Rich Presence → Art Assets (необязательно).</p></div>
+        </div>
+        <div>
+          <div class="panel" style="position:sticky;top:14px"><h2>Как это увидят игроки</h2>
+            <div class="preview" id="pv"><img id="pvImg"><div class="t" id="pvT"></div></div>
+            <div class="card" style="margin-top:12px"><div style="font-size:20px;font-weight:900" id="pvName"></div><div class="muted" id="pvIp"></div><p id="pvAbout" style="margin:8px 0 0;font-size:13px"></p></div>
+            <div class="chips" style="margin-top:12px" id="pvCmds"></div>
+            <p class="muted" style="font-size:12px">Изменения уходят в лаунчеры после «Сохранить для всех» — игроки увидят их при следующем запуске лаунчера.</p>
+            <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Для опытных: JSON</summary><textarea id="raw" style="min-height:240px;font:12px/1.5 ui-monospace,Consolas,monospace;margin-top:8px"></textarea><button style="margin-top:8px" onclick="applyRaw()">Применить JSON</button></details>
+          </div>
+        </div>
+      </div>
+      <div class="save panel"><span class="muted" id="dirty">Нет несохранённых изменений</span><div class="row"><button onclick="resetConf()">Отменить изменения</button><button class="primary" onclick="saveConf()">Сохранить для всех</button></div></div>
+    </section>
+
+    <!-- ============ servers -->
+    <section data-p="servers" class="hidden">
+      <div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Серверы во вкладке «Серверы»</h2><div class="row"><div class="lang" data-lang></div><button onclick="add('servers')">+ Сервер</button></div></div>
+        <p class="muted" style="margin:6px 0 12px">Главный сервер (вкладка «Содержимое») показывается первым. Здесь — дополнительные: свои режимы, тестовый сервер, сервера партнёров. Лаунчер сам покажет онлайн и иконку, добавит их в список серверов игры, а кнопка «Зайти» подключит сразу.</p>
+        <div class="items" id="servers"></div></div>
+      <div class="save panel"><span class="muted" data-dirty>—</span><div class="row"><button class="primary" onclick="saveConf()">Сохранить для всех</button></div></div>
+    </section>
+
+    <!-- ============ files -->
+    <section data-p="files" class="hidden">
+      <div class="g2">
+        <div class="panel"><h2>PREMIUM-визуалы</h2>
+          <p class="muted" style="margin-top:0">Отдаются только игрокам с подпиской. Если лаунчер собран вместе с модами (папка <code>mods/dist</code>), загружать ничего не нужно — они уже здесь (<i>build</i>). Загруженный файл заменяет собранный.</p>
+          <div class="row"><select id="pMc" style="width:auto"></select><input id="pFile" type="file" accept=".jar" style="flex:1;min-width:0;width:auto"><button onclick="upload('premium')">Загрузить</button></div>
+          <div class="files" id="premList" style="margin-top:10px"></div></div>
+        <div class="panel"><h2>Бесплатный мод Asteria</h2>
+          <div class="row"><select id="mMc" style="width:auto"></select><input id="mFile" type="file" accept=".jar" style="flex:1;min-width:0;width:auto"><button onclick="upload('mods')">Загрузить</button></div>
+          <div class="files" id="modList" style="margin-top:10px"></div></div>
+      </div>
+      <div class="panel" id="keyWarn" style="display:none;border-color:rgba(244,63,94,.5)"><b>Нет ключа подписи.</b> <span class="muted">Выполните <code>node tools/gen-keys.cjs</code> и пересоберите моды, иначе визуалы будут заблокированы у всех.</span></div>
+      <div class="panel"><h2>Ключ для плагина статистики AsteriaBridge (необязательно)</h2><p class="muted" style="margin:0">Нужен только для статистики игрока (монеты, убийства) в профиле лаунчера. Значок звезды и скины работают без плагина. <code>plugins/AsteriaBridge/config.yml</code> → <code>secret:</code></p><div class="row" style="margin-top:8px"><code id="skey" style="flex:1;overflow:auto"></code><button onclick="navigator.clipboard.writeText(skey.textContent);toast('Скопировано')">Копировать</button></div></div>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const VERS=['26.1','1.21.11','1.21.4','1.20.1','1.19.4','1.18.2','1.17.1','1.16.5','1.12.2','1.8.9'], MODV=['1.16.5','1.20.1','1.21.4','1.21.11']
+const ICONS={shop:'Магазин',discord:'Discord',telegram:'Telegram',rules:'Правила',shield:'Защита',bot:'Бот',support:'Поддержка',home:'Сайт',user:'Профиль',star:'Звезда',servers:'Сервер'}
+const BUILTIN=['wipe','news','ender','spawners','apiary','about']
+for (const s of [pMc,mMc]) s.innerHTML=MODV.map(v=>`<option>${v}</option>`).join('')
+let KEY=''; try{KEY=localStorage.getItem('asteriaAdmin')||''}catch{}
+let players=[], C=null, saved='', L='ru'
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)]
+const api=async(p,o={})=>{const r=await fetch(p,{...o,headers:{'x-admin':KEY,'content-type':'application/json',...(o.headers||{})}});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
+const toast=(m)=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t.t);t.t=setTimeout(()=>t.style.display='none',2600)}
+const esc=(s)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+const date=(t)=>t?new Date(t).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—'
+const imgSrc=(v)=>!v?'':/^(https?:)?\/\//.test(v)||v.startsWith('/img/')?v:BUILTIN.includes(v)?'':v
+
+// ---------- tabs
+$$('#tabs button').forEach(b=>b.onclick=()=>{$$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));$$('section[data-p]').forEach(s=>s.classList.toggle('hidden',s.dataset.p!==b.dataset.t))})
+async function login(){KEY=$('#key').value.trim()||KEY;try{await load();try{localStorage.setItem('asteriaAdmin',KEY)}catch{}loginBox.classList.add('hidden');app.classList.remove('hidden')}catch(e){toast('Неверный ключ')}}
+async function load(){players=await api('/admin/api/players');draw();const f=await api('/admin/api/files')
+  const ls=(a,el)=>{el.innerHTML=a.length?a.map(x=>`<div><span>${x.file} <span class="pill">${x.src==='build'?'build':'загружен'}</span></span><span class="muted">${(x.size/1024).toFixed(0)} КБ · ${new Date(x.mtime).toLocaleDateString()}</span></div>`).join(''):'<div class="muted">Пусто</div>'};ls(f.premium,premList);ls(f.mods,modList)
+  keyWarn.style.display=f.keyOk?'none':'block';skey.textContent=f.statsKey
+  C=norm(await api('/admin/api/config'));saved=JSON.stringify(C);render()}
+
+// ---------- subscriptions
+function draw(){const q=flt.value.toLowerCase(),a=players.filter(p=>p.name.includes(q));empty.style.display=players.length?'none':'block';cnt.textContent=players.length?`· ${players.length}, PREMIUM: ${players.filter(p=>p.plan==='PREMIUM').length}`:''
+  tb.innerHTML=a.map(p=>`<tr><td><span class="dot ${p.online?'on':''}" title="${p.online?'в игре':''}"></span></td><td><b>${esc(p.name)}</b></td>
+  <td><span class="pill ${p.plan==='PREMIUM'?'prem':''}">${p.plan}${p.expired?' (истекла)':''}</span></td><td class="muted">${p.plan==='PREMIUM'?(p.until?date(p.until):'навсегда'):'—'}</td><td class="muted">${date(p.seen)}</td>
+  <td><div class="row" style="justify-content:flex-end"><button onclick="grant('${p.name}',30)">+30 дн.</button><button onclick="grant('${p.name}',0)">Навсегда</button>${p.plan==='PREMIUM'?`<button class="danger" onclick="revoke('${p.name}')">Снять</button>`:''}</div></td></tr>`).join('')}
+async function grant(name,days){if(!/^\w{3,16}$/.test(name))return toast('Ник: 3–16 символов, A-Z 0-9 _');try{const r=await api('/admin/plan',{method:'POST',body:JSON.stringify({name,plan:'PREMIUM',days})});toast(`${name}: PREMIUM ${r.until?'до '+date(r.until):'навсегда'}`);players=await api('/admin/api/players');draw()}catch(e){toast('Ошибка: '+e.message)}}
+async function revoke(name){if(!/^\w{3,16}$/.test(name))return toast('Введите ник');if(!confirm('Снять подписку у '+name+'?'))return;await api('/admin/plan',{method:'POST',body:JSON.stringify({name,plan:'FREE'})});toast(name+': FREE');players=await api('/admin/api/players');draw()}
+async function upload(kind){const f=(kind==='premium'?pFile:mFile).files[0],mc=(kind==='premium'?pMc:mMc).value;if(!f)return toast('Выберите .jar')
+  const r=await fetch(`/admin/${kind==='premium'?'premium-jar':'mod-jar'}?mc=${mc}`,{method:'POST',headers:{'x-admin':KEY},body:f});const j=await r.json();toast(r.ok?'Загружено: '+j.file:'Ошибка: '+j.error);load()}
+
+// ---------- content editor
+const tx=(o)=>typeof o==='string'?{ru:o,en:o}:(o||{ru:'',en:''})
+function norm(c){c=c||{};c.server={name:'SafiMine',ip:'mc.safimine.ru',port:25565,recommended:'1.16.5',...(c.server||{})};c.about=tx(c.about);c.links=c.links||[];c.commands=c.commands||[];c.news=(c.news||[]).map(n=>({...n,title:tx(n.title),text:tx(n.text)}));c.servers=(c.servers||[]).map(s=>({port:25565,...s,desc:tx(s.desc)}));c.versionImages=c.versionImages||{};c.events=(c.events||[]).map(e=>({lines:[],tips:[],grad:[],...e}));c.eventsIntro=tx(c.eventsIntro);return c}
+const get=(k)=>k.replace('{L}',L).split('.').reduce((o,p)=>o?.[p],C), set=(k,v)=>{const ps=k.replace('{L}',L).split('.');let o=C;for(const p of ps.slice(0,-1))o=o[p]=o[p]||{};o[ps.at(-1)]=v;changed()}
+function changed(){const d=JSON.stringify(C)!==saved;$('#dirty').textContent=d?'Есть несохранённые изменения':'Нет несохранённых изменений';$('#dirty').style.color=d?'var(--warn)':'';$$('[data-dirty]').forEach(e=>{e.textContent=$('#dirty').textContent;e.style.color=$('#dirty').style.color});preview()}
+function langSw(){$$('[data-lang]').forEach(el=>{el.innerHTML=['ru','en'].map(l=>`<button class="${l===L?'on':''}" onclick="L='${l}';render()">${l.toUpperCase()}</button>`).join('')})}
+function render(){langSw();$('[data-k="server.recommended"]').innerHTML=VERS.map(v=>`<option>${v}</option>`).join('')
+  $$('[data-k]').forEach(el=>{el.value=get(el.dataset.k)??'';el.oninput=()=>set(el.dataset.k,el.value)})
+  renderList('news',(n,i)=>`<div class="thumb">${imgSrc(n.image)?`<img src="${esc(imgSrc(n.image))}">`:`<span>${BUILTIN.includes(n.image)?'встроенная: '+n.image:'нет картинки'}</span>`}<button class="up" onclick="pickImg('news',${i})">Загрузить</button></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><input value="${esc(n.title[L])}" placeholder="Заголовок (${L})" oninput="C.news[${i}].title[L]=this.value;changed()">
+    <textarea rows="2" placeholder="Текст (${L})" oninput="C.news[${i}].text[L]=this.value;changed()">${esc(n.text[L])}</textarea>
+    <div class="g2"><input value="${esc(n.image||'')}" placeholder="Картинка: ссылка или wipe/news/ender…" onchange="C.news[${i}].image=this.value;changed();render()"><input value="${esc(n.url||'')}" placeholder="Ссылка «Подробнее» (необязательно)" oninput="C.news[${i}].url=this.value;changed()"></div></div>`)
+  renderList('events',(e,i)=>`<div class="thumb" style="height:64px;background:${esc(e.color||'#333')}33;border:1px solid ${esc(e.color||'#333')}"><b style="color:${esc(e.color||'#fff')};font-size:13px">${esc(e.name||e.id)}</b></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><div class="g3"><input value="${esc(e.id)}" placeholder="ID (как в AsteriaBridge)" oninput="C.events[${i}].id=this.value.trim();changed()"><input value="${esc(e.name)}" placeholder="Название" oninput="C.events[${i}].name=this.value;changed()"><input value="${esc(e.world)}" placeholder="Мир / где проходит" oninput="C.events[${i}].world=this.value;changed()"></div>
+    <div class="g3"><label class="row" style="flex-wrap:nowrap;gap:6px"><input type="color" value="${esc(e.color||'#22d3ee')}" style="width:42px;padding:2px" onchange="C.events[${i}].color=this.value;C.events[${i}].grad=[];changed();render()"><input value="${esc((e.grad||[]).join(' '))}" placeholder="Градиент: #83EFFF #00C4DE" onchange="C.events[${i}].grad=this.value.split(/[\\s,]+/).filter(Boolean);changed()"></label><input value="${esc(e.timerLabel||'')}" placeholder="До спавна" oninput="C.events[${i}].timerLabel=this.value;changed()"><input value="${esc(e.cmd||'')}" placeholder="Команда (необязательно)" oninput="C.events[${i}].cmd=this.value;changed()"></div>
+    <input value="${esc(e.short||'')}" placeholder="Коротко (видно на карточке)" oninput="C.events[${i}].short=this.value;changed()">
+    <input value="${esc(e.head||'')}" placeholder="Голова: хэш текстуры textures.minecraft.net" oninput="C.events[${i}].head=this.value.trim();changed()">
+    <div class="g2"><textarea rows="3" placeholder="Описание — каждая строка отдельно" oninput="C.events[${i}].lines=this.value.split('\\n').filter(x=>x.trim());changed()">${esc((e.lines||[]).join('\n'))}</textarea><textarea rows="3" placeholder="Советы — каждая строка отдельно" oninput="C.events[${i}].tips=this.value.split('\\n').filter(x=>x.trim());changed()">${esc((e.tips||[]).join('\n'))}</textarea></div></div>`)
+  renderList('links',(l,i)=>`<div class="thumb" style="height:42px">${ICONS[l.icon]||l.icon}</div><div class="g3"><input value="${esc(l.title)}" placeholder="Название" oninput="C.links[${i}].title=this.value;changed()"><input value="${esc(l.url)}" placeholder="https://" oninput="C.links[${i}].url=this.value;changed()">
+    <select onchange="C.links[${i}].icon=this.value;changed();render()">${Object.entries(ICONS).map(([k,v])=>`<option value="${k}" ${k===l.icon?'selected':''}>${v}</option>`).join('')}</select></div>`)
+  renderList('servers',(s,i)=>`<div class="thumb">${s.image?`<img src="${esc(s.image)}">`:'<span>картинка</span>'}<button class="up" onclick="pickImg('servers',${i})">Загрузить</button></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><div class="g3"><input value="${esc(s.name)}" placeholder="Название" oninput="C.servers[${i}].name=this.value;changed()"><input value="${esc(s.ip)}" placeholder="play.example.ru" oninput="C.servers[${i}].ip=this.value.trim();changed()"><input value="${esc(s.port)}" placeholder="25565" oninput="C.servers[${i}].port=+this.value||25565;changed()"></div>
+    <div class="g2"><select onchange="C.servers[${i}].version=this.value;changed()">${VERS.map(v=>`<option ${v===(s.version||'1.16.5')?'selected':''}>${v}</option>`).join('')}</select><input value="${esc(s.image||'')}" placeholder="Картинка: ссылка" onchange="C.servers[${i}].image=this.value;changed();render()"></div>
+    <textarea rows="2" placeholder="Описание (${L})" oninput="C.servers[${i}].desc[L]=this.value;changed()">${esc(s.desc[L])}</textarea></div>`)
+  $('#cmds').innerHTML=C.commands.map((c,i)=>`<span class="chip">${esc(c)}<button onclick="C.commands.splice(${i},1);changed();render()">✕</button></span>`).join('')
+  $('#vimgs').innerHTML=VERS.map(v=>`<label class="f"><span>${v}</span><div class="row" style="flex-wrap:nowrap"><input value="${esc(C.versionImages[v]||'')}" placeholder="встроенная" onchange="setVimg('${v}',this.value)"><button onclick="pickImg('vimg','${v}')">⇪</button></div></label>`).join('')
+  $('#raw').value=JSON.stringify(C,null,2);changed()}
+function renderList(id,tpl){$('#'+id).innerHTML=C[id].map((x,i)=>`<div class="card item">${tpl(x,i)}<div style="display:flex;flex-direction:column;gap:6px"><button class="ghost" title="Выше" onclick="move('${id}',${i},-1)">↑</button><button class="ghost" title="Ниже" onclick="move('${id}',${i},1)">↓</button><button class="ghost danger" title="Удалить" onclick="if(confirm('Удалить?')){C.${id}.splice(${i},1);changed();render()}">✕</button></div></div>`).join('')||'<p class="muted">Пусто</p>'}
+function move(id,i,d){const a=C[id],j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];changed();render()}
+function add(id){if(id==='news')C.news.unshift({id:'n'+Date.now().toString(36),image:'',title:{ru:'Новая новость',en:'News'},text:{ru:'',en:''}});if(id==='links')C.links.push({title:'Ссылка',url:'https://',icon:'home'});if(id==='events')C.events.push({id:'event'+(C.events.length+1),name:'Новый ивент',world:'Обычный мир',color:'#22d3ee',grad:[],head:'',timerLabel:'До спавна',lines:[],tips:[]});if(id==='servers')C.servers.push({name:'Новый сервер',ip:'',port:25565,version:'1.16.5',image:'',desc:{ru:'',en:''}});changed();render()}
+function addCmd(){const v=cmdIn.value.trim();if(!v)return;C.commands.push(v.startsWith('/')?v:'/'+v);cmdIn.value='';changed();render()}
+function setVimg(v,u){if(u)C.versionImages[v]=u;else delete C.versionImages[v];changed()}
+function pickImg(kind,i){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.onchange=async()=>{const f=inp.files[0];if(!f)return;const r=await fetch('/admin/image',{method:'POST',headers:{'x-admin':KEY},body:f});const j=await r.json();if(!r.ok)return toast('Ошибка: '+j.error)
+  if(kind==='news')C.news[i].image=j.url;else if(kind==='servers')C.servers[i].image=j.url;else C.versionImages[i]=j.url;changed();render();toast('Картинка загружена')};inp.click()}
+function preview(){const n=C.news[0];$('#pvImg').src=n&&imgSrc(n.image)||'';$('#pvImg').style.display=n&&imgSrc(n.image)?'':'none';$('#pvT').textContent=n?n.title[L]:'';$('#pvName').textContent=C.server.name;$('#pvIp').textContent=C.server.ip;$('#pvAbout').textContent=C.about[L];$('#pvCmds').innerHTML=C.commands.slice(0,8).map(c=>`<span class="chip" style="padding-right:11px">${esc(c)}</span>`).join('')}
+function applyRaw(){try{C=norm(JSON.parse($('#raw').value));render();toast('JSON применён — не забудьте сохранить')}catch(e){toast('Ошибка в JSON: '+e.message)}}
+function resetConf(){C=norm(JSON.parse(saved));render()}
+async function saveConf(){await api('/admin/api/config',{method:'POST',body:JSON.stringify(C)});saved=JSON.stringify(C);changed();toast('Сохранено — игроки увидят при следующем запуске лаунчера')}
+addEventListener('beforeunload',e=>{if(C&&JSON.stringify(C)!==saved){e.preventDefault();e.returnValue=''}})
+$('#key').addEventListener('keydown',e=>e.key==='Enter'&&login())
+if(KEY)login()
+</script>
+</body>
+</html>

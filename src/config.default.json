@@ -1,0 +1,263 @@
+{
+ "server": {
+  "name": "SafiMine",
+  "ip": "mc.safimine.ru",
+  "port": 25565,
+  "recommended": "1.16.5"
+ },
+ "about": {
+  "ru": "SafiMine — большой грифер-проект с кланами, казино, боевым пропуском, квестами и кейсами. Вайп прошёл 17 октября, каждое воскресенье — Эндер-Мир с наградами, а мобы, соты и мёд добываются в авто-спавнерах и авто-пасеках. Заходи, собирай клан и становись легендой сервера.",
+  "en": "SafiMine is a big grief project with clans, a casino, battle pass, quests and cases. The wipe was on October 17, the End World with rewards opens every Sunday, and mobs, honeycombs and honey come from auto-spawners and auto-apiaries."
+ },
+ "links": [
+  {
+   "title": "Магазин",
+   "url": "https://shop.safimine.ru/",
+   "icon": "shop"
+  },
+  {
+   "title": "Discord",
+   "url": "https://dsc.gg/safimine/",
+   "icon": "discord"
+  },
+  {
+   "title": "Новости",
+   "url": "https://t.me/safimine_grief",
+   "icon": "telegram"
+  },
+  {
+   "title": "Правила",
+   "url": "https://t.me/SafiMine_Rules",
+   "icon": "rules"
+  },
+  {
+   "title": "2FA-бот",
+   "url": "https://t.me/safimine_2fa_bot",
+   "icon": "shield"
+  },
+  {
+   "title": "Бот информации",
+   "url": "https://t.me/SafiMineAdmin_Bot",
+   "icon": "bot"
+  },
+  {
+   "title": "Тех. поддержка",
+   "url": "http://t.me/safimine_help",
+   "icon": "support"
+  }
+ ],
+ "commands": [
+  "/menu",
+  "/clans",
+  "/shop",
+  "/events",
+  "/casino",
+  "/rang",
+  "/bp",
+  "/quest",
+  "/case",
+  "/free",
+  "/donate",
+  "/spawn",
+  "/warps",
+  "/code",
+  "/links"
+ ],
+ "news": [
+  {
+   "id": "wipe",
+   "image": "wipe",
+   "title": {
+    "ru": "Глобальный вайп — 17 октября",
+    "en": "Global wipe — October 17"
+   },
+   "text": {
+    "ru": "17 октября в 15:00 по МСК прошёл глобальный вайп: мир, экономика и кланы начались с нуля. Займи лучшие территории и собери клан первым!",
+    "en": "On October 17 at 15:00 MSK the global wipe took place: the world, economy and clans started from zero. Claim the best land and build your clan first!"
+   }
+  },
+  {
+   "id": "news",
+   "image": "news",
+   "title": {
+    "ru": "Новости проекта",
+    "en": "Project news"
+   },
+   "text": {
+    "ru": "Следи за новостями в Telegram: обновления, ивенты, розыгрыши и акции магазина появляются там первыми.",
+    "en": "Follow Telegram: updates, events, giveaways and shop deals appear there first."
+   }
+  },
+  {
+   "id": "ender",
+   "image": "ender",
+   "title": {
+    "ru": "Эндер-Мир — воскресенье, 17:00 МСК",
+    "en": "End World — Sunday, 17:00 MSK"
+   },
+   "text": {
+    "ru": "Каждое воскресенье в 17:00 по МСК открывается Эндер-Мир. Игроки, занявшие 1–3 места, получают сапфиры и монеты, а один раз за вайп можно добыть яйцо дракона.",
+    "en": "Every Sunday at 17:00 MSK the End World opens. Players in places 1–3 get sapphires and coins, and once per wipe you can win the dragon egg."
+   }
+  },
+  {
+   "id": "spawners",
+   "image": "spawners",
+   "title": {
+    "ru": "Авто-спавнеры мобов",
+    "en": "Auto mob spawners"
+   },
+   "text": {
+    "ru": "Теперь мобы добываются в авто-спавнерах — фарм ресурсов стал быстрее и удобнее для всех игроков.",
+    "en": "Mobs now come from auto-spawners — resource farming is faster and easier for everyone."
+   }
+  },
+  {
+   "id": "apiary",
+   "image": "apiary",
+   "title": {
+    "ru": "Авто-пасеки",
+    "en": "Auto apiaries"
+   },
+   "text": {
+    "ru": "Авто-пасеки работают как авто-спавнеры: сами добывают соты и бутылочки мёда, пока вы занимаетесь своими делами.",
+    "en": "Auto apiaries work like auto-spawners: they produce honeycombs and honey bottles by themselves while you do other things."
+   }
+  },
+  {
+   "id": "about",
+   "image": "about",
+   "title": {
+    "ru": "О сервере",
+    "en": "About the server"
+   },
+   "text": {
+    "ru": "SafiMine — большой грифер-проект с кланами, казино, боевым пропуском, квестами и кейсами.",
+    "en": "SafiMine is a big grief project with clans, a casino, battle pass, quests and cases."
+   }
+  }
+ ],
+ "versionImages": {},
+ "modsBase": "",
+ "eventsIntro": {
+  "ru": "Ивенты — серверные события, которые проводятся автоматически самой системой. На них можно развлечься и залутать хорошие вещи. Команда в игре: /events"
+ },
+ "events": [
+  {
+   "id": "cargo",
+   "name": "Cargo",
+   "world": "Адский мир",
+   "grad": [
+    "#83EFFF",
+    "#00C4DE"
+   ],
+   "color": "#13CAE3",
+   "head": "f2c61783590b6e68473005b32ec0a08bc3b95d649036b358afe77ad8af884800",
+   "lines": [
+    "Ивент, который появляется через определённое время.",
+    "В Адском мире, на случайных координатах.",
+    "В нём находятся ресурсы, подходящие под этот тип мира.",
+    "Сообщения о спавне, координатах и исчезновении выводятся в чат."
+   ],
+   "tips": [
+    "На ивенте много игроков — будьте готовы.",
+    "На ивенте работает PvP, будьте аккуратнее!"
+   ],
+   "timerLabel": "До спавна",
+   "short": "Груз с ресурсами Адского мира на случайных координатах — координаты приходят в чат."
+  },
+  {
+   "id": "ender",
+   "name": "Ender",
+   "world": "Эндер мир",
+   "grad": [
+    "#7851B8",
+    "#AE34F1"
+   ],
+   "color": "#9E3CE1",
+   "head": "b4e63e45b44c8d89ff3e33e5b60166b791c706066648570bd5b86480ba71f4b1",
+   "lines": [
+    "Ивент, который появляется через определённое время.",
+    "В Эндер мире, на случайных координатах.",
+    "В нём находятся ресурсы, подходящие под этот тип мира.",
+    "Сообщения о спавне, координатах и исчезновении выводятся в чат."
+   ],
+   "tips": [
+    "На ивенте много игроков — будьте готовы.",
+    "На ивенте работает PvP, будьте аккуратнее!"
+   ],
+   "timerLabel": "До спавна",
+   "short": "Груз с ресурсами Эндер-мира на случайных координатах. Много игроков и PvP."
+  },
+  {
+   "id": "goldmine",
+   "name": "Gold Mine",
+   "world": "Обычный мир",
+   "grad": [
+    "#C6DB00",
+    "#FCFF00"
+   ],
+   "color": "#FCFF00",
+   "head": "6891f5c23a543643244bc610204e475aaf731dda5c96b268dc5d922ea8327a8c",
+   "lines": [
+    "Ивент, который появляется через определённое время.",
+    "В Обычном мире, на случайных координатах.",
+    "В нём находятся ресурсы, подходящие под этот тип мира.",
+    "Сообщения о спавне, координатах и исчезновении выводятся в чат."
+   ],
+   "tips": [
+    "На ивенте много игроков — будьте готовы.",
+    "На ивенте работает PvP, будьте аккуратнее!"
+   ],
+   "timerLabel": "До спавна",
+   "short": "Ивент в обычном мире с ресурсами — спавн и координаты пишутся в чат."
+  },
+  {
+   "id": "hangbox",
+   "name": "Hang Box",
+   "world": "Обычный мир",
+   "grad": [
+    "#25AB00",
+    "#31E200"
+   ],
+   "color": "#31E200",
+   "head": "21865de1a77da86f8423af4ba44101397429d200be42045651212a615cf754f2",
+   "lines": [
+    "Ивент, который появляется через определённое время.",
+    "В Обычном мире, на случайных координатах.",
+    "В нём находятся ресурсы, подходящие под этот тип мира.",
+    "Сообщения о спавне, координатах и исчезновении выводятся в чат."
+   ],
+   "tips": [
+    "На ивенте много игроков — будьте готовы.",
+    "На ивенте работает PvP, будьте аккуратнее!"
+   ],
+   "timerLabel": "До спавна",
+   "short": "Ещё один ивент обычного мира: успей первым забрать лут."
+  },
+  {
+   "id": "blackauc",
+   "name": "Black Auction",
+   "world": "Весь сервер",
+   "grad": [
+    "#9CA3AF",
+    "#F8FAFC",
+    "#9CA3AF"
+   ],
+   "color": "#A3A3A3",
+   "head": "6ae4be3fc785f6c7cc777c937f5ade8fe8d71f6dfa48da8889e98af07525feff",
+   "lines": [
+    "На всём сервере начинается ивент, на котором можно выиграть абсолютно любой крутой предмет.",
+    "Так что готовь кучу монет ꒙ и действуй!",
+    "Сообщения о начале ивента выводятся в чат."
+   ],
+   "tips": [
+    "На ивенте много игроков — будьте готовы.",
+    "Используй команду /blackauction!"
+   ],
+   "cmd": "/blackauction",
+   "timerLabel": "Начнётся через",
+   "short": "Аукцион, на котором можно выиграть любой крутой предмет. Готовь монеты!"
+  }
+ ]
+}

@@ -1,0 +1,705 @@
+{
+ "categories": [
+  {
+   "id": "hud",
+   "name": "Интерфейс",
+   "icon": "▣"
+  },
+  {
+   "id": "world",
+   "name": "Мир",
+   "icon": "◈"
+  },
+  {
+   "id": "combat",
+   "name": "Бой",
+   "icon": "✦"
+  },
+  {
+   "id": "camera",
+   "name": "Камера",
+   "icon": "◉"
+  }
+ ],
+ "modules": [
+  {
+   "id": "watermark",
+   "cat": "hud",
+   "name": "Логотип",
+   "desc": "Надпись Asteria в углу экрана",
+   "on": true,
+   "hud": [
+    0.006,
+    0.008
+   ],
+   "s": [
+    {
+     "id": "style",
+     "name": "Стиль",
+     "type": "mode",
+     "options": [
+      "Asteria",
+      "Капсула",
+      "Минимал"
+     ],
+     "def": 0
+    },
+    {
+     "id": "fps",
+     "name": "Показывать FPS",
+     "type": "bool",
+     "def": true
+    },
+    {
+     "id": "time",
+     "name": "Показывать время",
+     "type": "bool",
+     "def": true
+    }
+   ]
+  },
+  {
+   "id": "arraylist",
+   "cat": "hud",
+   "name": "Список функций",
+   "desc": "Включённые визуалы у края экрана",
+   "on": true,
+   "hud": [
+    0.995,
+    0.008
+   ],
+   "s": [
+    {
+     "id": "line",
+     "name": "Полоска сбоку",
+     "type": "bool",
+     "def": true
+    },
+    {
+     "id": "bg",
+     "name": "Подложка",
+     "type": "bool",
+     "def": true
+    }
+   ]
+  },
+  {
+   "id": "keystrokes",
+   "cat": "hud",
+   "name": "Клавиши",
+   "desc": "WASD, мышь и CPS",
+   "on": true,
+   "hud": [
+    0.006,
+    0.3
+   ],
+   "s": [
+    {
+     "id": "mouse",
+     "name": "Кнопки мыши",
+     "type": "bool",
+     "def": true
+    },
+    {
+     "id": "space",
+     "name": "Пробел",
+     "type": "bool",
+     "def": true
+    }
+   ]
+  },
+  {
+   "id": "info",
+   "cat": "hud",
+   "name": "Инфо-панель",
+   "desc": "FPS, пинг, координаты и другое",
+   "on": true,
+   "hud": [
+    0.006,
+    0.075
+   ],
+   "s": [
+    {
+     "id": "fps",
+     "name": "FPS",
+     "type": "bool",
+     "def": true
+    },
+    {
+     "id": "ping",
+     "name": "Пинг",
+     "type": "bool",
+     "def": true
+    },
+    {
+     "id": "cps",
+     "name": "CPS",
+     "type": "bool",
+     "def": true
+    },
+    {
+     "id": "coords",
+     "name": "Координаты",
+     "type": "bool",
+     "def": true
+    },
+    {
+     "id": "speed",
+     "name": "Скорость",
+     "type": "bool",
+     "def": false
+    },
+    {
+     "id": "clock",
+     "name": "Часы",
+     "type": "bool",
+     "def": true
+    },
+    {
+     "id": "server",
+     "name": "Сервер",
+     "type": "bool",
+     "def": false
+    }
+   ]
+  },
+  {
+   "id": "armor",
+   "cat": "hud",
+   "name": "Броня",
+   "desc": "Броня и её прочность",
+   "on": true,
+   "hud": [
+    0.5,
+    0.78
+   ],
+   "s": [
+    {
+     "id": "layout",
+     "name": "Расположение",
+     "type": "mode",
+     "options": [
+      "В ряд",
+      "Столбиком"
+     ],
+     "def": 0
+    },
+    {
+     "id": "percent",
+     "name": "Проценты",
+     "type": "bool",
+     "def": true
+    }
+   ]
+  },
+  {
+   "id": "effects",
+   "cat": "hud",
+   "name": "Эффекты",
+   "desc": "Зелья с таймерами",
+   "on": true,
+   "hud": [
+    0.83,
+    0.3
+   ],
+   "s": [
+    {
+     "id": "bars",
+     "name": "Полоски времени",
+     "type": "bool",
+     "def": true
+    }
+   ]
+  },
+  {
+   "id": "targethud",
+   "cat": "hud",
+   "name": "Цель",
+   "desc": "Здоровье игрока, с которым вы сражаетесь",
+   "on": true,
+   "hud": [
+    0.5,
+    0.7
+   ],
+   "s": [
+    {
+     "id": "head",
+     "name": "Голова игрока",
+     "type": "bool",
+     "def": true
+    }
+   ]
+  },
+  {
+   "id": "notifications",
+   "cat": "hud",
+   "name": "Уведомления",
+   "desc": "Сообщения о включении функций",
+   "on": true,
+   "hud": [
+    0.995,
+    0.93
+   ],
+   "s": []
+  },
+  {
+   "id": "frame",
+   "cat": "hud",
+   "name": "Рамка Asteria",
+   "desc": "Тонкие линии по краям экрана и звезда сверху",
+   "on": false,
+   "s": [
+    {
+     "id": "corners",
+     "name": "Уголки",
+     "type": "bool",
+     "def": true
+    },
+    {
+     "id": "top",
+     "name": "Звезда сверху",
+     "type": "bool",
+     "def": true
+    }
+   ]
+  },
+  {
+   "id": "crosshair",
+   "cat": "hud",
+   "name": "Прицел",
+   "desc": "Свой прицел вместо обычного",
+   "on": false,
+   "s": [
+    {
+     "id": "style",
+     "name": "Форма",
+     "type": "mode",
+     "options": [
+      "Крест",
+      "Точка",
+      "Круг",
+      "Уголки",
+      "Звезда",
+      "Ромб",
+      "Кольцо+точка"
+     ],
+     "def": 0
+    },
+    {
+     "id": "size",
+     "name": "Размер",
+     "type": "num",
+     "min": 2,
+     "max": 10,
+     "step": 1,
+     "def": 4
+    },
+    {
+     "id": "gap",
+     "name": "Зазор",
+     "type": "num",
+     "min": 0,
+     "max": 6,
+     "step": 1,
+     "def": 2
+    },
+    {
+     "id": "thick",
+     "name": "Толщина",
+     "type": "num",
+     "min": 1,
+     "max": 3,
+     "step": 1,
+     "def": 1
+    },
+    {
+     "id": "color",
+     "name": "Цвет",
+     "type": "color",
+     "def": "#ffffff"
+    },
+    {
+     "id": "dynamic",
+     "name": "Реагирует на удар",
+     "type": "bool",
+     "def": true
+    }
+   ]
+  },
+  {
+   "id": "trails",
+   "cat": "world",
+   "name": "Шлейф",
+   "desc": "Светящийся след за вами",
+   "on": false,
+   "s": [
+    {
+     "id": "length",
+     "name": "Длина",
+     "type": "num",
+     "min": 10,
+     "max": 80,
+     "step": 5,
+     "def": 35
+    },
+    {
+     "id": "mode",
+     "name": "Вид",
+     "type": "mode",
+     "options": [
+      "Лента",
+      "Линия"
+     ],
+     "def": 0
+    },
+    {
+     "id": "height",
+     "name": "Высота ленты",
+     "type": "num",
+     "min": 0.2,
+     "max": 1.8,
+     "step": 0.1,
+     "def": 1.0
+    }
+   ]
+  },
+  {
+   "id": "jumpcircles",
+   "cat": "world",
+   "name": "Круги прыжка",
+   "desc": "Волна под ногами при прыжке",
+   "on": false,
+   "s": [
+    {
+     "id": "radius",
+     "name": "Радиус",
+     "type": "num",
+     "min": 0.5,
+     "max": 3,
+     "step": 0.1,
+     "def": 1.4
+    },
+    {
+     "id": "life",
+     "name": "Длительность",
+     "type": "num",
+     "min": 0.3,
+     "max": 2,
+     "step": 0.1,
+     "def": 0.9
+    }
+   ]
+  },
+  {
+   "id": "ambient",
+   "cat": "world",
+   "name": "Частицы вокруг",
+   "desc": "Светлячки, снег или звёзды вокруг вас",
+   "on": false,
+   "s": [
+    {
+     "id": "style",
+     "name": "Вид",
+     "type": "mode",
+     "options": [
+      "Светлячки",
+      "Снег",
+      "Звёзды"
+     ],
+     "def": 0
+    },
+    {
+     "id": "count",
+     "name": "Количество",
+     "type": "num",
+     "min": 10,
+     "max": 120,
+     "step": 5,
+     "def": 45
+    },
+    {
+     "id": "radius",
+     "name": "Радиус",
+     "type": "num",
+     "min": 3,
+     "max": 16,
+     "step": 1,
+     "def": 8
+    }
+   ]
+  },
+  {
+   "id": "chinahat",
+   "cat": "world",
+   "name": "Шляпа",
+   "desc": "Светящийся конус над головой (вид от 3-го лица)",
+   "on": false,
+   "s": [
+    {
+     "id": "size",
+     "name": "Размер",
+     "type": "num",
+     "min": 0.3,
+     "max": 1.2,
+     "step": 0.05,
+     "def": 0.65
+    },
+    {
+     "id": "alpha",
+     "name": "Прозрачность",
+     "type": "num",
+     "min": 0.1,
+     "max": 1,
+     "step": 0.05,
+     "def": 0.55
+    }
+   ]
+  },
+  {
+   "id": "worldtime",
+   "cat": "world",
+   "name": "Время суток",
+   "desc": "Своё время и ясная погода (только у вас)",
+   "on": false,
+   "s": [
+    {
+     "id": "time",
+     "name": "Время",
+     "type": "mode",
+     "options": [
+      "Утро",
+      "День",
+      "Закат",
+      "Ночь",
+      "Полночь"
+     ],
+     "def": 2
+    },
+    {
+     "id": "clear",
+     "name": "Без дождя",
+     "type": "bool",
+     "def": true
+    }
+   ]
+  },
+  {
+   "id": "fog",
+   "cat": "world",
+   "name": "Туман",
+   "desc": "Цвет и дальность тумана",
+   "on": false,
+   "s": [
+    {
+     "id": "color",
+     "name": "Цвет",
+     "type": "color",
+     "def": "#7c5cff"
+    },
+    {
+     "id": "start",
+     "name": "Начало",
+     "type": "num",
+     "min": 0,
+     "max": 1,
+     "step": 0.05,
+     "def": 0.5
+    }
+   ]
+  },
+  {
+   "id": "fullbright",
+   "cat": "world",
+   "name": "Яркость",
+   "desc": "Всё светло, даже ночью",
+   "on": false,
+   "s": []
+  },
+  {
+   "id": "targetesp",
+   "cat": "combat",
+   "name": "Метка цели",
+   "desc": "Кольцо вокруг того, кого вы бьёте",
+   "on": false,
+   "s": [
+    {
+     "id": "style",
+     "name": "Вид",
+     "type": "mode",
+     "options": [
+      "Кольцо",
+      "Призрак"
+     ],
+     "def": 0
+    },
+    {
+     "id": "speed",
+     "name": "Скорость",
+     "type": "num",
+     "min": 0.3,
+     "max": 3,
+     "step": 0.1,
+     "def": 1.0
+    }
+   ]
+  },
+  {
+   "id": "hitparticles",
+   "cat": "combat",
+   "name": "Частицы удара",
+   "desc": "Искры при попадании",
+   "on": false,
+   "s": [
+    {
+     "id": "count",
+     "name": "Количество",
+     "type": "num",
+     "min": 4,
+     "max": 30,
+     "step": 1,
+     "def": 12
+    },
+    {
+     "id": "style",
+     "name": "Форма",
+     "type": "mode",
+     "options": [
+      "Звёзды",
+      "Квадраты",
+      "Сердца",
+      "Кристаллы",
+      "Пузыри"
+     ],
+     "def": 3
+    }
+   ]
+  },
+  {
+   "id": "hitcolor",
+   "cat": "combat",
+   "name": "Цвет удара",
+   "desc": "Цвет вспышки при получении урона",
+   "on": false,
+   "s": [
+    {
+     "id": "color",
+     "name": "Цвет",
+     "type": "color",
+     "def": "#a855f7"
+    }
+   ]
+  },
+  {
+   "id": "killeffect",
+   "cat": "combat",
+   "name": "Эффект убийства",
+   "desc": "Вспышка и осколки, когда цель погибает",
+   "on": false,
+   "s": [
+    {
+     "id": "style",
+     "name": "Вид",
+     "type": "mode",
+     "options": [
+      "Столб света",
+      "Только осколки"
+     ],
+     "def": 0
+    }
+   ]
+  },
+  {
+   "id": "swing",
+   "cat": "combat",
+   "name": "Анимация удара",
+   "desc": "Плавный медленный взмах",
+   "on": false,
+   "s": [
+    {
+     "id": "speed",
+     "name": "Длительность",
+     "type": "num",
+     "min": 6,
+     "max": 20,
+     "step": 1,
+     "def": 11
+    }
+   ]
+  },
+  {
+   "id": "zoom",
+   "cat": "camera",
+   "name": "Зум",
+   "desc": "Приближение (клавиша C, колесо — сила)",
+   "on": true,
+   "s": [
+    {
+     "id": "fov",
+     "name": "Приближение",
+     "type": "num",
+     "min": 5,
+     "max": 50,
+     "step": 1,
+     "def": 20
+    },
+    {
+     "id": "smooth",
+     "name": "Плавно",
+     "type": "bool",
+     "def": true
+    },
+    {
+     "id": "scroll",
+     "name": "Колесо мыши",
+     "type": "bool",
+     "def": true
+    }
+   ]
+  },
+  {
+   "id": "viewmodel",
+   "cat": "camera",
+   "name": "Положение рук",
+   "desc": "Сдвиг и размер предметов в руке",
+   "on": false,
+   "s": [
+    {
+     "id": "x",
+     "name": "Влево / вправо",
+     "type": "num",
+     "min": -1,
+     "max": 1,
+     "step": 0.05,
+     "def": 0
+    },
+    {
+     "id": "y",
+     "name": "Вниз / вверх",
+     "type": "num",
+     "min": -1,
+     "max": 1,
+     "step": 0.05,
+     "def": 0
+    },
+    {
+     "id": "z",
+     "name": "Ближе / дальше",
+     "type": "num",
+     "min": -1,
+     "max": 1,
+     "step": 0.05,
+     "def": 0
+    },
+    {
+     "id": "scale",
+     "name": "Размер",
+     "type": "num",
+     "min": 0.4,
+     "max": 1.5,
+     "step": 0.05,
+     "def": 1
+    }
+   ]
+  }
+ ]
+}

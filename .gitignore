@@ -1,0 +1,18 @@
+node_modules/
+/dist/
+release/
+# build output of mods/plugins (the root build/ folder holds the launcher icon and must be pushed)
+mods/**/build/
+server-plugin/build/
+tools/**/build/
+**/.gradle/
+**/run/
+out/
+# server-side secrets and data: never push these to GitHub
+backend/data/
+*.pem
+.env
+
+
+# your own server plugins (SafiClan source) stay private: not pushed to the public launcher repo
+server-side/
