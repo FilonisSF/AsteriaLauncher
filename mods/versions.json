@@ -1,0 +1,6 @@
+{
+ "1.16.5": { "java": 8, "core": true, "visuals": true, "fabricApi": true },
+ "1.20.1": { "java": 17, "core": true, "visuals": true, "fabricApi": false },
+ "1.21.4": { "java": 21, "core": true, "visuals": true, "fabricApi": false },
+ "1.21.11": { "java": 21, "core": true, "visuals": false, "fabricApi": false }
+}

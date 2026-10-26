@@ -1,0 +1,14 @@
+plugins { id 'java' }
+group = 'ru.safimine'; version = '1.2.0'
+base { archivesName = 'AsteriaBridge' }
+repositories {
+  mavenCentral()
+  maven { url 'https://repo.papermc.io/repository/maven-public/' }
+  maven { url 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
+}
+dependencies {
+  compileOnly 'com.destroystokyo.paper:paper-api:1.16.5-R0.1-SNAPSHOT'
+  compileOnly 'me.clip:placeholderapi:2.11.6'
+}
+java { sourceCompatibility = JavaVersion.VERSION_1_8; targetCompatibility = JavaVersion.VERSION_1_8 }
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }

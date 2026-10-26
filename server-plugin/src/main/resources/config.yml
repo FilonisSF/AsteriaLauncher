@@ -1,0 +1,42 @@
+# Адрес бэкенда AsteriaLauncher и ключ (переменная STATS_KEY на бэкенде)
+url: "https://api.safimine.ru/asteria"
+secret: "change-me"
+
+# ---- Звезда в табе для игроков AsteriaLauncher (видят ВСЕ игроки сервера, даже без мода)
+tab-icon:
+  enabled: true
+  # & - цветовые коды. По умолчанию голубая звезда
+  prefix: "&b✦ &r"
+  # Если у вас плагин TAB / другой плагин таба перезаписывает имена - поставьте false
+  # и добавьте в его настройки плейсхолдер %asteria_icon% перед ником
+  set-player-list-name: true
+
+# ---- Статистика для вкладки «Профиль» в лаунчере
+interval-seconds: 60
+# Ключ = как покажется в лаунчере, значение = любой PlaceholderAPI-плейсхолдер вашего сервера (подставьте свои!)
+fields:
+  coins: "%vault_eco_balance%"
+  sapphires: "%playerpoints_points%"
+  kills: "%statistic_player_kills%"
+  deaths: "%statistic_deaths%"
+  clan: "%saficlan_clanname_raw%"
+  clan_role: "%saficlan_role%"
+
+# ---- Ивенты для лаунчера (блок «Ивенты» на главной). name — название с цветами, timer — сколько осталось.
+# Отправляются каждые events-interval-seconds. Можно добавлять свои ивенты: id должен совпадать с id в админ-панели лаунчера.
+events-interval-seconds: 15
+events:
+  cargo:
+    name: "%bairdropx_placeholder_cargo_air_name%"
+    timer: "%safiblackauction_bairdropx_cargo%"
+  ender:
+    name: "%bairdropx_placeholder_ender_air_name%"
+    timer: "%safiblackauction_bairdropx_ender%"
+  goldmine:
+    name: "%bairdropx_placeholder_goldmine_air_name%"
+    timer: "%safiblackauction_bairdropx_goldmine%"
+  hangbox:
+    name: "%bairdropx_placeholder_hangbox_air_name%"
+    timer: "%safiblackauction_bairdropx_hangbox%"
+  blackauc:
+    timer: "%safiblackauction_time%"

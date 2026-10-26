@@ -1,0 +1,37 @@
+name: Build mods and server plugin
+# Every push that touches mods/ or server-plugin/ rebuilds the jars.
+#  - free mods (mods/dist/asteria-core-<mc>.jar) and the server plugin -> GitHub release "mods" (the launcher downloads them from there)
+#  - PREMIUM mods (asteria-visuals-<mc>.jar) are never pushed to GitHub (.gitignore): the backend serves them from mods/dist
+#    on the machine it runs on, or you upload them in the admin panel.
+on:
+  push: { paths: ['mods/**', 'server-plugin/**', '.github/workflows/mods.yml'] }
+  workflow_dispatch: {}
+permissions: { contents: write }
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: gh release view mods >/dev/null 2>&1 || gh release create mods --title "Asteria mods" --notes "Built automatically. The launcher downloads asteria-core-<version>.jar from here." --prerelease
+        env: { GH_TOKEN: '${{ github.token }}' }
+  mods:
+    # the jars are built on the developer PC (mods/toolchain/build.sh, see mods/README.md) and committed to mods/dist
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish free mods to release "mods"
+        run: gh release upload mods mods/dist/asteria-core-*.jar --clobber
+        env: { GH_TOKEN: '${{ github.token }}' }
+  plugin:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.8' }
+      - run: cd server-plugin && gradle build --no-daemon && cp build/libs/AsteriaBridge-*.jar ../AsteriaBridge.jar
+      - run: gh release upload mods AsteriaBridge.jar --clobber
+        env: { GH_TOKEN: '${{ github.token }}' }

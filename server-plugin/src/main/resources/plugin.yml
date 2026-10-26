@@ -1,0 +1,6 @@
+name: AsteriaBridge
+version: 1.2.0
+main: ru.safimine.asteria.AsteriaBridge
+api-version: 1.16
+softdepend: [PlaceholderAPI]
+description: Star in the tab list for AsteriaLauncher players + player stats for the launcher's Profile tab
