@@ -47,6 +47,7 @@ const server = http.createServer((req, res) => {
     if (url === '/' ) return json({ ok: true, name: 'AsteriaLauncher backend', version: VERSION })
     if (url === '/admin') return file(path.join(__dirname, 'admin.html'), 'text/html; charset=utf-8')
     let m
+    if ((m = url.match(/^\/share\/([A-Z0-9]{6})$/i))) return file(path.join(DATA, 'share', m[1].toUpperCase() + '.json'), 'application/json') // things shared between friends
     if ((m = url.match(/^\/vcfg\/([A-Z0-9]{6})$/i))) return file(path.join(DATA, 'vcfg', m[1].toUpperCase() + '.json'), 'application/json') // shared Asteria Visuals configs
     if ((m = url.match(/^\/(skin|cape|mini)\/(\w{3,16})\.png$/))) return file(path.join(DATA, 'skins', `${m[1]}-${m[2].toLowerCase()}.png`), 'image/png')
     if ((m = url.match(/^\/skinmeta\/(\w{3,16})$/))) return json({ slim: fs.existsSync(path.join(DATA, 'skins', `slim-${m[1].toLowerCase()}`)) })
@@ -113,6 +114,15 @@ const server = http.createServer((req, res) => {
       if (url === '/server/clans') { if (!Array.isArray(j.clans)) return json({ error: 'bad data' }, 400); clans = { time: Date.now(), icons: j.icons || {}, clans: j.clans.slice(0, 2000) }; wr('clans.json', clans) }
       else { if (typeof j.events !== 'object' || !j.events) return json({ error: 'bad data' }, 400); events = { time: Date.now(), events: j.events }; wr('events.json', events) }
       return json({ ok: true })
+    }
+    if (url === '/share') { // { kind, data } -> { id }: a mod pack, skin, cape or crosshair for a friend
+      if (!['modpack', 'skin', 'cape', 'crosshair'].includes(j.kind)) return json({ error: 'bad kind' }, 400)
+      const c = JSON.stringify({ kind: j.kind, data: j.data }); if (c.length > 3_500_000) return json({ error: 'too large' }, 413)
+      const dir = path.join(DATA, 'share'); fs.mkdirSync(dir, { recursive: true })
+      const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', h = crypto.createHash('sha1').update(c).digest()
+      for (let k = 0; k < 8; k++) { let id = ''; for (let i = 0; i < 6; i++) id += A[h[(i + k * 6) % h.length] % A.length]; const f = path.join(dir, id + '.json')
+        try { if (fs.readFileSync(f, 'utf8') === c) return json({ id }) } catch { fs.writeFileSync(f, c); return json({ id }) } }
+      return json({ error: 'busy' }, 500)
     }
     if (url === '/vcfg') { // { code: 'AST1:...' } -> { id: 'K7Q2XD' } short share code for a visuals config
       const c = String(j.code || ''); if (!/^AST1:[\w-]{8,60000}$/.test(c)) return json({ error: 'bad code' }, 400)

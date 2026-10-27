@@ -27,7 +27,7 @@ let CONF: any = defConf
 const OVR: Record<string, string> = Object.fromEntries(Object.entries({ ...(import.meta.glob('./assets/art/*.jpg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>), ...(import.meta.glob('./assets/art/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>) }).map(([k, v]) => [k.split('/').pop()!.replace(/\.(jpg|png)$/, ''), v]))
 /** news without an uploaded picture get official Minecraft key art that fits the topic */
 const NEWSART: Record<string, string[]> = { wipe: ['26.1', '1.21.11', '1.21.4'], news: ['1.20.1', '1.20.4'], ender: ['1.19.4', '1.19'], spawners: ['1.21.4', '1.21'], apiary: ['1.15.2', '1.15'], about: ['1.18.2', '1.18'] }
-const CAPES = glob(cos, 'cape-'), POSTERS = Object.fromEntries(glob(pos, 'v-'))
+const CAPES = glob(cos, 'cape-'), SKINS = glob(cos, 'skin-'), POSTERS = Object.fromEntries(glob(pos, 'v-'))
 const NAV: [string, string][] = [['home', 'home'], ['versions', 'versions'], ['mods', 'mods'], ['visuals', 'sparkles'], ['skins', 'skins'], ['profile', 'user'], ['servers', 'servers'], ['screenshots', 'image'], ['settings', 'settings']]
 const SHORT: Record<string, string> = { home: 'Главная', versions: 'Версии', mods: 'Моды', visuals: 'Визуалы', skins: 'Скины', profile: 'Профиль', servers: 'Серверы', screenshots: 'Скрины', settings: 'Настройки' }
 const ACCENTS: Record<string, [string, string]> = { aqua: ['#0ea5e9', '#22d3ee'], blue: ['#2563eb', '#60a5fa'], violet: ['#7c3aed', '#c084fc'], pink: ['#db2777', '#f9a8d4'], rose: ['#e11d48', '#fb7185'],
@@ -62,11 +62,24 @@ function NumInput({ v, on }: { v: number; on: (n: number) => void }) { // free t
   const [txt, setTxt] = useState(String(v)); useEffect(() => { if (+txt !== v) setTxt(String(v)) }, [v])
   return <input inputMode="numeric" className="w-24 text-center" value={txt} onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setTxt(d); if (d) on(+d) }} onBlur={() => { if (!txt || +txt < 320) setTxt(String(v)) }} />
 }
-function CapeTile({ name, url, on, pick }: { name: string; url: string; on: boolean; pick: () => void }) {
+/** a picture as a data: URL (bigger assets come as file URLs; the launcher saves data: URLs) */
+const toData = async (u: string): Promise<string> => u.startsWith('data:') ? u : await fetch(u).then((r) => r.blob()).then((b) => new Promise<string>((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsDataURL(b) }))
+type Saved = { id: string; data: string }
+const readList = (k: string): Saved[] => { try { return JSON.parse(localStorage.getItem(k) || '[]') } catch { return [] } }
+const writeList = (k: string, l: Saved[]) => { try { localStorage.setItem(k, JSON.stringify(l.slice(0, 16))) } catch {} }
+/** face of a skin (any resolution): base + hat layer */
+function SkinTile({ url, on, pick, del, title }: { url: string; on: boolean; pick: () => void; del?: () => void; title?: string }) {
+  const bg = (x: number) => ({ backgroundImage: `url(${url})`, backgroundSize: '800% 800%', backgroundPosition: `${x / 56 * 100}% ${8 / 56 * 100}%`, imageRendering: 'pixelated' as const })
+  return <div className="relative group"><button onClick={pick} title={title} className={'w-full rounded-xl flex items-center justify-center transition hover:-translate-y-0.5 ' + (on ? 'ring-2 ring-[var(--a1)]' : '')} style={{ height: 84, background: 'var(--chip)' }}>
+    <span className="relative rounded-lg overflow-hidden shadow-lg" style={{ width: 52, height: 52 }}><span className="absolute inset-0" style={bg(8)} /><span className="absolute inset-0" style={bg(40)} /></span></button>
+    {del && <button className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full hidden group-hover:flex items-center justify-center" style={{ background: '#ef4444', color: '#fff' }} title="Удалить" onClick={del}><Icon n="close" s={12} /></button>}</div>
+}
+function CapeTile({ name, url, on, pick, del }: { name: string; url: string; on: boolean; pick: () => void; del?: () => void }) {
   const [hd, setHd] = useState(false); useEffect(() => { const im = new Image(); im.onload = () => setHd(im.width > 64); im.src = url }, [url])
   const k = 6.4
-  return <button onClick={pick} title={name} className={'rounded-xl flex items-center justify-center transition hover:-translate-y-0.5 ' + (on ? 'ring-2 ring-[var(--a1)]' : '')} style={{ height: 112, background: 'var(--chip)' }}>
+  return <div className="relative group"><button onClick={pick} title={name} className={'w-full rounded-xl flex items-center justify-center transition hover:-translate-y-0.5 ' + (on ? 'ring-2 ring-[var(--a1)]' : '')} style={{ height: 112, background: 'var(--chip)' }}>
     <span className="rounded-[3px] shadow-lg" style={{ width: 10 * k, height: 16 * k, backgroundImage: `url(${url})`, backgroundSize: `${64 * k}px ${32 * k}px`, backgroundPosition: `${-1 * k}px ${-1 * k}px`, imageRendering: hd ? 'auto' : 'pixelated' }} /></button>
+    {del && <button className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full hidden group-hover:flex items-center justify-center" style={{ background: '#ef4444', color: '#fff' }} title="Удалить плащ" onClick={del}><Icon n="close" s={12} /></button>}</div>
 }
 const PageHead = ({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) => <div className="ph"><div><h1 className="grad-text">{title}</h1>{sub && <div className="sub">{sub}</div>}</div>{right}</div>
 
@@ -169,7 +182,33 @@ export default function App() {
   const shotStep = (d: number) => { if (!shotView || !shotList.length) return; const i = shotList.findIndex((x) => x.file === shotView.file); setShotView(shotList[(i + d + shotList.length) % shotList.length]) }
   useEffect(() => { if (!shotView) return; const f = (e: KeyboardEvent) => { if (e.key === 'Escape') setShotView(null); if (e.key === 'ArrowRight') shotStep(1); if (e.key === 'ArrowLeft') shotStep(-1) }; addEventListener('keydown', f); return () => removeEventListener('keydown', f) }, [shotView, shots, shotQ])
   const copy = (x: string) => { navigator.clipboard.writeText(x); say(t('copied') + (sm ? '' : ': ' + x)) }
-  const pickCape = (n: string, u: string) => { setCape(n); api.saveTexture({ data: u, kind: 'cape' }) }
+  // favourite mods / resource packs / shaders (the AL mark on a card)
+  const [favs, setFavsS] = useState<any[]>(() => { try { return JSON.parse(localStorage.getItem('favs') || '[]') } catch { return [] } }), [favOnly, setFavOnly] = useState(false)
+  const setFavs = (l: any[]) => { setFavsS(l); try { localStorage.setItem('favs', JSON.stringify(l)) } catch {} }
+  const isFav = (slug: string) => favs.some((f) => f.slug === slug && f.kind === kind)
+  const toggleFav = (h: any) => isFav(h.slug) ? setFavs(favs.filter((f) => !(f.slug === h.slug && f.kind === kind))) : setFavs([{ kind, slug: h.slug, title: h.title, description: h.description, icon_url: h.icon_url, downloads: h.downloads, gallery: h.gallery, featured_gallery: h.featured_gallery }, ...favs])
+  // sharing with a friend
+  const [friend, setFriend] = useState<{ open: boolean; code: string; busy: boolean; got?: any }>({ open: false, code: '', busy: false })
+  const share = async (k: string, data: any) => { const r = await api.shareMake(k, data); r?.id ? say('Код ' + r.id + ' скопирован — отправьте его другу') : say(r?.error || 'Не удалось', 'err') }
+  const sharePack = async () => { const p = await api.packExport(ver); if (!p.mods.length && !p.packs.length && !p.shaders.length) return say('В этой версии пока нет модов, ресурспаков и шейдеров из каталога', 'info'); share('modpack', p) }
+  const applyFriend = async (got: any) => { const d = got.data
+    if (got.kind === 'skin') { addSkin(d); await useSkin(d) }
+    else if (got.kind === 'cape') await addCape(d)
+    else if (got.kind === 'crosshair') { const v = await api.visGet(); if (v) { v.modules = v.modules || {}; v.modules.crosshair = { ...(v.modules.crosshair || {}), ...d, on: true }; await api.visSet(v); say('Прицел друга установлен') } }
+    else if (got.kind === 'modpack') { let ok = 0, n = 0; say('Ставим сборку друга на ' + ver + '…', 'info')
+      for (const s of d.mods || []) { n++; const r = await api.modsInstall(s, ver).catch(() => null); if (r && !r.error) ok++ }
+      for (const [list, k] of [[d.packs, 'resourcepack'], [d.shaders, 'shader']] as [string[], string][]) for (const s of list || []) { n++; const r = await api.pkInstall(s, ver, k).catch(() => null); if (r?.ok) ok++ }
+      say(`Сборка установлена: ${ok} из ${n}` + (d.ver !== ver ? ` (сделана для ${d.ver})` : '')); loadMods() }
+    setFriend({ open: false, code: '', busy: false }) }
+  const pickCape = async (n: string, u: string) => { setCape(n); api.saveTexture({ data: await toData(u), kind: 'cape' }) }
+  // your own capes and skins: kept in a list, any of them can be put on again or removed
+  const [myCapes, setMyCapesS] = useState<Saved[]>(() => { const l = readList('myCapes'); try { const old = localStorage.getItem('ccape'); if (old && !l.length) { l.push({ id: 'custom', data: old }); writeList('myCapes', l) } } catch {} return l })
+  const [mySkins, setMySkinsS] = useState<Saved[]>(() => readList('mySkins'))
+  const myCapesUrl = (id: string) => myCapes.find((c) => c.id === id)?.data
+  const setMyCapes = (l: Saved[]) => { setMyCapesS(l); writeList('myCapes', l) }, setMySkins = (l: Saved[]) => { setMySkinsS(l); writeList('mySkins', l) }
+  const addCape = async (data: string) => { const it = { id: 'my' + Date.now().toString(36), data }; setMyCapes([it, ...myCapes]); setCape(it.id); const r = await api.saveTexture({ data, kind: 'cape' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
+  const addSkin = (data: string) => { if (!mySkins.some((x) => x.data === data)) setMySkins([{ id: 'my' + Date.now().toString(36), data }, ...mySkins]) }
+  const useSkin = async (data: string) => { setSkin(data); const r = await api.saveTexture({ data, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
   const play = async (v: string, join = false, server?: any) => { if (!me) { setAddOpen(true); return say('Сначала добавьте аккаунт', 'info') } let r: any; try { r = await api.launch({ version: v, join, lang, server }) } catch (e: any) { r = { error: 'Не удалось запустить: ' + (e?.message || e) } } if (r?.warn) say(r.warn, 'info'); if (r?.error) say(r.error, 'err') }
   const install = async (slug: string) => { setBusy(slug)
     if (kind === 'mod') { const list = targets.filter((x) => tsel.includes(x.key)); const tg = list.length ? list : [{ key: instKeyNow, version: ver }]
@@ -178,7 +217,7 @@ export default function App() {
     setBusy(''); loadMods() }
   const visArt = useImg(OVR.visuals ? [] : [ART['1.21.4'], ART['1.20.1'], ART['1.16.5']].filter(Boolean) as string[]), visBg = OVR.visuals || visArt || hudBg
   const skinImg = useImg(skin ? [] : [`https://mc-heads.net/skin/${me?.name ?? 'Steve'}`, `https://minotar.net/skin/${me?.name ?? 'Steve'}`])
-  const skinUrl = skin || skinImg || defSkin, capeUrl = capeId === 'custom' && customCape ? customCape : CAPES.find(([n]) => n === capeId)?.[1]
+  const skinUrl = skin || skinImg || defSkin, capeUrl = myCapesUrl(capeId) || (capeId === 'custom' && customCape ? customCape : CAPES.find(([n]) => n === capeId)?.[1])
   const fps = mods.some((m) => m.slug === 'sodium' && m.enabled) // the optimization mods really are in this version's folder
   const ramMax = Math.max(2048, Math.round(sys.totalMb / 512) * 512), ramOpt = sys.totalMb <= 4096 ? 1536 : sys.totalMb <= 8192 ? 3072 : sys.totalMb <= 16384 ? 4096 : 6144
   const needDl = !running && !vst.installed, mainBtn = () => (running ? api.killGame() : dling ? undefined : needDl ? download() : play(ver)), mainLabel = running ? t('closeGame') : dling ? (vst.installed ? 'Обновление…' : 'Скачивание…') : needDl ? 'Скачать' : t('play'), hrs = (stats.playMs / 3600000).toFixed(1)
@@ -301,8 +340,11 @@ export default function App() {
                       <div key={x.key} className="target"><Check on={tsel.includes(x.key)} set={(v) => setTsel(v ? [...tsel, x.key] : tsel.filter((k) => k !== x.key))} label={<span><b>{x.name}</b><span className="muted text-xs block">{x.profile ? 'Профиль · ' : ''}Minecraft {x.version}{x.key === instKeyNow ? ' · сейчас выбрана' : ''}</span></span>} /></div>)}
                     <p className="muted text-[11px] px-2 pt-1">Для каждой сборки скачается версия мода под её Minecraft.</p></div></>}</div>}</div>
               {kind === 'mod' && <div className="flex gap-1.5 flex-wrap mb-4"><button className={'pill ' + (!cat ? 'on' : '')} onClick={() => setCat('')}>{t('allCats')}</button>{CATS.map((c) => <button key={c} className={'pill ' + (cat === c ? 'on' : '')} onClick={() => setCat(c)}>{t('cat_' + c)}</button>)}</div>}
-              <div className="flex flex-col gap-2">{hits.map((h) => { const have = mods.some((m) => m.slug === h.slug); return <div key={h.slug} className="mcard"><button onClick={() => kind !== 'mod' && setPrev(h)} className="shrink-0"><Pic src={kind !== 'mod' && (h.featured_gallery || h.gallery?.[0]) ? (h.featured_gallery || h.gallery[0]) : h.icon_url} cls={kind === 'mod' ? 'w-14 h-14 rounded-xl object-cover' : 'w-28 h-16 rounded-xl object-cover'} /></button>
+              <div className="flex gap-1.5 mb-3"><button className={'pill ' + (favOnly ? 'on' : '')} onClick={() => setFavOnly(!favOnly)}><Icon n="star" s={13} />Избранное {favs.filter((f) => f.kind === kind).length || ''}</button>
+                {kind === 'mod' && <button className="pill" onClick={sharePack}><Icon n="share" s={13} />Поделиться сборкой</button>}<button className="pill" onClick={() => setFriend({ open: true, code: '', busy: false })}><Icon n="link" s={13} />Код от друга</button></div>
+              <div className="flex flex-col gap-2">{(favOnly ? favs.filter((f) => f.kind === kind) : hits).map((h) => { const have = mods.some((m) => m.slug === h.slug); return <div key={h.slug} className="mcard"><button onClick={() => kind !== 'mod' && setPrev(h)} className="shrink-0"><Pic src={kind !== 'mod' && (h.featured_gallery || h.gallery?.[0]) ? (h.featured_gallery || h.gallery[0]) : h.icon_url} cls={kind === 'mod' ? 'w-14 h-14 rounded-xl object-cover' : 'w-28 h-16 rounded-xl object-cover'} /></button>
                 <div className="min-w-0 flex-1"><div className="font-bold truncate">{h.title}</div><div className="muted text-xs line-clamp-2">{h.description}</div><div className="muted text-xs mt-0.5 flex items-center gap-1"><Icon n="download" s={11} />{h.downloads?.toLocaleString()}</div></div>
+                <button className="iconbtn shrink-0" title={isFav(h.slug) ? 'Убрать из избранного' : 'В избранное'} onClick={() => toggleFav(h)} style={isFav(h.slug) ? { color: 'var(--a1)' } : { opacity: 0.45 }}><Icon n="star" s={18} /></button>
                 <button disabled={have && tsel.length <= 1} className={'btn flex items-center gap-1.5 ' + (have && tsel.length <= 1 ? '' : 'btn-primary')} onClick={() => install(h.slug)}>{have && tsel.length <= 1 ? <><Icon n="check" s={16} />{t('installedBadge')}</> : busy === h.slug ? '…' : <><Icon n="download" s={16} />{t('install')}</>}</button></div> })}</div></div>
               <div><div className="flex items-center justify-between mb-2"><h3 className="text-lg font-bold">{t(kind === 'mod' ? 'installed' : kind === 'shader' ? 'installedShaders' : 'installedPacks')} <span className="muted text-sm">{mods.length}</span></h3>{kind === 'mod' && <button className="pill" title={t('verifyHint')} onClick={async () => { const r = await api.modsVerify(ver, true); say(`${t('verifyDone')}: ${r.total} · ${t('updated2')} ${r.updated} · ${t('fixed')} ${r.fixed}`); loadMods() }}><Icon n="shield" s={14} />{t('verify')}</button>}</div>
                 {kind === 'mod' && (fps ? <div className="pill mb-3" style={{ background: 'rgba(16,185,129,.18)' }}><Icon n="check" s={14} />{t('fps')}</div>
@@ -331,10 +373,16 @@ export default function App() {
             <div className="card rounded-3xl p-4"><Skin3D skin={skinUrl} slim={variant === 'slim'} cape={capeUrl} height={470} spin={skinSpin === '1'} />
               <div className="mt-2"><Check on={skinSpin === '1'} set={(v) => setSkinSpin(v ? '1' : '0')} label="Вращать модель" /></div>
               <div className="flex gap-2 items-center flex-wrap mt-3"><button className="btn btn-primary flex items-center gap-2" onClick={() => setEdit('skin')}><Icon n="pencil" s={16} />Редактировать на модели</button>
-                <button className="btn flex items-center gap-2" onClick={async () => { const d = await api.pickSkin(); if (d) { setSkin(d); const r = await api.saveTexture({ data: d, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) } }}><Icon n="upload" s={16} />{t('pickPng')}</button>
+                <button className="btn flex items-center gap-2" onClick={async () => { const d = await api.pickSkin(); if (d) { setSkin(d); addSkin(d); const r = await api.saveTexture({ data: d, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) } }}><Icon n="upload" s={16} />{t('pickPng')}</button>
                 <div className="seg"><button className={variant === 'classic' ? 'on' : ''} onClick={() => setVariant('classic')}>Classic</button><button className={variant === 'slim' ? 'on' : ''} onClick={() => setVariant('slim')}>{t('slim')}</button></div>
                 {me?.type === 'microsoft' && <button className="btn" title="Скин на всех серверах (Mojang)" onClick={async () => { const r = await api.applySkin(variant); r.error ? say(r.error, 'err') : say(t('applied')) }}>{t('apply')}</button>}</div>
-              <p className="muted text-xs mt-2">{t('drag')}</p></div>
+              <div className="flex gap-2 mt-3 flex-wrap"><button className="pill" onClick={() => share('skin', skinUrl.startsWith('data:') ? skinUrl : null)} disabled={!skinUrl.startsWith('data:')}><Icon n="share" s={13} />Поделиться скином</button>
+                <button className="pill" disabled={!capeUrl} onClick={async () => capeUrl && share('cape', await toData(capeUrl))}><Icon n="share" s={13} />Поделиться плащом</button>
+                <button className="pill" onClick={() => setFriend({ open: true, code: '', busy: false })}><Icon n="link" s={13} />Код от друга</button></div>
+              <p className="muted text-xs mt-2">{t('drag')}</p>
+              <div className="mt-4"><div className="flex items-center justify-between mb-2"><b className="text-sm">Скины</b><span className="muted text-xs">Наведите на свой скин — появится кнопка удаления</span></div>
+                <div className="grid grid-cols-6 gap-2">{mySkins.map((x) => <SkinTile key={x.id} url={x.data} on={skin === x.data} title="Мой скин" pick={() => useSkin(x.data)} del={() => { setMySkins(mySkins.filter((y) => y.id !== x.id)); say('Скин удалён из списка') }} />)}
+                  {SKINS.map(([n, u]) => <SkinTile key={n} url={u} on={false} title={'HD-скин ' + n} pick={async () => { const d = await toData(u); addSkin(d); useSkin(d) }} />)}</div></div></div>
             <div className="flex flex-col gap-4">
               <div className="card rounded-3xl p-5 flex gap-4 items-center"><div className="w-16 h-16 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center" style={{ background: 'var(--chip)' }}>{miniSkin ? <div className="w-full h-full" style={{ backgroundImage: `url(${miniSkin})`, backgroundSize: '512px 512px', backgroundPosition: '-64px -64px', imageRendering: 'pixelated' }} /> : <Icon n="user" s={26} />}</div>
                 <div className="flex-1 min-w-0"><b>Питомец «Мини-я»</b><div className="muted text-sm">Маленькая копия вас бегает следом. Включите в Визуалы → Питомец → «Мини-я»; скин — ваш или отдельный отсюда. Его видят все игроки Asteria</div>
@@ -343,8 +391,9 @@ export default function App() {
               <div className="card rounded-3xl p-5"><div className="flex items-center justify-between gap-2 mb-1"><h3 className="text-lg font-bold">{t('capes')}</h3>
                 <button className="btn !py-1.5 flex items-center gap-1.5 text-sm" onClick={() => setEdit('cape')}><Icon n="pencil" s={14} />Создать свой</button></div><p className="muted text-xs mb-3">{t('cosm')}</p>
                 <div className="grid grid-cols-5 gap-2.5"><button className={'rounded-xl flex flex-col items-center justify-center gap-1 muted text-xs ' + (!capeId ? 'ring-2 ring-[var(--a1)]' : '')} style={{ height: 112, background: 'var(--chip)' }} onClick={() => { setCape(''); api.saveTexture({ data: null, kind: 'cape' }) }}><Icon n="close" s={18} />Без плаща</button>
-                  {[...CAPES, ...(customCape ? [['custom', customCape] as [string, string]] : [])].map(([n, u]) => <CapeTile key={n} name={n} url={u} on={capeId === n} pick={() => pickCape(n, u)} />)}</div>
-                <div className="flex gap-2 mt-3 flex-wrap"><button className="btn flex items-center gap-2 text-sm" onClick={async () => { const d = await api.pickPng(); if (d) { setCustomCape(d); setCape('custom'); const r = await api.saveTexture({ data: d, kind: 'cape' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) } }}><Icon n="upload" s={15} />Загрузить PNG плаща</button>
+                  {myCapes.map((c) => <CapeTile key={c.id} name="Мой плащ" url={c.data} on={capeId === c.id} pick={() => pickCape(c.id, c.data)} del={() => { setMyCapes(myCapes.filter((x) => x.id !== c.id)); if (capeId === c.id) { setCape(''); api.saveTexture({ data: null, kind: 'cape' }) } say('Плащ удалён') }} />)}
+                  {CAPES.map(([n, u]) => <CapeTile key={n} name={n} url={u} on={capeId === n} pick={() => pickCape(n, u)} />)}</div>
+                <div className="flex gap-2 mt-3 flex-wrap"><button className="btn flex items-center gap-2 text-sm" onClick={async () => { const d = await api.pickPng(); if (d) addCape(d) }}><Icon n="upload" s={15} />Загрузить PNG плаща</button>
                   <button className="btn flex items-center gap-2 text-sm" onClick={() => setEdit('cape')}><Icon n="image" s={15} />Плащ из своей картинки</button></div></div>
               <div className="card rounded-3xl p-5 flex gap-4 items-center"><div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#0b2a3c,#0e7490)' }}><Gem s={30} /></div>
                 <div><b>Значок Asteria</b><div className="muted text-sm">Знак AL перед ником в табе и над головой. Его видите вы и все игроки с AsteriaLauncher.</div></div></div>
@@ -439,8 +488,15 @@ export default function App() {
         <div className="flex gap-2 mt-3"><button className="btn btn-ghost flex items-center gap-2 mr-auto" onClick={() => setShotView(null)}><Icon n="left" s={16} />Назад</button><button className="btn flex items-center gap-2" onClick={() => { api.shotAct(shotView.file, 'copy'); say(t('copiedImg')) }}><Icon n="copy" s={16} /> {t('copyImg')}</button><button className="btn flex items-center gap-2" onClick={() => api.shotAct(shotView.file, 'open')}><Icon n="folder" s={16} /> {t('openIn')}</button>
           <button className="btn flex items-center gap-2" onClick={async () => { await api.shotAct(shotView.file, 'delete'); setShots(shots.filter((x) => x.file !== shotView.file)); setShotView(null) }}><Icon n="trash" s={16} /> {t('del')}</button></div></div></div>}
       {edit && <SkinStudio mode={edit === 'skin' ? 'skin' : 'cape'} src={edit === 'skin' ? skinUrl : (capeUrl || '')} skin={skinUrl} cape={capeUrl} slim={variant === 'slim'} pickImage={() => api.pickImage()} onClose={() => setEdit('')}
-        onSave={async (d) => { const kind = edit === 'skin' ? 'skin' : 'cape'; if (kind === 'skin') setSkin(d); else { setCustomCape(d); setCape('custom') } setEdit(''); const r = await api.saveTexture({ data: d, kind, slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }} />}
+        onSave={async (d) => { const kind = edit === 'skin' ? 'skin' : 'cape'; if (kind === 'skin') { setSkin(d); addSkin(d) } else { const it = { id: 'my' + Date.now().toString(36), data: d }; setMyCapes([it, ...myCapes]); setCape(it.id) } setEdit(''); const r = await api.saveTexture({ data: d, kind, slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }} />}
       <Palette cmds={cmds} open={pal} setOpen={setPal} />
+      {friend.open && <Modal open onClose={() => setFriend({ open: false, code: '', busy: false })} title="Код от друга">
+        <p className="muted text-sm mb-3">Друг нажал «Поделиться» — сборкой модов, скином, плащом или прицелом — и прислал вам 6 символов.</p>
+        <input className="w-full text-center font-mono text-2xl tracking-[.3em] uppercase" maxLength={6} autoFocus value={friend.code} placeholder="K7Q2XD" onChange={(e) => setFriend({ ...friend, code: e.target.value.toUpperCase(), got: undefined })} />
+        {friend.got && <div className="card rounded-2xl p-3 mt-3 text-sm">{friend.got.kind === 'modpack' ? <><b>Сборка для Minecraft {friend.got.data.ver}</b><div className="muted">Моды: {friend.got.data.mods.length} · ресурспаки: {friend.got.data.packs.length} · шейдеры: {friend.got.data.shaders.length}. Поставим на {ver}.</div></>
+          : friend.got.kind === 'crosshair' ? <b>Прицел</b> : <div className="flex items-center gap-3"><img src={friend.got.data} className="h-12 rounded" style={{ imageRendering: 'pixelated' }} /><b>{friend.got.kind === 'skin' ? 'Скин' : 'Плащ'}</b></div>}</div>}
+        <div className="flex gap-2 justify-end mt-4">{!friend.got ? <button className="btn btn-primary" disabled={friend.code.length !== 6 || friend.busy} onClick={async () => { setFriend({ ...friend, busy: true }); const r = await api.shareGet(friend.code); r?.error ? (say(r.error, 'err'), setFriend({ ...friend, busy: false })) : setFriend({ ...friend, busy: false, got: r }) }}>{friend.busy ? '…' : 'Найти'}</button>
+          : <button className="btn btn-primary" onClick={() => applyFriend(friend.got)}>Установить</button>}</div></Modal>}
       <LaunchOverlay prog={prog} img={hero} t={t} /><LogModal open={logOpen} onClose={() => setLogOpen(false)} t={t} /><UpdateModal upd={upd} t={t} /><Splash pct={boot.pct} msg={boot.msg} />
       {toast && <div className="toastx pop-in"><span className={'ic ' + toastKind}>{toastKind === 'err' ? <Icon n="close" s={18} /> : toastKind === 'info' ? <Icon n="eye" s={18} /> : <Gem s={20} glow={false} />}</span><div className="min-w-0"><b className="block text-sm">{toastKind === 'err' ? 'Ошибка' : toastKind === 'info' ? 'Внимание' : 'Готово'}</b><span className="muted text-xs block">{toast}</span></div><button className="iconbtn !w-7 !h-7" onClick={() => setToast('')}><Icon n="close" s={12} /></button></div>}
     </div>

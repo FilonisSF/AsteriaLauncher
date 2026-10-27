@@ -8,7 +8,19 @@ const SKIN_GUIDES: [number, number, number, number, string][] = [[0, 0, 32, 16, 
   [0, 16, 16, 16, 'Пр. нога'], [0, 32, 16, 16, 'Штанина'], [16, 48, 16, 16, 'Лев. нога'], [0, 48, 16, 16, 'Штанина'], [32, 48, 16, 16, 'Лев. рука'], [48, 48, 16, 16, 'Рукав']]
 const CAPE_GUIDES: [number, number, number, number, string][] = [[1, 1, 10, 16, 'Снаружи'], [12, 1, 10, 16, 'Изнутри'], [0, 1, 1, 16, ''], [11, 1, 1, 16, ''], [1, 0, 10, 1, ''], [11, 0, 10, 1, '']]
 const PALETTE = ['#000000', '#3f3f46', '#a1a1aa', '#ffffff', '#7f1d1d', '#ef4444', '#f97316', '#facc15', '#65a30d', '#22c55e', '#0d9488', '#22d3ee', '#0ea5e9', '#1d4ed8', '#7c3aed', '#c026d3', '#ec4899', '#78350f', '#c68642', '#f1c27d']
-const TOOLS: [string, string, string][] = [['brush', 'pencil', 'Кисть'], ['eraser', 'eraser', 'Ластик'], ['fill', 'bucket', 'Заливка'], ['picker', 'picker', 'Пипетка'], ['lighten', 'sun', 'Осветлить'], ['darken', 'moon', 'Затемнить']]
+const TOOLS: [string, string, string, string][] = [['brush', 'pencil', 'Кисть', 'B'], ['eraser', 'eraser', 'Ластик', 'E'], ['fill', 'bucket', 'Заливка', 'G'], ['picker', 'picker', 'Пипетка', 'I'],
+  ['line', 'line', 'Линия', 'L'], ['rect', 'rect', 'Прямоугольник (Shift — залитый)', 'R'], ['noise', 'noise', 'Шум: оттенки текущего цвета', 'N'], ['lighten', 'sun', 'Осветлить', 'U'], ['darken', 'moon', 'Затемнить', 'D']]
+/** the faces of every box on a 64x64 skin / a cape: painting stays inside them (nothing lands on unused parts of the texture) */
+type Rect = [number, number, number, number]
+const boxFaces = (u: number, v: number, w: number, h: number, d: number): Rect[] => [[u + d, v, w, d], [u + d + w, v, w, d], [u, v + d, d, h], [u + d, v + d, w, h], [u + d + w, v + d, d, h], [u + 2 * d + w, v + d, w, h]]
+function skinFaces(slim: boolean): { r: Rect; over: boolean }[] {
+  const a = slim ? 3 : 4, out: { r: Rect; over: boolean }[] = []
+  const boxes: [number, number, number, number, number, boolean][] = [[0, 0, 8, 8, 8, false], [32, 0, 8, 8, 8, true], [16, 16, 8, 12, 4, false], [16, 32, 8, 12, 4, true], [40, 16, a, 12, 4, false], [40, 32, a, 12, 4, true],
+    [32, 48, a, 12, 4, false], [48, 48, a, 12, 4, true], [0, 16, 4, 12, 4, false], [0, 32, 4, 12, 4, true], [16, 48, 4, 12, 4, false], [0, 48, 4, 12, 4, true]]
+  for (const [u, v, w, h, d, over] of boxes) for (const r of boxFaces(u, v, w, h, d)) out.push({ r, over })
+  return out
+}
+const CAPE_FACES: { r: Rect; over: boolean }[] = [[1, 1, 10, 16], [12, 1, 10, 16], [0, 1, 1, 16], [11, 1, 1, 16], [1, 0, 10, 1], [11, 0, 10, 1]].map((r) => ({ r: r as Rect, over: false }))
 const RES: [number, string][] = [[1, '64×32 · классика'], [8, '512×256 · HD'], [16, '1024×512 · HD+']]
 
 type Design = { bg: 'solid' | 'gradient'; c1: string; c2: string; img: string; scale: number; ox: number; oy: number; rot: number; fit: 'cover' | 'contain'; back: boolean; border: number; borderColor: string }
@@ -46,35 +58,73 @@ export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClos
   const [recent, setRecent] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('recentColors') || '[]') } catch { return [] } })
   const [layer, setLayer] = useState<'over' | 'base'>('over'), [guides, setGuides] = useState(true), [d, setD] = useState<Design>(DESIGN), [, force] = useState(0)
   const isCape = mode === 'cape', TW = 64, TH = isCape ? 32 : 64
+  const [view2, setView2] = useState<'3d' | 'flat'>('3d'), [zoom, setZoom] = useState(1), [grid, setGrid] = useState(true), [mirror, setMirror] = useState(false), [hover, setHover] = useState<[number, number] | null>(null)
+  const faces = isCape ? CAPE_FACES : skinFaces(slim)
+  const mask = useRef<Uint8Array>(new Uint8Array(0))
+  if (mask.current.length !== TW * TH) { const m = new Uint8Array(TW * TH); for (const f of faces) for (let y = f.r[1]; y < f.r[1] + f.r[3]; y++) for (let x = f.r[0]; x < f.r[0] + f.r[2]; x++) m[y * TW + x] = 1; mask.current = m }
+  const faceAt = (u: number, v: number) => faces.find((f) => u >= f.r[0] && u < f.r[0] + f.r[2] && v >= f.r[1] && v < f.r[1] + f.r[3])
+  const valid = (px: number, py: number) => mask.current[Math.floor(py / k) * TW + Math.floor(px / k)] === 1
+  /** clip drawing to the faces (fillRect / clearRect / strokes respect it) */
+  const clipFaces = (x: CanvasRenderingContext2D) => { x.save(); x.beginPath(); for (const f of faces) x.rect(f.r[0] * k, f.r[1] * k, f.r[2] * k, f.r[3] * k); x.clip() }
+  const last = useRef<[number, number] | null>(null), shape = useRef<{ base: ImageData; u: number; v: number } | null>(null), shift = useRef(false)
   const ctx = () => cv.current!.getContext('2d', { willReadFrequently: true })!
   const flush = () => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(() => setUrl(cv.current!.toDataURL('image/png'))) }
 
   useEffect(() => { // load the texture being edited
     const im = new Image()
-    im.onload = () => { const kk = isCape ? Math.max(1, Math.round(im.width / 64)) : 1; setK(kk); const c = cv.current!; c.width = TW * kk; c.height = TH * kk; const x = ctx(); x.imageSmoothingEnabled = false; x.clearRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height); flush() }
+    im.onload = () => { const kk = Math.max(1, Math.round(im.width / 64)); setK(kk); const c = cv.current!; c.width = TW * kk; c.height = TH * kk; const x = ctx(); x.imageSmoothingEnabled = false; x.clearRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height); flush() }
     im.onerror = () => { const c = cv.current!; c.width = TW; c.height = TH; if (isCape) compose(DESIGN, 1, false); flush() }
     if (src) im.src = src; else im.onerror(new Event('x') as any)
   }, [])
 
   const snap = () => { undo.current.push(ctx().getImageData(0, 0, cv.current!.width, cv.current!.height)); if (undo.current.length > 60) undo.current.shift(); redo.current = []; force((x) => x + 1) }
   const history = (from: React.MutableRefObject<ImageData[]>, to: React.MutableRefObject<ImageData[]>) => { const p = from.current.pop(); if (!p) return; to.current.push(ctx().getImageData(0, 0, cv.current!.width, cv.current!.height)); if (p.width !== cv.current!.width) { cv.current!.width = p.width; cv.current!.height = p.height; setK(p.width / 64) } ctx().putImageData(p, 0, 0); flush(); force((x) => x + 1) }
-  useEffect(() => { const f = (e: KeyboardEvent) => { if (e.ctrlKey && e.code === 'KeyZ') { e.preventDefault(); e.shiftKey ? history(redo, undo) : history(undo, redo) } else if (e.ctrlKey && e.code === 'KeyY') { e.preventDefault(); history(redo, undo) } else if (e.code === 'Escape') onClose() }
-    addEventListener('keydown', f); return () => removeEventListener('keydown', f) }, [])
+  useEffect(() => { const f = (e: KeyboardEvent) => { if (e.ctrlKey && e.code === 'KeyZ') { e.preventDefault(); e.shiftKey ? history(redo, undo) : history(undo, redo) } else if (e.ctrlKey && e.code === 'KeyY') { e.preventDefault(); history(redo, undo) } else if (e.code === 'Escape') onClose()
+      else if (!e.ctrlKey && !(e.target instanceof HTMLInputElement)) { const t = TOOLS.find((x) => 'Key' + x[3] === e.code); if (t) setTool(t[0])
+        if (e.code === 'BracketLeft') setSize((s) => Math.max(1, s - 1)); if (e.code === 'BracketRight') setSize((s) => Math.min(4, s + 1)); if (e.code === 'KeyM') setMirror((m) => !m) } }
+    const sh = (e: KeyboardEvent) => { shift.current = e.shiftKey }; addEventListener('keydown', sh); addEventListener('keyup', sh)
+    addEventListener('keydown', f); return () => { removeEventListener('keydown', f); removeEventListener('keydown', sh); removeEventListener('keyup', sh) } }, [])
   const useColor = (c: string) => { setColor(c); if (tool === 'eraser' || tool === 'picker') setTool('brush') }
   const remember = (c: string) => setRecent((r) => { const n = [c, ...r.filter((x) => x !== c)].slice(0, 12); try { localStorage.setItem('recentColors', JSON.stringify(n)) } catch {} return n })
 
+  /** mirror point inside its face (left <-> right), for symmetric faces and capes */
+  const mirrored = (u: number, v: number): [number, number] | null => { const f = faceAt(u, v); if (!f) return null; return [f.r[0] + f.r[2] - 1 - (u - f.r[0]) + 0.0001, v] }
+  const rgb = (c: string) => { const n = parseInt(c.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255] }
+  /** one brush dab (size x size texture pixels) at (u, v) */
+  const stamp = (x: CanvasRenderingContext2D, u: number, v: number) => {
+    const px = Math.floor(u) * k, py = Math.floor(v) * k, s = size * k, x0 = px - Math.floor((size - 1) / 2) * k, y0 = py - Math.floor((size - 1) / 2) * k
+    if (tool === 'eraser') { x.clearRect(x0, y0, s, s); return }
+    if (tool === 'brush') { x.fillStyle = color; x.fillRect(x0, y0, s, s); return }
+    const im = x.getImageData(x0, y0, s, s), a = im.data, [r, g, b] = rgb(color)
+    for (let i = 0; i < a.length; i += 4) { const qx = x0 + (i / 4) % s, qy = y0 + Math.floor(i / 4 / s); if (!valid(qx, qy)) continue
+      if (tool === 'noise') { const j = (Math.random() - 0.5) * 46; a[i] = Math.max(0, Math.min(255, r + j)); a[i + 1] = Math.max(0, Math.min(255, g + j)); a[i + 2] = Math.max(0, Math.min(255, b + j)); a[i + 3] = 255 }
+      else if (a[i + 3]) { const f = tool === 'lighten' ? 1.12 : 0.88; for (const c of [0, 1, 2]) a[i + c] = Math.min(255, a[i + c] * f + (f > 1 ? 4 : 0)) } }
+    x.putImageData(im, x0, y0)
+  }
   /** paint at texture coordinates (u, v) in 64-pixel units */
   const paintAt = (u: number, v: number, first: boolean) => {
-    const x = ctx(), px = Math.floor(u * k), py = Math.floor(v * k), s = size * k, x0 = px - Math.floor((size - 1) / 2) * k, y0 = py - Math.floor((size - 1) / 2) * k
+    if (u < 0 || v < 0 || u >= TW || v >= TH) return
+    const x = ctx(), px = Math.floor(u * k), py = Math.floor(v * k)
+    if (first && !faceAt(u, v)) return // started outside the unwrap: nothing to paint there
     if (first) snap()
     if (tool === 'picker') { const p = x.getImageData(px, py, 1, 1).data; if (p[3]) { const c = '#' + [p[0], p[1], p[2]].map((n) => n.toString(16).padStart(2, '0')).join(''); setColor(c); remember(c) } setTool('brush'); undo.current.pop(); return }
-    if (tool === 'fill') { if (first) flood(px, py); flush(); return }
-    if (tool === 'eraser') x.clearRect(x0, y0, s, s)
-    else if (tool === 'lighten' || tool === 'darken') {
-      const im = x.getImageData(x0, y0, s, s), a = im.data, f = tool === 'lighten' ? 1.12 : 0.88
-      for (let i = 0; i < a.length; i += 4) if (a[i + 3]) { a[i] = Math.min(255, a[i] * f + (f > 1 ? 4 : 0)); a[i + 1] = Math.min(255, a[i + 1] * f + (f > 1 ? 4 : 0)); a[i + 2] = Math.min(255, a[i + 2] * f + (f > 1 ? 4 : 0)) }
-      x.putImageData(im, x0, y0)
-    } else { x.fillStyle = color; x.fillRect(x0, y0, s, s); if (first) remember(color) }
+    if (tool === 'fill') { if (first) { flood(px, py); const m = mirror && mirrored(u, v); if (m) flood(Math.floor(m[0] * k), py) } flush(); return }
+    if (tool === 'line' || tool === 'rect') { // shapes: drawn again from the start point on every move, kept on release
+      if (first) shape.current = { base: x.getImageData(0, 0, cv.current!.width, cv.current!.height), u, v }
+      const sh = shape.current; if (!sh) return; x.putImageData(sh.base, 0, 0); clipFaces(x); x.fillStyle = color
+      const pts = (u0: number, v0: number, u1: number, v1: number) => { const n = Math.max(Math.abs(Math.floor(u1) - Math.floor(u0)), Math.abs(Math.floor(v1) - Math.floor(v0)), 1); const o: [number, number][] = []; for (let i = 0; i <= n; i++) o.push([Math.floor(u0 + (u1 - u0) * i / n), Math.floor(v0 + (v1 - v0) * i / n)]); return o }
+      const draw = (u0: number, v0: number, u1: number, v1: number) => {
+        if (tool === 'line') for (const [a, b] of pts(u0, v0, u1, v1)) x.fillRect(a * k, b * k, size * k, size * k)
+        else { const l = Math.floor(Math.min(u0, u1)), t = Math.floor(Math.min(v0, v1)), r2 = Math.floor(Math.max(u0, u1)), b2 = Math.floor(Math.max(v0, v1))
+          if (shift.current) x.fillRect(l * k, t * k, (r2 - l + 1) * k, (b2 - t + 1) * k)
+          else { x.fillRect(l * k, t * k, (r2 - l + 1) * k, k); x.fillRect(l * k, b2 * k, (r2 - l + 1) * k, k); x.fillRect(l * k, t * k, k, (b2 - t + 1) * k); x.fillRect(r2 * k, t * k, k, (b2 - t + 1) * k) } } }
+      draw(sh.u, sh.v, u, v); const m0 = mirror && mirrored(sh.u, sh.v), m1 = mirror && mirrored(u, v); if (m0 && m1) draw(m0[0], m0[1], m1[0], m1[1])
+      x.restore(); if (first) remember(color); flush(); return }
+    clipFaces(x)
+    const from = first || !last.current ? [u, v] : last.current, n = Math.max(1, Math.ceil(Math.hypot(u - from[0], v - from[1]) * 2)) // no gaps when the mouse moves fast
+    for (let i = 1; i <= n || i === 1; i++) { const t = n ? i / n : 1, uu = from[0] + (u - from[0]) * t, vv = from[1] + (v - from[1]) * t
+      stamp(x, uu, vv); const m = mirror && mirrored(uu, vv); if (m) stamp(x, m[0], m[1]); if (i >= n) break }
+    x.restore(); last.current = [u, v]; if (first && tool === 'brush') remember(color)
     flush()
   }
   const flood = (sx: number, sy: number) => {
@@ -82,13 +132,16 @@ export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClos
     const n = parseInt(color.slice(1), 16), rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
     if (t[0] === rgb[0] && t[1] === rgb[1] && t[2] === rgb[2] && t[3] === 255) return
     const st = [sx, sy]
-    while (st.length) { const py = st.pop()!, px = st.pop()!; if (px < 0 || py < 0 || px >= W || py >= H) continue; const i = (py * W + px) * 4
+    while (st.length) { const py = st.pop()!, px = st.pop()!; if (px < 0 || py < 0 || px >= W || py >= H || !valid(px, py)) continue; const i = (py * W + px) * 4
       if (a[i] !== t[0] || a[i + 1] !== t[1] || a[i + 2] !== t[2] || a[i + 3] !== t[3]) continue
       a[i] = rgb[0]; a[i + 1] = rgb[1]; a[i + 2] = rgb[2]; a[i + 3] = 255; st.push(px + 1, py, px - 1, py, px, py + 1, px, py - 1) }
     x.putImageData(im, 0, 0); remember(color)
   }
   const onSkinHit = (h: Hit) => { if (layer === 'base' && h.layer === 'over') return; paintAt(h.u, h.v, h.first) }
   const map = (e: React.PointerEvent, first: boolean) => { const r = cv.current!.getBoundingClientRect(); paintAt(Math.floor(((e.clientX - r.left) / r.width) * TW * 1000) / 1000, Math.floor(((e.clientY - r.top) / r.height) * TH * 1000) / 1000, first) }
+  /** the big flat unwrap: same as the small one, plus the hovered pixel */
+  const flat = (e: React.PointerEvent, first: boolean, hoverOnly = false) => { const r = (e.currentTarget as Element).getBoundingClientRect(), u = ((e.clientX - r.left) / r.width) * TW, v = ((e.clientY - r.top) / r.height) * TH
+    setHover(faceAt(u, v) ? [Math.floor(u), Math.floor(v)] : null); if (!hoverOnly) paintAt(u, v, first) }
 
   // ---------------------------------------------------------------- cape designer
   const loadImg = (s: string) => new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = s })
@@ -124,9 +177,25 @@ export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClos
           <button className="btn !p-2" title="Повторить (Ctrl+Y)" disabled={!redo.current.length} onClick={() => history(redo, undo)} style={{ transform: 'scaleX(-1)' }}><Icon n="undo" s={18} /></button>
           <button className="btn !p-2" title="Закрыть (Esc)" onClick={onClose}><Icon n="close" s={18} /></button></div></div>
       <div className="flex gap-3 flex-1 min-h-0">
-        <div className="flex flex-col gap-1.5">{TOOLS.map(([id, ic, label]) => <button key={id} title={label} onClick={() => setTool(id)} className={'btn !p-2.5 ' + (tool === id ? 'btn-on' : '')}><Icon n={ic} s={20} /></button>)}
-          <div className="label mt-2 text-center">Кисть</div>{[1, 2, 3].map((n) => <button key={n} onClick={() => setSize(n)} className={'btn !p-0 h-9 flex items-center justify-center ' + (size === n ? 'btn-on' : '')}><span className="rounded-sm" style={{ width: 4 + n * 4, height: 4 + n * 4, background: 'currentColor' }} /></button>)}</div>
-        <div className="flex-1 min-w-0"><Skin3D skin={isCape ? skin : url || src} cape={isCape ? url : undefined} slim={slim} paint={isCape ? 'cape' : 'skin'} onSkinHit={onSkinHit} onCapeHit={(h) => paintAt(h.u, h.v, h.first)} view={view} height={640} scale={isCape ? 9 : 8} /></div>
+        <div className="flex flex-col gap-1.5 overflow-auto">{TOOLS.map(([id, ic, label, key]) => <button key={id} title={label + ' (' + key + ')'} onClick={() => setTool(id)} className={'btn !p-2.5 ' + (tool === id ? 'btn-on' : '')}><Icon n={ic} s={20} /></button>)}
+          <button title="Зеркально: рисует сразу на левой и правой половине (M)" onClick={() => setMirror(!mirror)} className={'btn !p-2.5 ' + (mirror ? 'btn-on' : '')}><Icon n="mirror" s={20} /></button>
+          <div className="label mt-1 text-center">Кисть</div>{[1, 2, 3, 4].map((n) => <button key={n} title={'Размер ' + n + ' ([ и ])'} onClick={() => setSize(n)} className={'btn !p-0 h-8 flex items-center justify-center ' + (size === n ? 'btn-on' : '')}><span className="rounded-sm" style={{ width: 3 + n * 3.5, height: 3 + n * 3.5, background: 'currentColor' }} /></button>)}</div>
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
+          <div className="flex items-center gap-2"><div className="seg"><button className={view2 === '3d' ? 'on' : ''} onClick={() => setView2('3d')}>3D-модель</button><button className={view2 === 'flat' ? 'on' : ''} onClick={() => setView2('flat')}>Развёртка крупно</button></div>
+            {view2 === 'flat' && <><button className={'pill ' + (grid ? 'on' : '')} onClick={() => setGrid(!grid)}><Icon n="grid" s={13} />Сетка</button>
+              <span className="muted text-xs flex items-center gap-1 ml-1"><Icon n="zoom" s={14} />{Math.round(zoom * 100)}%</span><input type="range" min={1} max={4} step={0.25} value={zoom} onChange={(e) => setZoom(+e.target.value)} style={{ width: 120 }} /></>}
+            <span className="muted text-xs ml-auto">{hover ? `пиксель ${hover[0]}, ${hover[1]}` : view2 === '3d' ? 'Левая кнопка — рисовать, правая — вращать' : 'Колесо — масштаб'}</span></div>
+          {view2 === '3d' ? <Skin3D skin={isCape ? skin : url || src} cape={isCape ? url : undefined} slim={slim} paint={isCape ? 'cape' : 'skin'} onSkinHit={onSkinHit} onCapeHit={(h) => paintAt(h.u, h.v, h.first)} view={view} height={600} scale={isCape ? 9 : 8} />
+          : <div className="flex-1 min-h-0 overflow-auto rounded-2xl" style={{ background: 'rgba(0,0,0,.25)' }} onWheel={(e) => setZoom((z) => Math.max(1, Math.min(4, +(z * (e.deltaY < 0 ? 1.15 : 0.87)).toFixed(2))))}>
+            <div className="relative checker m-auto" style={{ width: (isCape ? 820 : 560) * zoom, height: (isCape ? 410 : 560) * zoom, cursor: tool === 'picker' ? 'copy' : 'crosshair', touchAction: 'none' }}
+              onPointerDown={(e) => { (e.currentTarget as Element).setPointerCapture(e.pointerId); flat(e, true) }} onPointerMove={(e) => { flat(e, false, !(e.buttons & 1) || tool === 'fill' || tool === 'picker') }} onPointerUp={() => { last.current = null; shape.current = null }} onPointerLeave={() => setHover(null)}>
+              <img src={url} draggable={false} className="absolute inset-0 w-full h-full" style={{ imageRendering: k > 1 ? 'auto' : 'pixelated' }} />
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${TW} ${TH}`} preserveAspectRatio="none">
+                <path fillRule="evenodd" fill="rgba(4,10,16,.72)" d={`M0 0H${TW}V${TH}H0Z ` + faces.map((f) => `M${f.r[0]} ${f.r[1]}h${f.r[2]}v${f.r[3]}h${-f.r[2]}Z`).join(' ')} />
+                {faces.map((f, i) => <rect key={i} x={f.r[0]} y={f.r[1]} width={f.r[2]} height={f.r[3]} fill="none" stroke={f.over ? 'rgba(167,139,250,.7)' : 'rgba(34,211,238,.55)'} strokeWidth={0.12} />)}
+                {hover && <rect x={hover[0]} y={hover[1]} width={size} height={size} fill="none" stroke="#fff" strokeWidth={0.15} />}</svg>
+              {grid && <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.09) 1px,transparent 1px)', backgroundSize: `${100 / TW}% ${100 / TH}%` }} />}
+            </div></div>}</div>
         <div className="flex flex-col gap-3 overflow-auto pr-1" style={{ width: 312 }}>
           <div className="card rounded-2xl p-3 flex flex-col items-center gap-2"><ColorWheel value={color} onChange={useColor} size={200} />
             <div className="flex gap-2 items-center w-full"><span className="w-9 h-9 rounded-xl shrink-0" style={{ background: color, boxShadow: 'inset 0 0 0 1px var(--line)' }} />
@@ -138,7 +207,7 @@ export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClos
           <div className="card rounded-2xl p-3"><div className="flex items-center justify-between mb-2"><span className="label">Развёртка</span><button className={'pill !py-0.5 ' + (guides ? 'on' : '')} onClick={() => setGuides(!guides)}>Подписи</button></div>
             <div className="relative checker rounded-lg overflow-hidden" style={{ width: mapW, height: mapH }}>
               <canvas ref={cv} width={TW} height={TH} style={{ width: mapW, height: mapH, imageRendering: k > 1 ? 'auto' : 'pixelated', cursor: 'crosshair', touchAction: 'none' }}
-                onPointerDown={(e) => { (e.target as Element).setPointerCapture(e.pointerId); map(e, true) }} onPointerMove={(e) => (e.buttons & 1) && tool !== 'fill' && tool !== 'picker' && map(e, false)} />
+                onPointerDown={(e) => { (e.target as Element).setPointerCapture(e.pointerId); map(e, true) }} onPointerUp={() => { last.current = null; shape.current = null }} onPointerMove={(e) => (e.buttons & 1) && tool !== 'fill' && tool !== 'picker' && map(e, false)} />
               {guides && guideList.map(([x, y, w, h, l], i) => <div key={i} className="absolute pointer-events-none text-[9px] text-white/90" style={{ left: x / TW * mapW, top: y / TH * mapH, width: w / TW * mapW, height: h / TH * mapH, border: '1px dashed rgba(255,255,255,.45)' }}>{l && <span style={{ background: 'rgba(0,0,0,.5)', padding: '0 3px' }}>{l}</span>}</div>)}</div></div>
           {isCape && <div className="card rounded-2xl p-3 flex flex-col gap-2.5">
             <div className="font-bold">Конструктор плаща</div>
@@ -159,7 +228,9 @@ export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClos
       </div>
       {cropSrc && <CropBox src={cropSrc} aspect={10 / 16} onCancel={() => setCropSrc('')} onDone={(png) => { setCropSrc(''); const nd = { ...d, img: png, fit: 'cover' as const, scale: 100, ox: 0, oy: 0, rot: 0 }; setD(nd); compose(nd, Math.max(k, 8)) }} />}
       <div className="flex gap-2 justify-end items-center"><span className="muted text-sm mr-auto">{isCape ? 'Плащ увидят все игроки AsteriaLauncher.' : 'Скин увидят все игроки AsteriaLauncher; для лицензии — ещё и на всех серверах (кнопка «Применить»).'}</span>
-        <a className="btn flex items-center gap-2" href={url} download={mode + '.png'}><Icon n="download" s={16} />PNG</a>
+        <button className="btn flex items-center gap-2" title={isCape ? 'Готовая развёртка плаща (64×32 или HD) или любая картинка — выберете область' : 'Готовый скин 64×64 или HD'} onClick={async () => { const p = await pickImage(); if (!p) return
+          const im = new Image(); im.onload = () => { if (Math.abs(im.width / im.height - TW / TH) < 0.02) { snap(); const kk = Math.max(1, Math.round(im.width / 64)), c = cv.current!; c.width = TW * kk; c.height = TH * kk; const x = ctx(); x.imageSmoothingEnabled = false; x.clearRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height); setK(kk); flush() } else if (isCape) setCropSrc(p) }; im.src = p }}><Icon n="upload" s={16} />Загрузить PNG</button>
+        <a className="btn flex items-center gap-2" href={url} download={mode + '.png'} title="Сохранить файл на компьютер"><Icon n="download" s={16} />Скачать</a>
         <button className="btn" onClick={onClose}>Отмена</button><button className="btn btn-primary" onClick={() => onSave(cv.current!.toDataURL('image/png'))}>Сохранить</button></div>
     </div>
   </div>

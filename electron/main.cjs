@@ -138,6 +138,16 @@ ipcMain.handle('vis:code', (_, cfg) => { const c = visCode(cfg); clipboard.write
 ipcMain.handle('vis:share', async (_, cfg) => { const code = visCode(cfg); await resolveApi().catch(() => {})
   const r = await net.fetch(apiBase() + '/vcfg', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }), signal: AbortSignal.timeout(6000) }).then((x) => x.json()).catch(() => null)
   const out = r?.id || code; clipboard.writeText(out); return { id: r?.id || null, code } })
+// ---------- sharing with a friend: a 6-letter code for a mod pack, skin, cape or crosshair
+ipcMain.handle('share:make', async (_, kind, data) => { await resolveApi().catch(() => {})
+  const r = await net.fetch(apiBase() + '/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind, data }), signal: AbortSignal.timeout(15000) }).then((x) => x.json()).catch(() => null)
+  if (r?.id) clipboard.writeText(r.id); return r?.id ? { id: r.id } : { error: r?.error || 'Сервер Asteria недоступен' } })
+ipcMain.handle('share:get', async (_, code) => { const t = String(code || '').trim().toUpperCase(); if (!/^[A-Z0-9]{6}$/.test(t)) return { error: 'Код — 6 букв и цифр' }
+  await resolveApi().catch(() => {}); const r = await net.fetch(`${apiBase()}/share/${t}`, { signal: AbortSignal.timeout(15000) }).then((x) => x.ok ? x.json() : null).catch(() => null)
+  return r || { error: 'Код не найден' } })
+/** what a version has from Modrinth: mods, resource packs, shaders (slugs) */
+ipcMain.handle('pack:export', (_, ver) => { const d = inst(settings(), ver), ls = (sub, re) => { try { return fs.readdirSync(path.join(d, sub)).map((f) => (f.match(re) || [])[1]).filter(Boolean) } catch { return [] } }
+  return { ver, mods: ls('mods', /^mod-(.+)\.jar$/).filter((x) => !DEFAULTS.includes(x) && x !== 'fabric-api'), packs: ls('resourcepacks', /^(.+)\.zip$/), shaders: ls('shaderpacks', /^(.+)\.zip$/) } })
 ipcMain.handle('vis:decode', async (_, text) => { const t = String(text ?? clipboard.readText()).trim()
   if (/^[A-Z0-9]{6}$/i.test(t)) { await resolveApi().catch(() => {}); const r = await net.fetch(`${apiBase()}/vcfg/${t.toUpperCase()}`, { signal: AbortSignal.timeout(6000) }).then((x) => x.ok ? x.json() : null).catch(() => null); return r ? visDecode(r.code) : null }
   return visDecode(t) })

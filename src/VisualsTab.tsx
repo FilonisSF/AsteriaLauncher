@@ -56,7 +56,7 @@ const GW = 640, GH = 360
 
 export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string; bg: string; onBuy: () => void; say: (m: string) => void; ver: string }) {
   const premium = plan === 'PREMIUM'
-  const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout' | 'configs'>('mods'), [q, setQ] = useState('')
+  const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout' | 'configs' | 'crosshair'>('mods'), [q, setQ] = useState('')
   const [pr, setPr] = useState<Presets | null>(null), prRef = useRef<Presets | null>(null), [enabled, setEnabled] = useState(true)
   useEffect(() => { window.api.visEnabled?.().then((v: boolean) => setEnabled(v !== false)) }, [])
   const toggleAll = async (v: boolean) => { setEnabled(v); await window.api.visEnabled?.(v); say(v ? 'Визуалы включены — со следующего запуска игры' : 'Визуалы выключены — игра запустится без них') }
@@ -101,7 +101,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     {!premium && <div className="card rounded-2xl p-4 mb-4 flex items-center gap-3"><span className="cmd-ic"><Icon n="lock" s={16} /></span><div className="text-sm flex-1"><b>Можно всё настроить заранее.</b> <span className="muted">В игре визуалы включатся, как только на аккаунте появится PREMIUM — лаунчер проверяет подписку при каждом запуске.</span></div></div>}
 
     <div className="flex items-center gap-3 mb-4 flex-wrap">
-      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['layout', 'Расположение HUD', 'move'], ['configs', 'Конфиги', 'folder']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
+      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['crosshair', 'Прицел', 'plus'], ['layout', 'Расположение HUD', 'move'], ['configs', 'Конфиги', 'folder']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
       <div className="flex-1" />
       <div className="flex items-center gap-2 text-sm"><span className="muted">Клавиши в игре:</span>
         {(['menu', 'zoom'] as const).map((k) => <button key={k} className={'btn !py-1.5 ' + (listenKey === k ? 'btn-on' : '')} onClick={() => setListenKey(k)}>{k === 'menu' ? 'Меню' : 'Зум'} <kbd className="ml-1">{listenKey === k ? '…' : pretty(keys[k])}</kbd></button>)}</div>
@@ -155,6 +155,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     </div>}
 
     {view === 'configs' && pr && <Configs c={c} pr={pr} set={setPresets} say={say} />}
+    {view === 'crosshair' && c.modules.crosshair && <CrosshairTab m={c.modules.crosshair} on={(v) => mod('crosshair', { on: v })} set={(k, v) => setS('crosshair', k, v)} say={say} />}
 
     {view === 'layout' && <Layout c={c} bg={bg} move={(id, x, y) => mod(id, { hud: [x, y] })} />}
   </div>
@@ -216,6 +217,34 @@ function Configs({ c, pr, set, say }: { c: VisCfg; pr: Presets; set: (p: Presets
 
 function Range({ label, min, max, step, v, set, show }: { label: string; min: number; max: number; step: number; v: number; set: (n: number) => void; show?: (n: number) => string }) {
   return <label className="block"><div className="flex justify-between text-sm mb-1"><span>{label}</span><b>{show ? show(v) : v}</b></div><input type="range" className="w-full" min={min} max={max} step={step} value={v} onChange={(e) => set(+e.target.value)} /></label>
+}
+/** the crosshair as the game draws it (Hud.crosshair), scaled up */
+function CrossPreview({ s, px = 8 }: { s: any; px?: number }) {
+  const st = +s.style, size = +s.size, gap = +s.gap, th = +s.thick, al = +s.alpha, ot = s.outline ? +s.othick : 0, col = s.color || '#fff', W = 30, c = W / 2, o = 'rgba(0,0,0,.85)'
+  const els: JSX.Element[] = []; const R = (x0: number, y0: number, x1: number, y1: number, key: string) => { if (ot) els.push(<rect key={key + 'o'} x={x0 - ot} y={y0 - ot} width={x1 - x0 + 2 * ot} height={y1 - y0 + 2 * ot} fill={o} />); els.push(<rect key={key} x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill={col} />) }
+  if (st === 6) { const p = String(s.pattern || ''), n = Math.round(Math.sqrt(p.length)); if (n * n === p.length) for (let i = 0; i < p.length; i++) if (p[i] === '1') R(c - n * th / 2 + (i % n) * th, c - n * th / 2 + Math.floor(i / n) * th, c - n * th / 2 + (i % n + 1) * th, c - n * th / 2 + (Math.floor(i / n) + 1) * th, 'p' + i) }
+  if (st === 0 || st === 1 || st === 5) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { if (st === 5 && dy < 0) continue
+    const x1 = c + dx * gap, y1 = c + dy * gap, x2 = c + dx * (gap + size), y2 = c + dy * (gap + size), hx = dx === 0 ? th / 2 : 0, hy = dy === 0 ? th / 2 : 0
+    R(Math.min(x1, x2) - hx, Math.min(y1, y2) - hy, Math.max(x1, x2) + hx, Math.max(y1, y2) + hy, 'a' + dx + dy) }
+  if (st === 3 || st === 4) { if (ot) els.push(<circle key="ro" cx={c} cy={c} r={size + gap} fill="none" stroke={o} strokeWidth={th + 2 * ot} />); els.push(<circle key="r" cx={c} cy={c} r={size + gap} fill="none" stroke={col} strokeWidth={th} />) }
+  if (st === 1 || st === 2 || st === 4) { const r = Math.max(0.6, th * 0.75) * (st === 2 ? 1.4 : 1); if (ot) els.push(<circle key="do" cx={c} cy={c} r={r + ot} fill={o} />); els.push(<circle key="d" cx={c} cy={c} r={r} fill={col} />) }
+  if (st === 7) els.push(<g key="v" opacity={0.9}><rect x={c - 4.5} y={c - 0.5} width={9} height={1} fill="#fff" /><rect x={c - 0.5} y={c - 4.5} width={1} height={9} fill="#fff" /></g>)
+  return <svg width={W * px} height={W * px} viewBox={`0 0 ${W} ${W}`} style={{ opacity: al, shapeRendering: 'crispEdges' }}>{els}</svg>
+}
+function CrosshairTab({ m, on, set, say }: { m: ModCfg; on: (v: boolean) => void; set: (k: string, v: any) => void; say: (s: string, k?: any) => void }) {
+  const sch = MODS.find((x) => x.id === 'crosshair')!, s = m.s, [bg, setBg] = useState(0), BGS = ['linear-gradient(160deg,#5b8c32,#2d4a1a)', 'linear-gradient(160deg,#87c6ff,#cfe9ff)', 'linear-gradient(160deg,#1b1b24,#050508)']
+  return <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)' }}>
+    <div className="card rounded-3xl p-5 flex flex-col gap-4">
+      <div className="flex items-center justify-between"><b className="text-lg">Прицел</b><Switch on={m.on} set={on} label="Свой прицел" /></div>
+      <div className="rounded-2xl flex items-center justify-center" style={{ height: 300, background: BGS[bg] }}><CrossPreview s={s} px={9} /></div>
+      <div className="flex gap-1.5 items-center"><span className="muted text-xs mr-1">Фон:</span>{['Трава', 'Небо', 'Ночь'].map((l, i) => <button key={l} className={'pill !py-0.5 ' + (bg === i ? 'on' : '')} onClick={() => setBg(i)}>{l}</button>)}
+        <div className="flex-1" /><button className="pill" onClick={async () => { const r = await window.api.shareMake('crosshair', s); r?.id ? say('Код ' + r.id + ' скопирован — отправьте его другу') : say(r?.error || 'Не удалось', 'err') }}><Icon n="share" s={13} />Поделиться прицелом</button></div>
+      <div><div className="text-sm mb-1.5">Форма</div><div className="grid grid-cols-4 gap-2">{sch.s[0].options!.map((o, i) => <button key={o} onClick={() => set('style', i)} className="rounded-xl flex flex-col items-center gap-1 py-2 transition" style={{ background: +s.style === i ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: +s.style === i ? '#fff' : undefined }}>
+        <span className="rounded-lg flex items-center justify-center" style={{ background: 'rgba(0,0,0,.35)', width: 56, height: 56 }}><CrossPreview s={{ ...s, style: i, alpha: 1 }} px={1.8} /></span><span className="text-[11px] font-semibold">{o}</span></button>)}</div></div>
+    </div>
+    <div className="card rounded-3xl p-5 flex flex-col gap-3">
+      {sch.s.filter((x) => x.id !== 'style').map((x) => <Setting key={x.id} mod="crosshair" s={x} v={s[x.id]} set={(v) => set(x.id, v)} />)}
+    </div></div>
 }
 /** draw your own crosshair: 15 x 15 cells, saved as a string of 0/1 (the game draws each cell "thickness" pixels big) */
 const PN = 15
