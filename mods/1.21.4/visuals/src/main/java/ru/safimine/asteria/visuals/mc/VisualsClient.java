@@ -25,7 +25,7 @@ public class VisualsClient implements ClientModInitializer {
     private static final Map<String, Boolean> HELD = new HashMap<>();
     private static int appliedHit = 0;
 
-    @Override public void onInitializeClient() { V.init(MinecraftClient.getInstance().getSession().getUsername()); }
+    @Override public void onInitializeClient() { V.init(MinecraftClient.getInstance().getSession().getUsername()); ru.safimine.asteria.visuals.Menu.tr = k -> net.minecraft.client.resource.language.I18n.translate(k); }
 
     public static void hud(DrawContext ctx) { try { Hud.render(new Gfx121(ctx), Game121.I); } catch (Throwable ignored) {} }
     public static void world(Matrix4f pos, Camera cam, float pt) { try { Fx.render(new R3_121(pos, cam, pt), Game121.I); } catch (Throwable ignored) {} }

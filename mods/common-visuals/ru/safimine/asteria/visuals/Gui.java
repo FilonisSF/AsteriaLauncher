@@ -229,6 +229,7 @@ public final class Gui {
         y = themeRow("Переливающиеся цвета (RGB)", V.chroma, x0, y, x1, () -> { V.chroma = !V.chroma; V.changed(); });
         y = themeRow("Тени", V.shadow, x0, y, x1, () -> { V.shadow = !V.shadow; V.changed(); });
         y = fontRow(x0, y, x1, mx);
+        y = themeRow("Свой стиль меню Minecraft", V.menu, x0, y, x1, () -> { V.menu = !V.menu; V.changed(); });
         y = themeRow("Блик по панелям", V.glare, x0, y, x1, () -> { V.glare = !V.glare; V.changed(); });
         y += 4;
         y = themeSlider("Прозрачность панелей", V.bg, 0.15f, 0.95f, Math.round(V.bg * 100) + "%", x0, y, x1, mx, 0);

@@ -25,12 +25,18 @@ import ru.safimine.asteria.visuals.Gfx;
 import ru.safimine.asteria.visuals.V;
 
 /** 2D drawing for 1.21.2–1.21.4: DrawContext for text/items/textures, Tessellator (POSITION_COLOR fans) for shapes. */
-final class Gfx121 implements Gfx {
+public final class Gfx121 implements Gfx {
     private final DrawContext ctx;
     private final MatrixStack m;
     private final MinecraftClient c = MinecraftClient.getInstance();
     private final TextRenderer tr = c.textRenderer;
-    Gfx121(DrawContext ctx) { this.ctx = ctx; this.m = ctx.getMatrices(); }
+    public Gfx121(DrawContext ctx) { this.ctx = ctx; this.m = ctx.getMatrices(); }
+    private static final java.util.Map<String, Identifier> TEX = new java.util.HashMap<>();
+    private Identifier tex(String path) { return TEX.computeIfAbsent(path, p -> { Identifier id = Identifier.of("asteria_visuals", p); try { c.getTextureManager().getTexture(id).setFilter(true, false); } catch (Throwable ignored) {} return id; }); }
+    @Override public void texture(String path, int tw, int th, float x, float y, float w, float h) {
+        Identifier id = tex(path);
+        m.push(); m.translate(x, y, 0); m.scale(w / tw, h / th, 1); ctx.drawTexture(RenderLayer::getGuiTextured, id, 0, 0, 0f, 0f, tw, th, tw, th); m.pop();
+    }
 
     @Override public void poly(float[] xy, int[] col) {
         ctx.draw();

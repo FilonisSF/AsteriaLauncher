@@ -15,6 +15,8 @@ public interface Gfx {
     void textTop(String s, float x, float y, int argb);
     /** a png from disk as a texture (re-uploaded when key changes); false if it could not be drawn */
     default boolean image(String key, java.io.File png, float x, float y, float w, float h) { return false; }
+    /** a texture of our mod (asteria_visuals:<path>, tw x th pixels) stretched to x, y, w, h, smooth filtering */
+    default void texture(String path, int tw, int th, float x, float y, float w, float h) {}
     void item(Object stack, int x, int y);
     /** status-effect icon; false if this version can't draw it */
     boolean effectIcon(Object type, int x, int y, int size);

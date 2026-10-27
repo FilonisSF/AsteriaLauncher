@@ -8,7 +8,7 @@ declare global { interface Window { api: any } }
 type S = { id: string; name: string; type: 'bool' | 'num' | 'mode' | 'color'; def: any; min?: number; max?: number; step?: number; options?: string[] }
 type M = { id: string; cat: string; name: string; desc: string; on: boolean; hud?: [number, number]; s: S[] }
 type ModCfg = { on: boolean; bind: number; hud?: [number, number]; s: Record<string, any> }
-type Theme = { accent: string; accent2: string; chroma: boolean; shadow: boolean; blur: boolean; bg: number; scale: number; hud?: number; glare?: boolean; font?: number | boolean }
+type Theme = { accent: string; accent2: string; chroma: boolean; shadow: boolean; blur: boolean; bg: number; scale: number; hud?: number; glare?: boolean; font?: number | boolean; menu?: boolean }
 export type VisCfg = { theme: Theme; modules: Record<string, ModCfg> }
 const MODS = (schema as any).modules as M[], CATS = (schema as any).categories as { id: string; name: string }[]
 const CAT_ICON: Record<string, string> = { hud: 'grid', world: 'cube', combat: 'sparkles', camera: 'eye' }
@@ -144,6 +144,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
         <Switch on={c.theme.blur} set={(v) => theme({ blur: v })} label="Мягкое свечение панелей" />
         <div className="flex items-center justify-between gap-3"><div><div className="text-sm">Шрифт в игре</div><div className="muted text-xs">Весь текст HUD и меню Asteria</div></div>
           <Dropdown value={String(fontIdx(c.theme.font))} w={210} set={(v) => theme({ font: +v })} options={FONTS.map((n, i) => ({ value: String(i), label: n }))} /></div>
+        <Switch on={c.theme.menu !== false} set={(v) => theme({ menu: v })} label="Свой стиль меню Minecraft" hint="Неоновые кнопки, логотип AsteriaLauncher вместо Minecraft, фон Asteria и без кнопки Realms" />
         <Switch on={!!c.theme.glare} set={(v) => theme({ glare: v })} label="Блик по панелям" hint="Иногда по панелям HUD пробегает светлый блик" />
         <Range label="Прозрачность подложки" min={0} max={1} step={0.05} v={c.theme.bg} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ bg: v })} />
         <Range label="Размер HUD" min={0.6} max={1.6} step={0.05} v={c.theme.scale} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ scale: v })} />

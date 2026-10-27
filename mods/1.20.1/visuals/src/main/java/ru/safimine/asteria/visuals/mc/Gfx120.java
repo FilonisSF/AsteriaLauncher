@@ -22,12 +22,18 @@ import ru.safimine.asteria.visuals.Gfx;
 import ru.safimine.asteria.visuals.V;
 
 /** 2D drawing for 1.20.x: DrawContext for text/items/textures, Tessellator (POSITION_COLOR triangle fans) for shapes. */
-final class Gfx120 implements Gfx {
+public final class Gfx120 implements Gfx {
     private final DrawContext ctx;
     private final MatrixStack m;
     private final MinecraftClient c = MinecraftClient.getInstance();
     private final TextRenderer tr = c.textRenderer;
-    Gfx120(DrawContext ctx) { this.ctx = ctx; this.m = ctx.getMatrices(); }
+    public Gfx120(DrawContext ctx) { this.ctx = ctx; this.m = ctx.getMatrices(); }
+    private static final java.util.Map<String, Identifier> TEX = new java.util.HashMap<>();
+    private Identifier tex(String path) { return TEX.computeIfAbsent(path, p -> { Identifier id = new Identifier("asteria_visuals", p); try { c.getTextureManager().getTexture(id).setFilter(true, false); } catch (Throwable ignored) {} return id; }); }
+    @Override public void texture(String path, int tw, int th, float x, float y, float w, float h) {
+        Identifier id = tex(path); RenderSystem.enableBlend(); RenderSystem.defaultBlendFunc();
+        m.push(); m.translate(x, y, 0); m.scale(w / tw, h / th, 1); ctx.drawTexture(id, 0, 0, 0f, 0f, tw, th, tw, th); m.pop();
+    }
 
     @Override public void poly(float[] xy, int[] col) {
         ctx.draw(); // flush batched text first so the order stays correct

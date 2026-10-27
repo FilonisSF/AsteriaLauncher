@@ -25,7 +25,7 @@ public class VisualsClient implements ClientModInitializer {
     private static int appliedHit = 0;
 
     @Override public void onInitializeClient() {
-        V.init(MinecraftClient.getInstance().getSession().getUsername());
+        V.init(MinecraftClient.getInstance().getSession().getUsername()); ru.safimine.asteria.visuals.Menu.tr = k -> net.minecraft.client.resource.language.I18n.translate(k);
         MENU = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.menu", InputUtil.Type.KEYSYM, 344, "category.asteria"));
         ZOOM = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.zoom", InputUtil.Type.KEYSYM, 67, "category.asteria"));
         HudRenderCallback.EVENT.register((m, delta) -> { try { Hud.render(new Gfx116(m), Game116.I); } catch (Throwable ignored) {} });

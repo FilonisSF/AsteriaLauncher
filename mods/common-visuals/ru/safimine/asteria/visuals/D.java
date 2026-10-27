@@ -225,6 +225,15 @@ public final class D {
             case "move": path(x, y, k, w, c, false, 12, 3, 12, 21); path(x, y, k, w, c, false, 3, 12, 21, 12); path(x, y, k, w, c, false, 9, 6, 12, 3, 15, 6); path(x, y, k, w, c, false, 9, 18, 12, 21, 15, 18); path(x, y, k, w, c, false, 6, 9, 3, 12, 6, 15); path(x, y, k, w, c, false, 18, 9, 21, 12, 18, 15); break;
             case "music": path(x, y, k, w, c, false, 9, 17, 9, 5, 19, 3, 19, 15); circle(x + 6.5f * k, y + 17 * k, 2.6f * k + w / 2, c); circle(x + 16.5f * k, y + 15 * k, 2.6f * k + w / 2, c); break;
             case "dot": circle(x + 12 * k, y + 12 * k, 3.5f * k, c); break;
+            case "users": ringIcon(x, y, k, 9, 8, 3.5f, w, c); path(x, y, k, w, c, false, 2.5f, 20, 3.5f, 15.5f, 9, 13, 14.5f, 15.5f, 15.5f, 20); ringIcon(x, y, k, 17, 9, 2.8f, w, c); path(x, y, k, w, c, false, 17.5f, 13.5f, 20.5f, 15, 21.5f, 19); break;
+            case "gear": ringIcon(x, y, k, 12, 12, 6, w, c); ringIcon(x, y, k, 12, 12, 2.2f, w, c);
+                for (int i = 0; i < 8; i++) { double an = Math.PI * i / 4; path(x, y, k, w * 1.4f, c, false, (float) (12 + Math.cos(an) * 6.5), (float) (12 + Math.sin(an) * 6.5), (float) (12 + Math.cos(an) * 9.5), (float) (12 + Math.sin(an) * 9.5)); } break;
+            case "exit": path(x, y, k, w, c, false, 14, 4, 5, 4, 5, 20, 14, 20); path(x, y, k, w, c, false, 10, 12, 21, 12); path(x, y, k, w, c, false, 17, 8, 21, 12, 17, 16); break;
+            case "globe": ringIcon(x, y, k, 12, 12, 8.5f, w, c); path(x, y, k, w, c, false, 3.5f, 12, 20.5f, 12); path(x, y, k, w, c, false, 12, 3.5f, 9, 8, 8.5f, 12, 9, 16, 12, 20.5f); path(x, y, k, w, c, false, 12, 3.5f, 15, 8, 15.5f, 12, 15, 16, 12, 20.5f); break;
+            case "check": path(x, y, k, w * 1.2f, c, false, 5, 12.5f, 10, 17.5f, 19.5f, 6.5f); break;
+            case "back": path(x, y, k, w, c, false, 20, 12, 5, 12); path(x, y, k, w, c, false, 11, 6, 5, 12, 11, 18); break;
+            case "plus": path(x, y, k, w * 1.2f, c, false, 12, 5, 12, 19); path(x, y, k, w * 1.2f, c, false, 5, 12, 19, 12); break;
+            case "close": path(x, y, k, w * 1.2f, c, false, 6, 6, 18, 18); path(x, y, k, w * 1.2f, c, false, 18, 6, 6, 18); break;
             default: circle(x + 12 * k, y + 12 * k, 4 * k, c);
         }
     }

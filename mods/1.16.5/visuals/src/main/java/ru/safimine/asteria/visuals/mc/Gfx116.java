@@ -25,11 +25,18 @@ import ru.safimine.asteria.visuals.V;
  * the fixed-function GL matrix would apply them a second time to everything. Items are the one exception (they ignore the
  * MatrixStack), so the stack's matrix is copied onto the GL matrix just for them.
  */
-final class Gfx116 implements Gfx {
+public final class Gfx116 implements Gfx {
     private final MatrixStack m;
     private final MinecraftClient c = MinecraftClient.getInstance();
     private final TextRenderer tr = c.textRenderer;
-    Gfx116(MatrixStack m) { this.m = m; }
+    public Gfx116(MatrixStack m) { this.m = m; }
+    private static final java.util.Map<String, Identifier> TEX = new java.util.HashMap<>();
+    private Identifier tex(String path) { return TEX.computeIfAbsent(path, p -> { Identifier id = new Identifier("asteria_visuals", p); try { c.getTextureManager().getTexture(id).setFilter(true, false); } catch (Throwable ignored) {} return id; }); }
+    @Override public void texture(String path, int tw, int th, float x, float y, float w, float h) {
+        Identifier id = tex(path); c.getTextureManager().bindTexture(id); c.getTextureManager().getTexture(id).setFilter(true, false);
+        RenderSystem.enableBlend(); RenderSystem.defaultBlendFunc(); RenderSystem.color4f(1, 1, 1, 1);
+        m.push(); m.translate(x, y, 0); m.scale(w / tw, h / th, 1); DrawableHelper.drawTexture(m, 0, 0, 0f, 0f, tw, th, tw, th); m.pop();
+    }
 
     @Override public void poly(float[] xy, int[] col) {
         Matrix4f mat = m.peek().getModel();
