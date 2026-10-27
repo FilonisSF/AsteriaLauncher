@@ -132,22 +132,34 @@ ipcMain.handle('visp:get', () => { const p = store.get('visPresets', null); if (
   return p })
 ipcMain.handle('visp:set', (_, p) => { store.set('visPresets', p); store.set('visPresetsAt', Date.now()); for (const d of instanceDirs()) writePresets(d, p) })
 // share codes: AST1:<base64url(deflate(json))>; short codes go through the backend (/vcfg)
-const visCode = (cfg) => 'AST1:' + zlib.deflateRawSync(Buffer.from(JSON.stringify(cfg))).toString('base64url')
+const PERSONAL = ['pet', 'music', 'nameprotect', 'killmsg', 'markers']
+const visCode = (cfg) => { const c = { ...cfg, modules: { ...(cfg?.modules || {}) } }; for (const k of PERSONAL) delete c.modules[k]; return 'AST1:' + zlib.deflateRawSync(Buffer.from(JSON.stringify(c))).toString('base64url') }
 const visDecode = (s) => { try { s = String(s || '').trim(); if (!s.startsWith('AST1:')) return null; const o = JSON.parse(zlib.inflateRawSync(Buffer.from(s.slice(5), 'base64url')).toString()); return o && o.modules ? o : null } catch { return null } }
 ipcMain.handle('vis:code', (_, cfg) => { const c = visCode(cfg); clipboard.writeText(c); return c })
 ipcMain.handle('vis:share', async (_, cfg) => { const code = visCode(cfg); await resolveApi().catch(() => {})
   const r = await net.fetch(apiBase() + '/vcfg', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }), signal: AbortSignal.timeout(6000) }).then((x) => x.json()).catch(() => null)
   const out = r?.id || code; clipboard.writeText(out); return { id: r?.id || null, code } })
 // ---------- sharing with a friend: a 6-letter code for a mod pack, skin, cape or crosshair
+const longShare = (kind, data) => 'ASH1:' + zlib.deflateRawSync(Buffer.from(JSON.stringify({ kind, data }))).toString('base64url')
 ipcMain.handle('share:make', async (_, kind, data) => { await resolveApi().catch(() => {})
-  const r = await net.fetch(apiBase() + '/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind, data }), signal: AbortSignal.timeout(15000) }).then((x) => x.json()).catch(() => null)
-  if (r?.id) clipboard.writeText(r.id); return r?.id ? { id: r.id } : { error: r?.error || 'Сервер Asteria недоступен' } })
-ipcMain.handle('share:get', async (_, code) => { const t = String(code || '').trim().toUpperCase(); if (!/^[A-Z0-9]{6}$/.test(t)) return { error: 'Код — 6 букв и цифр' }
+  const r = await net.fetch(apiBase() + '/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind, data }), signal: AbortSignal.timeout(20000) }).then((x) => x.ok ? x.json() : null).catch(() => null)
+  if (r?.id) { clipboard.writeText(r.id); return { id: r.id } }
+  const code = longShare(kind, data); clipboard.writeText(code); return { id: code, long: true } })
+ipcMain.handle('share:get', async (_, code) => { const raw = String(code || '').trim()
+  if (raw.startsWith('ASH1:')) { try { return JSON.parse(zlib.inflateRawSync(Buffer.from(raw.slice(5), 'base64url')).toString()) } catch { return { error: 'Код повреждён — скопируйте его целиком' } } }
+  const t = raw.toUpperCase(); if (!/^[A-Z0-9]{6}$/.test(t)) return { error: 'Код — 6 букв и цифр (или длинный код ASH1:…)' }
   await resolveApi().catch(() => {}); const r = await net.fetch(`${apiBase()}/share/${t}`, { signal: AbortSignal.timeout(15000) }).then((x) => x.ok ? x.json() : null).catch(() => null)
   return r || { error: 'Код не найден' } })
 /** what a version has from Modrinth: mods, resource packs, shaders (slugs) */
 ipcMain.handle('pack:export', (_, ver) => { const d = inst(settings(), ver), ls = (sub, re) => { try { return fs.readdirSync(path.join(d, sub)).map((f) => (f.match(re) || [])[1]).filter(Boolean) } catch { return [] } }
   return { ver, mods: ls('mods', /^mod-(.+)\.jar$/).filter((x) => !DEFAULTS.includes(x) && x !== 'fabric-api'), packs: ls('resourcepacks', /^(.+)\.zip$/), shaders: ls('shaderpacks', /^(.+)\.zip$/) } })
+// ---------- markers (instances/<v>/config/asteria-marks.json, the mod reads it every couple of seconds) and the own crosshair picture
+ipcMain.handle('marks:get', (_, ver) => { try { return JSON.parse(fs.readFileSync(path.join(inst(settings(), ver), 'config', 'asteria-marks.json'), 'utf8')) } catch { return {} } })
+ipcMain.handle('marks:set', (_, ver, data) => { const d = path.join(inst(settings(), ver), 'config'); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'asteria-marks.json'), JSON.stringify(data)); return true })
+ipcMain.handle('xh:set', (_, data) => { const png = data ? Buffer.from(String(data).split(',')[1], 'base64') : null
+  for (const d of instanceDirs()) { const f = path.join(d, 'config', 'asteria-crosshair.png'); try { fs.mkdirSync(path.dirname(f), { recursive: true }); png ? fs.writeFileSync(f, png) : fs.rmSync(f, { force: true }) } catch {} }
+  png ? store.set('crosshairPng', data) : store.delete('crosshairPng'); return true })
+ipcMain.handle('xh:get', () => store.get('crosshairPng', null))
 ipcMain.handle('vis:decode', async (_, text) => { const t = String(text ?? clipboard.readText()).trim()
   if (/^[A-Z0-9]{6}$/i.test(t)) { await resolveApi().catch(() => {}); const r = await net.fetch(`${apiBase()}/vcfg/${t.toUpperCase()}`, { signal: AbortSignal.timeout(6000) }).then((x) => x.ok ? x.json() : null).catch(() => null); return r ? visDecode(r.code) : null }
   return visDecode(t) })
@@ -235,9 +247,24 @@ async function prepareFabric(s, ver, send, legacy = false) { // legacy = Legacy 
       else if (fs.existsSync(file(slug))) fs.renameSync(file(slug), file(slug) + '.disabled') } }
   return id
 }
-ipcMain.handle('mods:search', async (_, { q, ver, sort, cat }) => {
+const trCache = new Map()
+async function translate(text, lang) { if (!text || !lang || lang === 'en') return text; const k = lang + '|' + text; if (trCache.has(k)) return trCache.get(k)
+  try { const r = await net.fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${ENC(lang)}&dt=t&q=${ENC(text.slice(0, 4500))}`, { signal: AbortSignal.timeout(8000) }).then((x) => x.json())
+    const out = (r[0] || []).map((p) => p[0]).join(''); trCache.set(k, out); return out } catch { return text } }
+/** interface texts: Russian -> lang, many at once, remembered between launches */
+async function trUi(text, lang) { const mem = store.get('trui:' + lang, {}); if (mem[text]) return mem[text]
+  try { const r = await net.fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ru&tl=${ENC(lang)}&dt=t&q=${ENC(text)}`, { signal: AbortSignal.timeout(10000) }).then((x) => x.json())
+    const out = (r[0] || []).map((p) => p[0]).join(''); if (out) { mem[text] = out; store.set('trui:' + lang, mem) } return out || text } catch { return text } }
+ipcMain.handle('tr:batch', async (_, list, lang) => { const out = new Array(list.length); let i = 0
+  const worker = async () => { while (i < list.length) { const k = i++; out[k] = await trUi(String(list[k]), String(lang)) } }
+  await Promise.all(Array.from({ length: 6 }, worker)); return out })
+const plain = (md) => String(md || '').replace(/<[^>]+>/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[#*_`>|]/g, '').replace(/\n{3,}/g, '\n\n').trim()
+ipcMain.handle('mr:project', async (_, slug, lang) => { try { const p = await mrJ(`https://api.modrinth.com/v2/project/${ENC(slug)}`), body = plain(p.body).slice(0, 2500)
+  const [desc, text] = await Promise.all([translate(p.description, lang), translate(body, lang)])
+  return { title: p.title, desc, text, gallery: (p.gallery || []).map((g) => g.url).slice(0, 8), downloads: p.downloads, followers: p.followers, categories: p.categories, icon: p.icon_url, updated: p.updated } } catch { return null } })
+ipcMain.handle('mods:search', async (_, { q, ver, sort, cat, pvp }) => {
   try { const fa = [['project_type:mod'], ['categories:fabric'], ['versions:' + ver]]; if (cat) fa.push(['categories:' + cat])
-    return (await mrJ(`https://api.modrinth.com/v2/search?query=${ENC(q || '')}&facets=${ENC(JSON.stringify(fa))}&index=${sort || 'downloads'}&limit=20`)).hits } catch { return [] }
+    return (await mrJ(`https://api.modrinth.com/v2/search?query=${ENC(((q || '') + (pvp ? ' pvp' : '')).trim())}&facets=${ENC(JSON.stringify(fa))}&index=${sort || 'downloads'}&limit=20`)).hits } catch { return [] }
 })
 ipcMain.handle('img:get', async (_, url) => { // fetch via Chromium network stack (honours system proxy/VPN), cache on disk
   if (!/^https:\/\//.test(url) && !String(url).startsWith(apiBase() + '/img/')) return null // https only (plus pictures from your own backend)
@@ -315,7 +342,15 @@ ipcMain.handle('acc:ms', async () => { try {
     if (/no\.?mc|not.?own|xbox|child|ban/i.test(m)) return { error: 'На этом аккаунте Microsoft нет лицензии Minecraft (или он не прошёл проверку Xbox)' }
     return { error: 'Не удалось войти через Microsoft: ' + m } }
 })
-ipcMain.handle('acc:select', (_, id) => store.set('active', id))
+const TEX_FILES = ['current.png', 'cape.png', 'mini.png', 'slim.flag']
+const accTexDir = (name) => path.join(settings().dir, 'skins', 'accounts', String(name || '_').toLowerCase().replace(/[^a-z0-9_]/g, '_'))
+/** puts the textures of the active account where the game and the launcher read them */
+function useAccountTextures() { try { const acc = store.get('accounts', []).find((a) => a.id === store.get('active')); if (!acc) return
+  const src = accTexDir(acc.name), dst = path.join(settings().dir, 'skins'); fs.mkdirSync(dst, { recursive: true })
+  if (!fs.existsSync(src)) { fs.mkdirSync(src, { recursive: true }); for (const f of TEX_FILES) if (fs.existsSync(path.join(dst, f))) fs.copyFileSync(path.join(dst, f), path.join(src, f)); return } // first time: the current files belong to this account
+  for (const f of TEX_FILES) { const a = path.join(src, f), b = path.join(dst, f); if (fs.existsSync(a)) fs.copyFileSync(a, b); else fs.rmSync(b, { force: true }) } } catch {} }
+ipcMain.handle('acc:select', (_, id) => { store.set('active', id); useAccountTextures(); return true })
+ipcMain.handle('acc:textures', () => useAccountTextures())
 ipcMain.handle('acc:remove', (_, id) => store.set('accounts', store.get('accounts', []).filter((a) => a.id !== id)))
 ipcMain.handle('dir:open', () => shell.openPath(settings().dir))
 ipcMain.handle('java:pick', async () => (await dialog.showOpenDialog(win, { filters: [{ name: 'java', extensions: ['exe'] }] })).filePaths[0])
@@ -442,7 +477,7 @@ async function installGame(version, send) {
 }
 ipcMain.handle('game:install', async (_, ver) => {
   if (game || pf.job || !/^[\w.\-]+$/.test(String(ver))) return { error: 'Подождите — идёт загрузка или игра запущена' }
-  const send = (stage, pct, detail = '', step = 0) => { try { win?.webContents.send('progress', { stage, pct, detail, step }) } catch {} }
+  const send = (stage, pct, detail = '', step = 0) => { try { win?.webContents.send('progress', { stage, pct: Math.max(0, Math.min(100, Math.round(+pct || 0))), detail, step }) } catch {} }
   pf.job = installGame(ver, send).catch((e) => ({ error: 'Не удалось скачать: ' + String(e?.message || e) })).finally(() => { pf.job = null; send('', 0) })
   return pf.job
 })
@@ -487,7 +522,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
   const ext = await externalGame(true); if (ext) { try { win?.webContents.send('game', true) } catch {} return { error: `Minecraft ${ext.version || ''} уже запущен — закройте его или нажмите «Остановить»` } }
   const s = settings(), acc = store.get('accounts', []).find((a) => a.id === store.get('active'))
   if (!acc) return { error: 'Выберите аккаунт' }
-  const send = (stage, pct, detail = '', step = 0) => { try { win?.webContents.send('progress', { stage, pct, detail, step }) } catch {} }
+  const send = (stage, pct, detail = '', step = 0) => { try { win?.webContents.send('progress', { stage, pct: Math.max(0, Math.min(100, Math.round(+pct || 0))), detail, step }) } catch {} }
   // window size: never the whole screen — otherwise F11 (fullscreen -> window) gives a window whose title bar and buttons are off-screen
   const wa = screen.getPrimaryDisplay().workAreaSize
   const winW = s.fullscreen ? Math.round(wa.width * 0.72) : Math.min(+s.width || 1280, wa.width - 40), winH = s.fullscreen ? Math.round(wa.height * 0.72) : Math.min(+s.height || 720, wa.height - 70)
@@ -497,7 +532,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
   const md = path.join(dir, 'mods'); fs.mkdirSync(md, { recursive: true })
   for (const f of ['asteria-mod.jar', 'asteria-core.jar', 'asteria-visuals.jar']) fs.rmSync(path.join(md, f), { force: true })
   try {
-    send('Подготовка', 0, '', 0); let custom = null, core = null, vis = null; await stopPrefetch(); await resolveApi().catch(() => {})
+    send('Подготовка', 0, '', 0); let custom = null, core = null, vis = null; await stopPrefetch(); useAccountTextures(); await resolveApi().catch(() => {})
     const javaPath = await ensureJava(s, version, send); await cacheVanillaJson(s, version)
     const modern = /^(1\.(1[6-9]|2\d)|26\.)/.test(version), legacy = /^1\.(8|12)\./.test(version)
     const wantFabric = (s.loaders || {})[version] ? s.loaders[version] === 'fabric' : s.fabric !== false
@@ -532,8 +567,9 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
     const petOf = () => { const p = visNow()?.modules?.pet; if (!p?.on) return '' // other Asteria players see your pet (":m" = mini-me with a skin from the launcher)
       const mini = +p.s?.kind === 9 && +p.s?.miniskin === 1 && fs.existsSync(path.join(s.dir, 'skins', 'mini.png'))
       return `${+p.s?.kind || 0}:${(+p.s?.size || 1).toFixed(2)}${mini ? ':m' : ''}` }
-    const fxOf = () => { const m = visNow()?.modules || {}; return [m.halo?.on && 'halo', m.chinahat?.on && 'hat', m.trails?.on && 'trail'].filter(Boolean).join(',') }
-    const beat = () => fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf() }) }).catch(() => {}); beat(); hb = setInterval(beat, 45000) // registers right away, so other launcher players see the icon at once
+    const fxOf = () => { const m = visNow()?.modules || {}; const c = m.cosmetics; const cos = c?.on ? `c:${+c.s?.wings || 0}.${+c.s?.hat || 0}.${+c.s?.back || 0}${c.s?.tint === false && c.s?.color ? '.' + String(c.s.color).replace('#', 'ff') : ''}` : ''
+      return [m.halo?.on && 'halo', m.chinahat?.on && 'hat', m.trails?.on && 'trail', cos].filter(Boolean).join(',') }
+    const beat = () => fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf() }) }).catch(() => {}); beat(); hb = setInterval(beat, 20000) // registers right away, so other launcher players see the icon at once
     await addServer(dir).catch(() => {}); for (const x of (store.get('remoteConf') || {}).servers || []) if (x.ip && x.ip !== HOST) await addServerEntry(dir, x.name || x.ip, x.port && +x.port !== 25565 ? x.ip + ':' + x.port : x.ip).catch(() => {})
     game = await l.launch(opts); gameVer = version
     if (!game) { clearInterval(hb); send('', 0); return { error: 'Не удалось запустить игру' } }
@@ -594,8 +630,8 @@ async function downloadJava(root, need, send) {
 }
 // ---------- resource packs & shaders (Modrinth)
 const PK = { resourcepack: 'resourcepacks', shader: 'shaderpacks' }
-ipcMain.handle('pk:search', async (_, { q, ver, sort, kind }) => { try { const fa = [['project_type:' + kind], ['versions:' + ver]]
-  return (await mrJ(`https://api.modrinth.com/v2/search?query=${ENC(q || '')}&facets=${ENC(JSON.stringify(fa))}&index=${sort || 'downloads'}&limit=20`)).hits } catch { return [] } })
+ipcMain.handle('pk:search', async (_, { q, ver, sort, kind, pvp }) => { try { const fa = [['project_type:' + kind], ['versions:' + ver]]; if (pvp && kind === 'resourcepack') fa.push(['categories:combat'])
+  return (await mrJ(`https://api.modrinth.com/v2/search?query=${ENC(((q || '') + (pvp && kind !== 'resourcepack' ? ' pvp' : '')).trim())}&facets=${ENC(JSON.stringify(fa))}&index=${sort || 'downloads'}&limit=20`)).hits } catch { return [] } })
 ipcMain.handle('pk:install', async (_, slug, ver, kind) => { try { const d = path.join(inst(settings(), ver), PK[kind]); fs.mkdirSync(d, { recursive: true })
   const v = (await mrJ(`https://api.modrinth.com/v2/project/${slug}/version?game_versions=${ENC(JSON.stringify([ver]))}`))[0]; if (!v) return { error: 'Нет версии под ' + ver }
   const f = v.files.find((x) => x.primary) || v.files[0]; if (/\.mrpack$/i.test(f.filename)) return { error: 'Формат .mrpack не поддерживается' }
@@ -631,7 +667,8 @@ ipcMain.handle('tex:save', async (_, { data, kind, slim }) => {
   const acc = store.get('accounts', []).find((a) => a.id === store.get('active')); const png = data ? Buffer.from(data.split(',')[1], 'base64') : null
   const d = path.join(settings().dir, 'skins'); fs.mkdirSync(d, { recursive: true }); const lf = path.join(d, kind === 'cape' ? 'cape.png' : kind === 'mini' ? 'mini.png' : 'current.png')
   if (png) fs.writeFileSync(lf, png); else fs.rmSync(lf, { force: true })
-  if (kind === 'skin') { store.set('slim', !!slim); const sf = path.join(d, 'slim.flag'); slim ? fs.writeFileSync(sf, '1') : fs.rmSync(sf, { force: true }) }
+  if (acc) { const ad = accTexDir(acc.name); fs.mkdirSync(ad, { recursive: true }); png ? fs.writeFileSync(path.join(ad, path.basename(lf)), png) : fs.rmSync(path.join(ad, path.basename(lf)), { force: true }) }
+  if (kind === 'skin') { store.set('slim', !!slim); for (const sf of [path.join(d, 'slim.flag'), ...(acc ? [path.join(accTexDir(acc.name), 'slim.flag')] : [])]) slim ? fs.writeFileSync(sf, '1') : fs.rmSync(sf, { force: true }) }
   if (!acc) return { uploaded: false }
   try { await resolveApi(); const tokens = store.get('tokens', {}), r = await fetch(apiBase() + '/skin', { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(8000),
       body: JSON.stringify({ name: acc.name, kind, slim: !!slim, png: png ? png.toString('base64') : null, token: tokens[acc.name] }) }), j = await r.json()
@@ -713,7 +750,8 @@ setInterval(() => { if (!win) return; const s = settings()
     if (old !== undefined && m !== old) try { win.webContents.send('files', { kind, dir: d, ver: path.basename(d) }) } catch {} } }, 1000)
 ipcMain.handle('opts:get', (_, ver) => { const f = path.join(inst(settings(), ver), 'options.txt'), o = {}; try { for (const l of fs.readFileSync(f, 'utf8').split(/\r?\n/)) { const i = l.indexOf(':'); if (i > 0) o[l.slice(0, i)] = l.slice(i + 1) } } catch {} return o })
 ipcMain.handle('opts:set', (_, ver, patch) => { const d = inst(settings(), ver); fs.mkdirSync(d, { recursive: true }); setOpts(d, patch)
-  if (game && gameVer === ver) { pendingOpts = { ...pendingOpts, ...patch }; try { fs.writeFileSync(path.join(d, 'asteria-live.flag'), String(Date.now())) } catch {} return { live: true, running: true } }
+  const ext = !game && extGame && alive(extGame.pid) && extGame.dir && path.resolve(extGame.dir) === path.resolve(d)
+  if ((game && gameVer === ver) || ext) { if (game) pendingOpts = { ...pendingOpts, ...patch }; try { fs.writeFileSync(path.join(d, 'asteria-live.flag'), String(Date.now())) } catch {} return { live: true, running: true } }
   return { live: false, running: !!game } })
 ipcMain.handle('game:state', async () => { if (game) return { running: true, version: gameVer }; const e = await externalGame(); return { running: !!e, version: e?.version || null, external: !!e } })
 ipcMain.handle('rpc:test', () => ({ id: !!rpcId(), connected: !!rpc?.user }))

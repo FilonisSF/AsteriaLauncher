@@ -42,7 +42,7 @@ public final class Asteria {
     private static final Map<String, Object> SKIN = new ConcurrentHashMap<>(), CAPE = new ConcurrentHashMap<>();
     private static final Map<String, Boolean> SLIM = new ConcurrentHashMap<>();
     private static final Map<String, Integer> HASH = new ConcurrentHashMap<>();
-    private static final Map<String, Long> LAST = new ConcurrentHashMap<>();
+    private static final Map<String, Long> LAST = new ConcurrentHashMap<>(), SEEN = new ConcurrentHashMap<>();
     private static final Map<String, Long> LOCAL_MTIME = new ConcurrentHashMap<>();
     private static ScheduledExecutorService EX;
 
@@ -59,7 +59,7 @@ public final class Asteria {
         EX.scheduleWithFixedDelay(safe(Asteria::localTextures), 3, 2, TimeUnit.SECONDS);
         EX.scheduleWithFixedDelay(safe(Asteria::liveOptions), 3, 1, TimeUnit.SECONDS);
         EX.scheduleWithFixedDelay(safe(Asteria::writeStatus), 5, 3, TimeUnit.SECONDS);
-        if (API != null && !API.isEmpty()) EX.scheduleWithFixedDelay(safe(Asteria::poll), 2, 15, TimeUnit.SECONDS);
+        if (API != null && !API.isEmpty()) EX.scheduleWithFixedDelay(safe(Asteria::poll), 2, 10, TimeUnit.SECONDS); // others see a new skin / cape / icon within ~30 s
     }
 
     private static Runnable safe(Runnable r) { return () -> { try { r.run(); } catch (Throwable ignored) {} }; }
@@ -69,7 +69,12 @@ public final class Asteria {
         return name != null && ONLINE.contains(name.toLowerCase());
     }
     public static Object skin(String name) { return name == null ? null : SKIN.get(name.toLowerCase()); }
-    public static Object cape(String name) { return name == null ? null : CAPE.get(name.toLowerCase()); }
+    /** the cape texture; an animated cape (GIF from the launcher) gives its current frame */
+    public static Object cape(String name) {
+        Object o = name == null ? null : CAPE.get(name.toLowerCase());
+        if (o instanceof Object[]) { Object[] f = (Object[]) o; return f.length == 0 ? null : f[(int) ((System.currentTimeMillis() / 90) % f.length)]; }
+        return o;
+    }
     public static boolean slim(String name) { return name != null && Boolean.TRUE.equals(SLIM.get(name.toLowerCase())); }
 
     // ---------------------------------------------------------------- own skin / cape from the launcher's files
@@ -96,16 +101,18 @@ public final class Asteria {
     private static void poll() {
         try {
             String s = new String(get(API + "/online"), StandardCharsets.UTF_8).replaceAll("[\\[\\]\" ]", "");
-            ONLINE.clear();
+            long now = System.currentTimeMillis();
+            if (!s.isEmpty()) for (String n : s.split(",")) SEEN.put(n.toLowerCase(), now);
+            SEEN.values().removeIf(t -> now - t > 180_000); // a player stays marked for 3 min: a short backend hiccup must not hide the AL icon
+            ONLINE.retainAll(SEEN.keySet()); ONLINE.addAll(SEEN.keySet());
             if (USER != null) ONLINE.add(USER.toLowerCase());
-            if (!s.isEmpty()) for (String n : s.split(",")) ONLINE.add(n.toLowerCase());
         } catch (Exception ignored) {}
         for (String n : ONLINE) if (USER == null || !n.equals(USER.toLowerCase())) refresh(n);
     }
     private static void refresh(String key) {
         long now = System.currentTimeMillis();
         Long last = LAST.get(key);
-        if (last != null && now - last < 120_000) return;
+        if (last != null && now - last < 30_000) return;
         LAST.put(key, now);
         for (String kind : new String[]{"skin", "cape"}) {
             try {
@@ -122,12 +129,26 @@ public final class Asteria {
     /** registers on the render thread; onDone runs only if it worked (so a failed attempt is retried later) */
     private static void register(String key, String kind, byte[] png, Runnable onDone) {
         final String path = kind + "/" + key.replaceAll("[^a-z0-9_]", "_") + "_" + (gen++);
+        // animated cape: frames of width x width/2 stacked from top to bottom -> one texture per frame
+        final java.util.List<byte[]> frames = kind.equals("cape") ? splitFrames(png) : null;
         P.onClient(() -> {
             try {
+                if (frames != null && frames.size() > 1) { Object[] ids = new Object[frames.size()]; for (int i = 0; i < ids.length; i++) ids[i] = P.registerTexture(path + "_f" + i, frames.get(i)); CAPE.put(key, ids); if (onDone != null) onDone.run(); return; }
                 (kind.equals("skin") ? SKIN : CAPE).put(key, P.registerTexture(path, png));
                 if (onDone != null) onDone.run();
             } catch (Throwable ignored) {}
         });
+    }
+
+    /** null / one element = a normal picture; otherwise the PNG of every frame (at most 24) */
+    private static java.util.List<byte[]> splitFrames(byte[] png) {
+        try {
+            java.awt.image.BufferedImage im = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png)); if (im == null) return null;
+            int w = im.getWidth(), fh = Math.max(1, w / 2), n = Math.min(24, Math.round(im.getHeight() / (float) fh)); if (n < 2) return null;
+            java.util.List<byte[]> out = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) { java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream(); javax.imageio.ImageIO.write(im.getSubimage(0, i * fh, w, fh), "png", o); out.add(o.toByteArray()); }
+            return out;
+        } catch (Throwable e) { return null; }
     }
 
     // ---------------------------------------------------------------- live settings from the launcher

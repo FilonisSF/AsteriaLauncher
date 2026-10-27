@@ -50,7 +50,7 @@ public final class D {
     public static void round(float x1, float y1, float x2, float y2, float r, int c) { round(x1, y1, x2, y2, r, c, c); }
     /** soft drop shadow made of a few expanding translucent rounded rects */
     public static void shadow(float x1, float y1, float x2, float y2, float r, float strength) {
-        if (!V.shadow) return;
+        if (!V.shadow || V.lite) return;
         for (int i = 4; i >= 1; i--) round(x1 - i, y1 - i + 1.5f, x2 + i, y2 + i + 1.5f, r + i, alpha(0, (int) (22 * strength / i)));
     }
     /** crystal panel used everywhere in the HUD (SafiMine style): soft accent glow, gradient crystal rim,
@@ -59,7 +59,8 @@ public final class D {
     public static void panel(float x1, float y1, float x2, float y2, float r, boolean gem) {
         if (V.hudStyle == 1) { lines(x1, y1, x2, y2); return; }
         if (V.hudStyle == 2) { minimal(x1, y1, x2, y2, r); return; }
-        if (V.shadow) for (int i = 3; i >= 1; i--) round(x1 - i, y1 - i, x2 + i, y2 + i, r + i, D.a(V.a1(), 0.10f / i), D.a(V.a2(), 0.10f / i));
+        if (V.hudStyle == 3) { glass(x1, y1, x2, y2, r); return; }
+        if (V.shadow && !V.lite) for (int i = 3; i >= 1; i--) round(x1 - i, y1 - i, x2 + i, y2 + i, r + i, D.a(V.a1(), 0.10f / i), D.a(V.a2(), 0.10f / i));
         round(x1, y1, x2, y2, r, D.a(bright(V.a1(), 1.1f), 0.85f), D.a(V.a2(), 0.85f));                 // rim
         int body = alpha(0x050B16, (int) (255 * V.bg));
         round(x1 + 1, y1 + 1, x2 - 1, y2 - 1, Math.max(0, r - 1), body);                                   // body
@@ -67,6 +68,17 @@ public final class D {
         float h = y2 - y1;
         if (h > 8) round(x1 + 2, y1 + 1.5f, x2 - 2, y1 + Math.min(h * 0.42f, 9), Math.max(0, r - 2), alpha(0xFFFFFF, 14)); // glass sheen
         round(x1 + r * 0.6f, y1 + 0.5f, x2 - r * 0.6f, y1 + 1.3f, 0.4f, alpha(0xFFFFFF, 0), alpha(0xFFFFFF, 140));          // highlight line
+        if (V.glare && !V.lite) glare(x1, y1, x2, y2);
+    }
+    /** "Glass" (like iOS): light frosted panel, thin white border, soft shadow */
+    static void glass(float x1, float y1, float x2, float y2, float r) {
+        r = Math.max(r, 6);
+        if (V.shadow) for (int i = 3; i >= 1; i--) round(x1 - i * 0.5f, y1 + i * 0.6f, x2 + i * 0.5f, y2 + i, r + i, alpha(0x000000, 18 / i));
+        int a = (int) (40 + 70 * V.bg);
+        round(x1, y1, x2, y2, r, alpha(0xFFFFFF, Math.min(255, a + 40)));                                                  // border
+        round(x1 + 0.7f, y1 + 0.7f, x2 - 0.7f, y2 - 0.7f, Math.max(0, r - 0.7f), alpha(0x9AA8BC, a), alpha(0x6A7890, a));      // frosted body
+        round(x1 + 0.7f, y1 + 0.7f, x2 - 0.7f, y1 + (y2 - y1) * 0.45f, Math.max(0, r - 0.7f), alpha(0xFFFFFF, 26));           // top light
+        round(x1 + 1, y1 + 1, x2 - 1, y2 - 1, Math.max(0, r - 1), D.a(V.a1(), 0.06f), D.a(V.a2(), 0.05f));
         if (V.glare) glare(x1, y1, x2, y2);
     }
     /** a soft vertical sheen sliding across the panel every few seconds (all panels in sync by screen x) */

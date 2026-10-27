@@ -30,15 +30,32 @@ public final class Gfx121 implements Gfx {
     private final MatrixStack m;
     private final MinecraftClient c = MinecraftClient.getInstance();
     private final TextRenderer tr = c.textRenderer;
-    public Gfx121(DrawContext ctx) { this.ctx = ctx; this.m = ctx.getMatrices(); }
+    public Gfx121(DrawContext ctx) { this(ctx, false); }
+    /** batch = shapes are collected and drawn together on the next text / item / flush (the HUD: far fewer draw calls) */
+    public Gfx121(DrawContext ctx, boolean batch) { this.ctx = ctx; this.m = ctx.getMatrices();  this.batch = batch; }
     private static final java.util.Map<String, Identifier> TEX = new java.util.HashMap<>();
     private Identifier tex(String path) { return TEX.computeIfAbsent(path, p -> { Identifier id = Identifier.of("asteria_visuals", p); try { c.getTextureManager().getTexture(id).setFilter(true, false); } catch (Throwable ignored) {} return id; }); }
-    @Override public void texture(String path, int tw, int th, float x, float y, float w, float h) {
+    @Override public void texture(String path, int tw, int th, float x, float y, float w, float h) { flush();
         Identifier id = tex(path);
         m.push(); m.translate(x, y, 0); m.scale(w / tw, h / th, 1); ctx.drawTexture(RenderLayer::getGuiTextured, id, 0, 0, 0f, 0f, tw, th, tw, th); m.pop();
     }
 
+
+    private final boolean batch; private BufferBuilder bb;
+    /** adds a fan (or a strip) to the batch as triangles */
+    private void addTris(float[] xy, int[] col, boolean strip) {
+        Matrix4f mat = m.peek().getPositionMatrix();
+        if (bb == null) { ctx.draw(); bb = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR); }
+        for (int t = 1; t + 1 < col.length; t++) for (int i : new int[]{strip ? t - 1 : 0, t, t + 1}) { int c = col[i]; bb.vertex(mat, xy[i * 2], xy[i * 2 + 1], 0).color((c >> 16) & 255, (c >> 8) & 255, c & 255, (c >>> 24) & 255); }
+    }
+    @Override public void flush() {
+        if (bb == null) return;
+        RenderSystem.setShader(ShaderProgramKeys.field_53876); RenderSystem.enableBlend(); RenderSystem.defaultBlendFunc(); RenderSystem.disableCull();
+        BufferRenderer.drawWithGlobalProgram(bb.end()); RenderSystem.enableCull();
+        bb = null;
+    }
     @Override public void poly(float[] xy, int[] col) {
+        if (batch) { addTris(xy, col, false); return; }
         ctx.draw();
         Matrix4f mat = m.peek().getPositionMatrix();
         RenderSystem.setShader(ShaderProgramKeys.field_53876); // POSITION_COLOR
@@ -49,6 +66,7 @@ public final class Gfx121 implements Gfx {
         RenderSystem.enableCull();
     }
     @Override public void strip(float[] xy, int[] col) {
+        if (batch) { addTris(xy, col, true); return; }
         ctx.draw();
         Matrix4f mat = m.peek().getPositionMatrix();
         RenderSystem.setShader(ShaderProgramKeys.field_53876); // POSITION_COLOR
@@ -58,7 +76,7 @@ public final class Gfx121 implements Gfx {
         BufferRenderer.drawWithGlobalProgram(b.end());
         RenderSystem.enableCull();
     }
-    @Override public void text(String s, float x, float y, int argb, boolean shadow) {
+    @Override public void text(String s, float x, float y, int argb, boolean shadow) { flush();
         if (((argb >>> 24) & 255) < 5) return;
         m.push(); m.translate(x, y, 0);
         ctx.drawText(tr, t(s), 0, 0, argb, shadow);
@@ -66,17 +84,21 @@ public final class Gfx121 implements Gfx {
     }
     private static Identifier imgId; private static String imgKey;
     /** loads (or reuses) the png as a texture under a fixed id */
+    /** pictures from disk (music cover, server icon, own crosshair): one texture per key prefix before ':' */
+    private static final java.util.Map<String, Object[]> IMG = new java.util.HashMap<>();
     private Identifier tex(String key, java.io.File png) {
-        if (key.equals(imgKey) && imgId != null) return imgId;
+        String slot = key.contains(":") ? key.substring(0, key.indexOf(':')) : "cover"; Object[] e = IMG.get(slot);
+        if (e != null && key.equals(e[0])) return (Identifier) e[1];
         try (java.io.InputStream in = new java.io.FileInputStream(png)) {
             net.minecraft.client.texture.NativeImage img = net.minecraft.client.texture.NativeImage.read(in);
-            Identifier id = Identifier.of("asteria_visuals", "dyn/cover");
-            if (imgId != null) c.getTextureManager().destroyTexture(imgId);
-            c.getTextureManager().registerTexture(id, new net.minecraft.client.texture.NativeImageBackedTexture(img));
-            imgId = id; imgKey = key; return id;
-        } catch (Exception e) { imgKey = key; imgId = null; return null; }
+            Identifier id = Identifier.of("asteria_visuals", "dyn/img_" + slot.toLowerCase().replaceAll("[^a-z0-9_]", "_"));
+            if (e != null && e[1] != null) c.getTextureManager().destroyTexture((Identifier) e[1]);
+            net.minecraft.client.texture.NativeImageBackedTexture t = new net.minecraft.client.texture.NativeImageBackedTexture(img); c.getTextureManager().registerTexture(id, t); try { t.setFilter(true, false); } catch (Throwable ignored) {}
+            IMG.put(slot, new Object[]{key, id}); return id;
+        } catch (Exception ex) { IMG.put(slot, new Object[]{key, null}); return null; }
     }
-    @Override public boolean image(String key, java.io.File png, float x, float y, float w, float h) {
+
+    @Override public boolean image(String key, java.io.File png, float x, float y, float w, float h) { flush();
         Identifier id = tex(key, png); if (id == null) return false;
         m.push(); m.translate(x, y, 0); m.scale(w / 64f, h / 64f, 1); ctx.drawTexture(RenderLayer::getGuiTextured, id, 0, 0, 0f, 0f, 64, 64, 64, 64); m.pop();
         return true;
@@ -88,23 +110,23 @@ public final class Gfx121 implements Gfx {
     /** GUI scale 1..6: the font variant rendered for exactly this many pixels per GUI pixel */
     private static int gs() { return Math.max(1, Math.min(6, (int) Math.round(net.minecraft.client.MinecraftClient.getInstance().getWindow().getScaleFactor()))); }
     private static Text t(String s) { if (V.font <= 0) return Text.literal(s); int i = Math.min(15, V.font), k = gs(); if (UI[i][k] == null) UI[i][k] = Identifier.of("asteria_visuals", "f" + i + "s" + k); return Text.literal(s).setStyle(Style.EMPTY.withFont(UI[i][k])); }
-    @Override public void item(Object stack, int x, int y) { ctx.drawItem((ItemStack) stack, x, y); }
+    @Override public void item(Object stack, int x, int y) { flush(); ctx.drawItem((ItemStack) stack, x, y); }
     @SuppressWarnings("unchecked")
-    @Override public boolean effectIcon(Object type, int x, int y, int size) {
+    @Override public boolean effectIcon(Object type, int x, int y, int size) { flush();
         Sprite sp = c.getStatusEffectSpriteManager().getSprite((RegistryEntry<StatusEffect>) type);
         ctx.drawSpriteStretched(RenderLayer::getGuiTextured, sp, x, y, size, size);
         return true;
     }
-    @Override public void head(Object skin, float x, float y, float size) {
+    @Override public void head(Object skin, float x, float y, float size) { flush();
         m.push(); m.translate(x, y, 0); m.scale(size / 8f, size / 8f, 1);
         ctx.drawTexture(RenderLayer::getGuiTextured, (Identifier) skin, 0, 0, 8f, 8f, 8, 8, 64, 64);
         ctx.drawTexture(RenderLayer::getGuiTextured, (Identifier) skin, 0, 0, 40f, 8f, 8, 8, 64, 64);
         m.pop();
     }
-    @Override public void skinPart(Object skin, int u, int v, int w, int h, float x, float y, float k) {
+    @Override public void skinPart(Object skin, int u, int v, int w, int h, float x, float y, float k) { flush();
         m.push(); m.translate(x, y, 0); m.scale(k, k, 1); ctx.drawTexture(RenderLayer::getGuiTextured, (Identifier) skin, 0, 0, (float) u, (float) v, w, h, 512, 512); m.pop();
     }
-    @Override public boolean entity(Object e, float x, float y, float size) {
+    @Override public boolean entity(Object e, float x, float y, float size) { flush();
         if (!(e instanceof net.minecraft.entity.LivingEntity)) return false; net.minecraft.entity.LivingEntity le = (net.minecraft.entity.LivingEntity) e;
         float sc = le.getScale(), s = size * 0.85f / Math.max(le.getHeight(), le.getWidth());
         float by = le.bodyYaw, yw = le.getYaw(), pi = le.getPitch(), hy = le.headYaw, phy = le.prevHeadYaw;
@@ -115,10 +137,10 @@ public final class Gfx121 implements Gfx {
     }
     @Override public void push(float x, float y, float s) { m.push(); m.translate(x, y, 0); m.scale(s, s, 1f); }
     @Override public void pop() { m.pop(); }
-    @Override public void scissor(float x, float y, float w, float h) {
+    @Override public void scissor(float x, float y, float w, float h) { flush();
         ctx.draw();
         Window win = c.getWindow(); double k = win.getScaleFactor();
         RenderSystem.enableScissor((int) (x * k), (int) (win.getFramebufferHeight() - (y + h) * k), Math.max(0, (int) (w * k)), Math.max(0, (int) (h * k)));
     }
-    @Override public void noScissor() { ctx.draw(); RenderSystem.disableScissor(); }
+    @Override public void noScissor() { flush(); ctx.draw(); RenderSystem.disableScissor(); }
 }

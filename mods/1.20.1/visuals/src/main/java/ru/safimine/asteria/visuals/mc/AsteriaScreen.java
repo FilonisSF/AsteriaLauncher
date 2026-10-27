@@ -8,7 +8,7 @@ import ru.safimine.asteria.visuals.Gui;
 /** the Asteria menu: everything is drawn by the shared {@link Gui}; this class only forwards input */
 public class AsteriaScreen extends Screen {
     public AsteriaScreen() { super(Text.literal("Asteria")); Gui.opened(); }
-    @Override public void render(DrawContext ctx, int mx, int my, float delta) { Gui.render(new Gfx120(ctx), Game120.I, mx, my); }
+    @Override public void render(DrawContext ctx, int mx, int my, float delta) { Gfx120 g = new Gfx120(ctx, true); try { Gui.render(g, Game120.I, mx, my); } finally { g.flush(); } }
     @Override public boolean mouseClicked(double x, double y, int b) { Gui.click((float) x, (float) y, b); return true; }
     @Override public boolean mouseReleased(double x, double y, int b) { Gui.release(); return true; }
     @Override public boolean mouseDragged(double x, double y, int b, double dx, double dy) { Gui.drag((float) x, (float) y); return true; }

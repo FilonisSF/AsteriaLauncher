@@ -163,5 +163,60 @@
   "sounds": [
    "asteria_visuals:kill/whii"
   ]
+ },
+ "wv_enable": {
+  "sounds": [
+   "asteria_visuals:wv_enable"
+  ]
+ },
+ "wv_disable": {
+  "sounds": [
+   "asteria_visuals:wv_disable"
+  ]
+ },
+ "wv_kill1": {
+  "sounds": [
+   "asteria_visuals:wv_kill1"
+  ]
+ },
+ "wv_kill2": {
+  "sounds": [
+   "asteria_visuals:wv_kill2"
+  ]
+ },
+ "wv_kill3": {
+  "sounds": [
+   "asteria_visuals:wv_kill3"
+  ]
+ },
+ "wv_kill4": {
+  "sounds": [
+   "asteria_visuals:wv_kill4"
+  ]
+ },
+ "wv_kill5": {
+  "sounds": [
+   "asteria_visuals:wv_kill5"
+  ]
+ },
+ "wv_totem1": {
+  "sounds": [
+   "asteria_visuals:wv_totem1"
+  ]
+ },
+ "wv_totem2": {
+  "sounds": [
+   "asteria_visuals:wv_totem2"
+  ]
+ },
+ "wv_open": {
+  "sounds": [
+   "asteria_visuals:wv_open"
+  ]
+ },
+ "wv_close": {
+  "sounds": [
+   "asteria_visuals:wv_close"
+  ]
  }
 }

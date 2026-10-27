@@ -1,3 +1,5 @@
 Particle / circle / hotbar / trinket textures and sounds in this folder come from Soup Visuals by Padej_
 (https://modrinth.com/mod/soup-api), used with the author's permission. See LICENSE_SoupVisuals.txt.
 Everything else in Asteria Visuals is (c) SafiMine.
+
+WellVisuals: some pictures (marker pin, jump circles, target markers, speed lines, particles) and sounds (module on/off, kill, totem) are used with the permission of the WellVisuals author. Files: textures/fx/wv/*, sounds/wv_*.ogg

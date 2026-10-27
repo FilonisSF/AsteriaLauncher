@@ -8,7 +8,7 @@ declare global { interface Window { api: any } }
 type S = { id: string; name: string; type: 'bool' | 'num' | 'mode' | 'color' | 'str'; def: any; min?: number; max?: number; step?: number; options?: string[] }
 type M = { id: string; cat: string; name: string; desc: string; on: boolean; hud?: [number, number]; s: S[] }
 type ModCfg = { on: boolean; bind: number; hud?: [number, number]; s: Record<string, any> }
-type Theme = { accent: string; accent2: string; chroma: boolean; shadow: boolean; blur: boolean; bg: number; scale: number; hud?: number; glare?: boolean; font?: number | boolean; menu?: boolean }
+type Theme = { accent: string; accent2: string; chroma: boolean; shadow: boolean; blur: boolean; bg: number; scale: number; hud?: number; glare?: boolean; font?: number | boolean; menu?: boolean; menuBg?: number; allFont?: boolean; lite?: boolean }
 export type VisCfg = { theme: Theme; modules: Record<string, ModCfg> }
 const MODS = (schema as any).modules as M[], CATS = (schema as any).categories as { id: string; name: string }[]
 const CAT_ICON: Record<string, string> = { hud: 'grid', world: 'cube', combat: 'sparkles', camera: 'eye' }
@@ -75,7 +75,7 @@ const GW = 640, GH = 360
 
 export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string; bg: string; onBuy: () => void; say: (m: string) => void; ver: string }) {
   const premium = plan === 'PREMIUM'
-  const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout' | 'configs' | 'crosshair'>('mods'), [q, setQ] = useState('')
+  const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout' | 'configs' | 'crosshair' | 'marks' | 'abbr'>('mods'), [q, setQ] = useState('')
   const [pr, setPr] = useState<Presets | null>(null), prRef = useRef<Presets | null>(null), [enabled, setEnabled] = useState(true)
   useEffect(() => { window.api.visEnabled?.().then((v: boolean) => setEnabled(v !== false)) }, [])
   const toggleAll = async (v: boolean) => { setEnabled(v); await window.api.visEnabled?.(v); say(v ? 'Визуалы включены — со следующего запуска игры' : 'Визуалы выключены — игра запустится без них') }
@@ -120,7 +120,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     {!premium && <div className="card rounded-2xl p-4 mb-4 flex items-center gap-3"><span className="cmd-ic"><Icon n="lock" s={16} /></span><div className="text-sm flex-1"><b>Можно всё настроить заранее.</b> <span className="muted">В игре визуалы включатся, как только на аккаунте появится PREMIUM — лаунчер проверяет подписку при каждом запуске.</span></div></div>}
 
     <div className="flex items-center gap-3 mb-4 flex-wrap">
-      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['crosshair', 'Прицел', 'plus'], ['layout', 'Расположение HUD', 'move'], ['configs', 'Конфиги', 'folder']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
+      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['crosshair', 'Прицел', 'plus'], ['marks', 'Метки', 'servers'], ['layout', 'Расположение HUD', 'move'], ['configs', 'Конфиги', 'folder'], ['abbr', 'Сокращения', 'rules']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
       <div className="flex-1" />
       <div className="flex items-center gap-2 text-sm"><span className="muted">Клавиши в игре:</span>
         {(['menu', 'zoom'] as const).map((k) => <button key={k} className={'btn !py-1.5 ' + (listenKey === k ? 'btn-on' : '')} onClick={() => setListenKey(k)}>{k === 'menu' ? 'Меню' : 'Зум'} <kbd className="ml-1">{listenKey === k ? '…' : pretty(keys[k])}</kbd></button>)}</div>
@@ -159,7 +159,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
             <span className="block h-6 rounded-lg mb-1.5" style={{ background: t.chroma ? 'linear-gradient(90deg,#f43f5e,#facc15,#22c55e,#22d3ee,#a855f7)' : `linear-gradient(135deg,${t.accent},${t.accent2})` }} />
             <b className="block text-[13px] leading-tight" style={{ fontFamily: PREVIEW_FONT[fontIdx(t.font)] }}>{name}</b><span className="muted text-[10.5px]">{FONTS[fontIdx(t.font)]}</span></button> })}</div>
         <div className="font-bold">Стиль HUD</div>
-        <div className="grid grid-cols-3 gap-2">{[[0, 'Кристалл', 'Стеклянные панели со светящейся рамкой'], [1, 'Созвездие', 'Тёмные карточки, линия-созвездие и бегущая комета'], [2, 'Минимал', 'Спокойные тёмные карточки, как в современных клиентах']].map(([k, n, d]) =>
+        <div className="grid grid-cols-2 gap-2">{[[0, 'Кристалл', 'Стеклянные панели со светящейся рамкой'], [1, 'Созвездие', 'Тёмные карточки, линия-созвездие и бегущая комета'], [2, 'Минимал', 'Спокойные тёмные карточки, как в современных клиентах'], [3, 'Стекло', 'Светлое матовое стекло с тонкой рамкой, как в iPhone']].map(([k, n, d]) =>
           <button key={k as number} onClick={() => theme({ hud: k as number })} className={'text-left rounded-2xl p-3 transition ' + ((c.theme.hud ?? 0) === k ? 'ring-2 ring-[var(--a2)]' : '')} style={{ background: 'var(--chip)' }}><b className="block text-sm">{n}</b><span className="muted text-xs">{d}</span></button>)}</div>
         <div className="font-bold">Цвета интерфейса</div>
         <div className="flex gap-6 flex-wrap"><ColorPick value={c.theme.accent} set={(v) => theme({ accent: v, chroma: false })} label="Основной" /><ColorPick value={c.theme.accent2} set={(v) => theme({ accent2: v, chroma: false })} label="Второй" /></div>
@@ -170,6 +170,9 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
         <Switch on={c.theme.blur} set={(v) => theme({ blur: v })} label="Мягкое свечение панелей" />
         <div className="flex items-center justify-between gap-3"><div><div className="text-sm">Шрифт в игре</div><div className="muted text-xs">Весь текст HUD и меню Asteria</div></div>
           <Dropdown value={String(fontIdx(c.theme.font))} w={210} set={(v) => theme({ font: +v })} options={FONTS.map((n, i) => ({ value: String(i), label: n }))} /></div>
+        {c.theme.menu !== false && <div className="flex items-center justify-between gap-3"><span className="text-sm">Фон меню Minecraft</span><div className="seg">{['Гладкий HD', 'Картинка'].map((l, i) => <button key={l} className={(c.theme.menuBg ?? 0) === i ? 'on' : ''} onClick={() => theme({ menuBg: i })}>{l}</button>)}</div></div>}
+        <Switch on={!!c.theme.allFont} set={(v) => theme({ allFont: v })} label="Шрифт для всего Minecraft" hint="Чат, ники, меню и названия предметов — выбранным шрифтом (не «Minecraft»)" />
+        <Switch on={!!c.theme.lite} set={(v) => theme({ lite: v })} label="Лёгкий режим (больше FPS)" hint="Без теней и бликов на панелях. Визуалы и эффекты в мире всегда немного снижают FPS — выключайте ненужные" />
         <Switch on={c.theme.menu !== false} set={(v) => theme({ menu: v })} label="Свой стиль меню Minecraft" hint="Неоновые кнопки, логотип AsteriaLauncher вместо Minecraft, фон Asteria и без кнопки Realms" />
         <Switch on={!!c.theme.glare} set={(v) => theme({ glare: v })} label="Блик по панелям" hint="Иногда по панелям HUD пробегает светлый блик" />
         <Range label="Прозрачность подложки" min={0} max={1} step={0.05} v={c.theme.bg} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ bg: v })} />
@@ -179,6 +182,8 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     </div>}
 
     {view === 'configs' && pr && <Configs c={c} pr={pr} set={setPresets} say={say} />}
+    {view === 'marks' && <MarksTab ver={ver} say={say} />}
+    {view === 'abbr' && <AbbrTab />}
     {view === 'crosshair' && c.modules.crosshair && <CrosshairTab m={c.modules.crosshair} on={(v) => mod('crosshair', { on: v })} set={(k, v) => setS('crosshair', k, v)} say={say} />}
 
     {view === 'layout' && <Layout c={c} bg={bg} move={(id, x, y) => mod(id, { hud: [x, y] })} />}
@@ -242,6 +247,42 @@ function Configs({ c, pr, set, say }: { c: VisCfg; pr: Presets; set: (p: Presets
 function Range({ label, min, max, step, v, set, show }: { label: string; min: number; max: number; step: number; v: number; set: (n: number) => void; show?: (n: number) => string }) {
   return <label className="block"><div className="flex justify-between text-sm mb-1"><span>{label}</span><b>{show ? show(v) : v}</b></div><input type="range" className="w-full" min={min} max={max} step={step} value={v} onChange={(e) => set(+e.target.value)} /></label>
 }
+/** markers of every server for this version: name, colour, coordinates; add by coordinates, edit, delete */
+type MarkT = { x: number; y: number; z: number; name?: string; color?: string }
+function MarksTab({ ver, say }: { ver: string; say: (s: string) => void }) {
+  const [all, setAll] = useState<Record<string, any[]>>({}), [srv, setSrv] = useState(''), [f, setF] = useState({ x: '', y: '', z: '', name: '', color: '#22d3ee' })
+  useEffect(() => { window.api.marksGet(ver).then((d: any) => { const o = d || {}; setAll(o); setSrv((s) => s || Object.keys(o)[0] || 'mc.safimine.ru') }) }, [ver])
+  const norm = (m: any): MarkT => Array.isArray(m) ? { x: m[0], y: m[1], z: m[2] } : m
+  const list: MarkT[] = (all[srv] || []).map(norm)
+  const save = (l: MarkT[]) => { const n = { ...all, [srv]: l }; setAll(n); window.api.marksSet(ver, n) }
+  const add = () => { const x = +f.x, y = +f.y, z = +f.z; if ([f.x, f.y, f.z].some((v) => v.trim() === '' || isNaN(+v))) return say('Введите X, Y и Z'); save([...list, { x: Math.floor(x) + 0.5, y: Math.floor(y), z: Math.floor(z) + 0.5, name: f.name || 'Метка ' + (list.length + 1), color: f.color }]); setF({ ...f, x: '', y: '', z: '', name: '' }); say('Метка добавлена — в игре появится через пару секунд') }
+  const servers = Array.from(new Set([...Object.keys(all), 'mc.safimine.ru', 'local']))
+  return <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.3fr)' }}>
+    <div className="card rounded-3xl p-5 flex flex-col gap-3"><b className="text-lg">Новая метка</b>
+      <div className="flex items-center gap-2"><span className="text-sm w-20">Сервер</span><select className="flex-1" value={srv} onChange={(e) => setSrv(e.target.value)}>{servers.map((s) => <option key={s} value={s}>{s === 'local' ? 'Одиночная игра' : s}</option>)}</select></div>
+      <div className="grid grid-cols-3 gap-2">{(['x', 'y', 'z'] as const).map((k) => <input key={k} placeholder={k.toUpperCase()} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className="text-center font-mono" />)}</div>
+      <input placeholder="Название (База, Шахта…)" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      <div className="flex items-center justify-between"><span className="text-sm">Цвет</span><ColorPick value={f.color} set={(v) => setF({ ...f, color: v })} size="sm" /></div>
+      <button className="btn btn-primary" onClick={add}><Icon n="plus" s={15} /> Добавить</button>
+      <p className="muted text-xs">В игре: B — метка туда, куда смотрите (ещё раз B рядом — убрать), Shift+B — убрать все. В чат: <b>.метка 100 64 -200 База</b> — координаты из чата тоже можно скопировать так.</p></div>
+    <div className="card rounded-3xl p-5"><div className="flex items-center justify-between mb-3"><b className="text-lg">Метки · {srv === 'local' ? 'одиночная игра' : srv}</b>{list.length > 0 && <button className="pill" onClick={() => save([])}><Icon n="trash" s={13} />Убрать все</button>}</div>
+      {!list.length && <div className="muted text-sm">Пока нет меток на этом сервере</div>}
+      <div className="flex flex-col gap-2">{list.map((m, i) => <div key={i} className="mcard !p-2.5 flex items-center gap-2">
+        <ColorPick value={m.color || '#22d3ee'} set={(v) => save(list.map((x, j) => j === i ? { ...x, color: v } : x))} size="sm" />
+        <input className="flex-1 min-w-0" value={m.name || ''} placeholder="Без названия" onChange={(e) => save(list.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
+        <span className="muted text-xs font-mono shrink-0">{Math.floor(m.x)} {Math.floor(m.y)} {Math.floor(m.z)}</span>
+        <button className="iconbtn" title="Удалить" onClick={() => save(list.filter((_, j) => j !== i))}><Icon n="trash" s={14} /></button></div>)}</div></div></div>
+}
+/** what the short enchantment names above players mean (same table as Hud.ABBR in the mod) */
+const ABBR: [string, string][] = [['ЗСн', 'Защита от снарядов'], ['ЗОг', 'Защита от огня / Огнеупорность'], ['ЗВз', 'Защита от взрывов'], ['Защ', 'Защита'], ['Нев', 'Невесомость'], ['Дых', 'Подводное дыхание'], ['Вод', 'Родство с водой'],
+  ['Шип', 'Шипы'], ['ПХ', 'Подводная ходьба'], ['Лёд', 'Ледоход'], ['Душ', 'Скорость душ'], ['Пров', 'Проворство'], ['Остр', 'Острота'], ['Кара', 'Небесная кара'], ['Бич', 'Бич членистоногих'], ['Отд', 'Отдача'],
+  ['Огн', 'Заговор огня'], ['Доб', 'Добыча'], ['Клин', 'Разящий клинок'], ['Эфф', 'Эффективность'], ['Шёлк', 'Шёлковое касание'], ['Проч', 'Прочность'], ['Удч', 'Удача'], ['Сила', 'Сила'], ['Отк', 'Откидывание'], ['Пыл', 'Горящая стрела'],
+  ['Беск', 'Бесконечность'], ['МУд', 'Морская удача'], ['Прим', 'Приманка'], ['Верн', 'Верность'], ['Пронз', 'Пронзатель'], ['Тяг', 'Тягун'], ['Гром', 'Громовержец'], ['Мульт', 'Тройной выстрел'], ['БП', 'Быстрая перезарядка'],
+  ['Скв', 'Пронзающая стрела'], ['Почин', 'Починка'], ['ПрН', 'Проклятие несъёмности'], ['ПрУ', 'Проклятие утраты'], ['Плот', 'Плотность'], ['Проб', 'Пробитие'], ['Вет', 'Порыв ветра']]
+function AbbrTab() {
+  return <div className="card rounded-3xl p-5"><b className="text-lg">Сокращения зачарований</b><p className="muted text-sm mb-3">Так они подписаны над предметами игроков («Инфо над игроками»). Цифра после — уровень: «Остр5» = Острота V.</p>
+    <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>{ABBR.map(([a, n]) => <div key={a} className="flex items-center gap-3 rounded-xl p-2" style={{ background: 'var(--chip)' }}><b className="w-14 text-center rounded-lg py-1" style={{ background: 'linear-gradient(135deg,var(--a1),var(--a2))', color: '#fff' }}>{a}</b><span className="text-sm">{n}</span></div>)}</div></div>
+}
 /** the crosshair as the game draws it (Hud.crosshair), scaled up */
 function CrossPreview({ s, px = 8 }: { s: any; px?: number }) {
   const st = +s.style, size = +s.size, gap = +s.gap, th = +s.thick, al = +s.alpha, ot = s.outline ? +s.othick : 0, col = s.color || '#fff', W = 30, c = W / 2, o = 'rgba(0,0,0,.85)'
@@ -252,10 +293,12 @@ function CrossPreview({ s, px = 8 }: { s: any; px?: number }) {
     R(Math.min(x1, x2) - hx, Math.min(y1, y2) - hy, Math.max(x1, x2) + hx, Math.max(y1, y2) + hy, 'a' + dx + dy) }
   if (st === 3 || st === 4) { if (ot) els.push(<circle key="ro" cx={c} cy={c} r={size + gap} fill="none" stroke={o} strokeWidth={th + 2 * ot} />); els.push(<circle key="r" cx={c} cy={c} r={size + gap} fill="none" stroke={col} strokeWidth={th} />) }
   if (st === 1 || st === 2 || st === 4) { const r = Math.max(0.6, th * 0.75) * (st === 2 ? 1.4 : 1); if (ot) els.push(<circle key="do" cx={c} cy={c} r={r + ot} fill={o} />); els.push(<circle key="d" cx={c} cy={c} r={r} fill={col} />) }
+  if (st === 8) els.push(<text key="i" x={c} y={c + 1.5} fontSize={4} textAnchor="middle" fill="#fff">PNG</text>)
   if (st === 7) els.push(<g key="v" opacity={0.9}><rect x={c - 4.5} y={c - 0.5} width={9} height={1} fill="#fff" /><rect x={c - 0.5} y={c - 4.5} width={1} height={9} fill="#fff" /></g>)
   return <svg width={W * px} height={W * px} viewBox={`0 0 ${W} ${W}`} style={{ opacity: al, shapeRendering: 'crispEdges' }}>{els}</svg>
 }
 function CrosshairTab({ m, on, set, say }: { m: ModCfg; on: (v: boolean) => void; set: (k: string, v: any) => void; say: (s: string, k?: any) => void }) {
+  const [xh, setXh] = useState<string | null>(null); useEffect(() => { window.api.xhGet?.().then(setXh) }, [])
   const sch = MODS.find((x) => x.id === 'crosshair')!, s = m.s, [bg, setBg] = useState(0), BGS = ['linear-gradient(160deg,#5b8c32,#2d4a1a)', 'linear-gradient(160deg,#87c6ff,#cfe9ff)', 'linear-gradient(160deg,#1b1b24,#050508)']
   return <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)' }}>
     <div className="card rounded-3xl p-5 flex flex-col gap-4">
@@ -263,11 +306,15 @@ function CrosshairTab({ m, on, set, say }: { m: ModCfg; on: (v: boolean) => void
       <div className="rounded-2xl flex items-center justify-center" style={{ height: 300, background: BGS[bg] }}><CrossPreview s={s} px={9} /></div>
       <div className="flex gap-1.5 items-center"><span className="muted text-xs mr-1">Фон:</span>{['Трава', 'Небо', 'Ночь'].map((l, i) => <button key={l} className={'pill !py-0.5 ' + (bg === i ? 'on' : '')} onClick={() => setBg(i)}>{l}</button>)}
         <div className="flex-1" /><button className="pill" title="Тонкий белый крест, как обычный прицел Minecraft, но с нашими настройками" onClick={() => { for (const [k, v] of [['style', 0], ['size', 4.5], ['gap', 0], ['thick', 1], ['outline', false], ['color', '#ffffff'], ['alpha', 0.95]] as [string, any][]) set(k, v) }}>Как в Minecraft</button>
-        <button className="pill" onClick={async () => { const r = await window.api.shareMake('crosshair', s); r?.id ? say('Код ' + r.id + ' скопирован — отправьте его другу') : say(r?.error || 'Не удалось', 'err') }}><Icon n="share" s={13} />Поделиться прицелом</button></div>
+        <button className="pill" onClick={async () => { const r = await window.api.shareMake('crosshair', s); r?.id ? say(r.long ? 'Код прицела скопирован — отправьте его другу целиком' : 'Код ' + r.id + ' скопирован — отправьте его другу') : say(r?.error || 'Не удалось', 'err') }}><Icon n="share" s={13} />Поделиться прицелом</button></div>
       <div><div className="text-sm mb-1.5">Форма</div><div className="grid grid-cols-4 gap-2">{sch.s[0].options!.map((o, i) => <button key={o} onClick={() => set('style', i)} className="rounded-xl flex flex-col items-center gap-1 py-2 transition" style={{ background: +s.style === i ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: +s.style === i ? '#fff' : undefined }}>
         <span className="rounded-lg flex items-center justify-center" style={{ background: 'rgba(0,0,0,.35)', width: 56, height: 56 }}><CrossPreview s={{ ...s, style: i, alpha: 1 }} px={1.8} /></span><span className="text-[11px] font-semibold">{o}</span></button>)}</div></div>
     </div>
     <div className="card rounded-3xl p-5 flex flex-col gap-3">
+      <div className="card rounded-2xl p-3 flex items-center gap-3"><span className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0 checker">{xh ? <img src={xh} className="w-10 h-10 object-contain" /> : <Icon n="image" s={20} />}</span>
+        <div className="flex-1 min-w-0"><b className="text-sm">Своя картинка прицела</b><div className="muted text-xs">PNG с прозрачным фоном — как ванильный, только ваш. Форма «Своя картинка», размер — ползунком «Длина»</div></div>
+        <button className="btn !py-1.5 text-sm" onClick={async () => { const d = await window.api.pickPng(); if (d) { await window.api.xhSet(d); setXh(d); set('style', 8); say('Картинка прицела установлена') } }}>Выбрать</button>
+        {xh && <button className="btn !py-1.5" onClick={async () => { await window.api.xhSet(null); setXh(null); if (+s.style === 8) set('style', 1) }}><Icon n="trash" s={14} /></button>}</div>
       {sch.s.filter((x) => x.id !== 'style').map((x) => <Setting key={x.id} mod="crosshair" s={x} v={s[x.id]} set={(v) => set(x.id, v)} />)}
     </div></div>
 }
@@ -295,10 +342,13 @@ function PatternEditor({ v, set }: { v: string; set: (v: string) => void }) {
 }
 /** pet pictures: the same textures the game draws (mods/common-visuals/resources/assets/asteria_visuals/textures/fx/trinket) */
 export const PET_PIC: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob('../mods/common-visuals/resources/assets/asteria_visuals/textures/fx/trinket/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>).map(([k, v]) => [k.split('/').pop()!.replace('.png', ''), v]))
+/** pictures of the 3D pets (index 10+), rendered from the same boxes the game draws */
+export const VOX_PIC: Record<number, string> = Object.fromEntries(Object.entries(import.meta.glob('./assets/pets/pet-*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>).map(([k, v]) => [+k.replace(/.*pet-|.png/g, ''), v]))
+export const petPic = (i: number) => i >= 10 ? VOX_PIC[i] : PET_PIC[PET_FILES[i]]
 export const PET_FILES = ['cat', 'ghost', 'flame', 'gem', 'atom', 'flower', 'donut', 'ball', 'banana']
 function Setting({ s, v, set, mod }: { s: S; v: any; set: (v: any) => void; mod?: string }) {
   if (mod === 'pet' && s.id === 'kind') return <div><div className="text-sm mb-1.5">{s.name}</div><div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
-    {s.options!.map((o, i) => { const pic = PET_PIC[PET_FILES[i]]; return <button key={o} title={o} onClick={() => set(i)} className="rounded-xl flex flex-col items-center gap-1 p-1.5 transition" style={{ background: +v === i ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: +v === i ? '#fff' : undefined }}>
+    {s.options!.map((o, i) => { const pic = petPic(i); return <button key={o} title={o} onClick={() => set(i)} className="rounded-xl flex flex-col items-center gap-1 p-1.5 transition" style={{ background: +v === i ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: +v === i ? '#fff' : undefined }}>
       {pic ? <img src={pic} className="w-9 h-9 object-contain" draggable={false} /> : <span className="w-9 h-9 flex items-center justify-center"><Icon n="user" s={22} /></span>}<span className="text-[10.5px] font-semibold leading-tight truncate w-full text-center">{o}</span></button> })}</div></div>
   if (s.type === 'str' && s.id === 'pattern') return <PatternEditor v={String(v ?? '')} set={set} />
   if (s.type === 'str') return <label className="block"><div className="text-sm mb-1">{s.name}</div><input className="w-full" placeholder="ezz" value={String(v ?? '')} maxLength={100} onChange={(e) => set(e.target.value)} /></label>

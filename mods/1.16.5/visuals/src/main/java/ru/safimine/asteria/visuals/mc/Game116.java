@@ -54,6 +54,7 @@ final class Game116 implements Game {
     @Override public String username() { return c.getSession().getUsername(); }
     @Override public int ping() { // tab latency; by name when the server changes UUIDs; else the server list ping
         ClientPlayNetworkHandler n = c.getNetworkHandler(); if (n == null || c.player == null) return -1;
+        int real = ru.safimine.asteria.visuals.Ping.get(server()); if (real > 0) return real; // measured to the server itself (tab latency can be fake)
         PlayerListEntry e = n.getPlayerListEntry(c.player.getUuid()); if (e == null) e = n.getPlayerListEntry(c.player.getGameProfile().getName());
         int p = e == null ? 0 : e.getLatency();
         if (p <= 0 && c.getCurrentServerEntry() != null) p = (int) c.getCurrentServerEntry().ping;
@@ -147,6 +148,8 @@ final class Game116 implements Game {
         if (!(h instanceof BlockHitResult) || h.getType() != HitResult.Type.BLOCK) return null; BlockPos p = ((BlockHitResult) h).getBlockPos();
         return new double[]{p.getX() + 0.5, p.getY() + 1, p.getZ() + 0.5};
     }
+    @Override public float light(double x, double y, double z) { if (c.world == null) return 1; try { return c.world.getLightLevel(new net.minecraft.util.math.BlockPos(x, y, z)) / 15f; } catch (Throwable t) { return 1; } }
+    @Override public int food() { return c.player == null ? -1 : c.player.getHungerManager().getFoodLevel(); }
     @Override public void openMenu() { c.openScreen(new AsteriaScreen()); }
     @Override public void closeMenu() { c.openScreen(null); }
 }

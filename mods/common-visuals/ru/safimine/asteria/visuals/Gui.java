@@ -57,9 +57,9 @@ public final class Gui {
     }
 
     private static void sidebar(Gfx g, Game game, float mx, float my) {
-        D.mark(6, 7, 24);
-        D.g.push(30, 12, 1.25f); D.gradText("Asteria", 0, 0, true); D.g.pop();
-        D.textS("VISUALS", 31, 24, 0.6f, 0xFF6F8B99);
+        D.mark(5, 8, 22);
+        { float ts = Math.min(1.25f, (SIDE - 40) / (float) Math.max(1, D.w("Asteria"))); D.g.push(32, 18 - 5 * ts, ts); D.gradText("Asteria", 0, 0, true); D.g.pop(); }
+        D.textS("VISUALS", 33, 25, 0.6f, 0xFF6F8B99);
         float y = 44;
         List<V.Cat> cats = new ArrayList<>(V.CATS); V.Cat th = new V.Cat(); th.id = "theme"; th.name = "Тема"; th.icon = "◐"; cats.add(th);
         V.Cat cf = new V.Cat(); cf.id = "configs"; cf.name = "Конфиги"; cf.icon = "☰"; cats.add(cf);
@@ -272,13 +272,14 @@ public final class Gui {
         hit(px + w / 2, y, x1, y + 15, "font", () -> { V.font = (V.font + 1) % k; V.changed(); });
         return y + 20;
     }
-    private static final String[] STYLES = {"Кристалл", "Созвездие", "Минимал"};
+    private static final String[] STYLES = {"Кристалл", "Созвездие", "Минимал", "Стекло"};
     private static float styleRow(float x0, float y, float x1) {
         D.g.text("Стиль панелей", x0, y + 3, 0xFFB9CBD4, false);
-        float px = x1; for (int i = STYLES.length - 1; i >= 0; i--) { String o = STYLES[i]; float w = D.w(o) * 0.8f + 12; px -= w; boolean on = V.hudStyle == i; final int idx = i;
-            D.round(px, y + 1, px + w - 2, y + 15, 4, on ? V.a1() : 0x18FFFFFF, on ? V.a2() : 0x18FFFFFF); D.textS(o, px + 5, y + 5, 0.8f, on ? 0xFFFFFFFF : 0xFFB9CBD4);
-            hit(px, y + 1, px + w - 2, y + 15, "style", () -> { V.hudStyle = idx; V.changed(); }); }
-        return y + 20;
+        float cw = (x1 - x0) / STYLES.length; // all styles in one row under the title
+        for (int i = 0; i < STYLES.length; i++) { String o = STYLES[i]; float px = x0 + i * cw; boolean on = V.hudStyle == i; final int idx = i; float ts = Math.min(0.8f, (cw - 8) / Math.max(1, D.w(o)));
+            D.round(px, y + 15, px + cw - 2, y + 29, 4, on ? V.a1() : 0x18FFFFFF, on ? V.a2() : 0x18FFFFFF); D.textS(o, px + (cw - 2 - D.w(o) * ts) / 2, y + 22 - 4 * ts, ts, on ? 0xFFFFFFFF : 0xFFB9CBD4);
+            hit(px, y + 15, px + cw - 2, y + 29, "style", () -> { V.hudStyle = idx; V.changed(); }); }
+        return y + 34;
     }
     private static float themeRow(String label, boolean on, float x0, float y, float x1, Runnable click) {
         D.g.text(label, x0, y + 3, 0xFFB9CBD4, false); toggleSwitch(x1 - 22, y + 1, D.anim("th." + label, on ? 1 : 0, 12)); hit(x0, y, x1, y + 16, "th", click); return y + 20;

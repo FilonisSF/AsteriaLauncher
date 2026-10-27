@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.util.Identifier;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
@@ -30,7 +31,7 @@ public class VisualsClient implements ClientModInitializer {
         ZOOM = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.zoom", InputUtil.Type.KEYSYM, 67, "category.asteria"));
         MARK = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.mark", InputUtil.Type.KEYSYM, 66, "category.asteria"));
         FREELOOK = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.freelook", InputUtil.Type.KEYSYM, 342, "category.asteria"));
-        HudRenderCallback.EVENT.register((m, delta) -> { try { Hud.render(new Gfx116(m), Game116.I); } catch (Throwable ignored) {} });
+        // the HUD is drawn by InGameHudMixin under the chat, Tab and scoreboard
         WorldRenderEvents.LAST.register(ctx -> { try { Fx.render(new R3_116(ctx), Game116.I); } catch (Throwable ignored) {} });
         ClientTickEvents.END_CLIENT_TICK.register(VisualsClient::tick);
     }
@@ -64,5 +65,15 @@ public class VisualsClient implements ClientModInitializer {
         int abgr = (0xB2 << 24) | (b << 16) | (g << 8) | r;
         for (int y = 0; y < 8; y++) for (int x = 0; x < 16; x++) img.setPixelColor(x, y, abgr);
         tex.upload();
+    }
+    /** chat messages of ours (.метка ...) stay in the client */
+    public static boolean chat(String msg) { return Fx.chatCommand(Game116.I, msg); }
+    public static void hud(net.minecraft.client.util.math.MatrixStack m) { Gfx116 g = new Gfx116(m, true); try { Hud.render(g, Game116.I); } catch (Throwable ignored) {} finally { try { g.flush(); } catch (Throwable ignored) {} } }
+    /** our font for every text of Minecraft (theme "font for all text"): minecraft:default -> asteria_visuals:f<N>s<scale> */
+    private static final Identifier[][] ALL = new Identifier[16][7];
+    public static Identifier allFont(Identifier id) {
+        if (!V.allFont || V.font <= 0 || id == null || !"minecraft".equals(id.getNamespace()) || !"default".equals(id.getPath())) return id;
+        int i = Math.min(15, V.font), k = Math.max(1, Math.min(6, (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor())));
+        if (ALL[i][k] == null) ALL[i][k] = new Identifier("asteria_visuals", "f" + i + "s" + k); return ALL[i][k];
     }
 }

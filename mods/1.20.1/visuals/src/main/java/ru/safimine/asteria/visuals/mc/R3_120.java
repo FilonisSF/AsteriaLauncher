@@ -62,6 +62,8 @@ final class R3_120 implements Fx.R3 {
             mc.getTextureManager().registerTexture(id, new net.minecraft.client.texture.NativeImageBackedTexture(img)); FT.put(slot, new Object[]{key, id}); return id;
         } catch (Exception ex) { FT.put(slot, new Object[]{key, null}); return null; }
     }
+    @Override public void beginSolid() { begin(QUADS, true); RenderSystem.depthMask(true); }
+    @Override public Object asset(String path) { return new Identifier("asteria_visuals", "textures/fx/" + path + ".png"); }
     @Override public double[] cam() { return new double[]{cam.x, cam.y, cam.z}; }
     @Override public float camYaw() { return camera.getYaw(); }
     @Override public float camPitch() { return camera.getPitch(); }

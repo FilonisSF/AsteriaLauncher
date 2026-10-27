@@ -28,7 +28,7 @@ const DESIGN: Design = { bg: 'gradient', c1: '#0b1f3a', c2: '#0e7490', img: '', 
 
 /** Skin / cape editor: paint right on the 3D model or on the 2D unwrap; cape designer (background, image, border, HD). */
 /** pick the part of a picture that goes on the cape: a frame in the cape's proportions (10:16) you move and resize */
-function CropBox({ src, aspect, onDone, onCancel, title = 'Выберите область для плаща', extra, okText = 'Использовать область' }: { src: string; aspect: number; onDone: (png: string) => void; onCancel: () => void; title?: string; extra?: ReactNode; okText?: string }) {
+function CropBox({ src, aspect, onDone, onCancel, title = 'Выберите область для плаща', extra, okText = 'Использовать область', onRect }: { src: string; aspect: number; onDone: (png: string) => void; onCancel: () => void; title?: string; extra?: ReactNode; okText?: string; onRect?: (r: { x: number; y: number; w: number; h: number }) => void }) {
   const [im, setIm] = useState<HTMLImageElement | null>(null), [sel, setSel] = useState({ x: 0, y: 0, w: 0 }), drag = useRef<{ mode: 'move' | 'size'; px: number; py: number; s: typeof sel } | null>(null)
   useEffect(() => { const i = new Image(); i.onload = () => { setIm(i); const w = Math.min(i.width, i.height * aspect) * 0.8; setSel({ x: (i.width - w) / 2, y: (i.height - w / aspect) / 2, w }) }; i.src = src }, [src])
   const BOX = 520, k = im ? Math.min(BOX / im.width, BOX / im.height) : 1, h = sel.w / aspect
@@ -38,7 +38,7 @@ function CropBox({ src, aspect, onDone, onCancel, title = 'Выберите об
   const move = (e: React.PointerEvent) => { const d = drag.current; if (!d) return; const dx = (e.clientX - d.px) / k, dy = (e.clientY - d.py) / k
     setSel(clamp(d.mode === 'move' ? { ...d.s, x: d.s.x + dx, y: d.s.y + dy } : { ...d.s, w: d.s.w + Math.max(dx, dy * aspect) })) }
   const wheel = (e: React.WheelEvent) => { const nw = sel.w * (e.deltaY > 0 ? 1.08 : 0.92), c = { x: sel.x + sel.w / 2, y: sel.y + h / 2 }; setSel(clamp({ w: nw, x: c.x - nw / 2, y: c.y - nw / aspect / 2 })) }
-  const done = () => { if (!im) return; const H = Math.min(640, Math.round(h)), W = Math.round(H * aspect), c = document.createElement('canvas'); c.width = W; c.height = H
+  const done = () => { if (!im) return; if (onRect) return onRect({ x: sel.x, y: sel.y, w: sel.w, h }); const H = Math.min(640, Math.round(h)), W = Math.round(H * aspect), c = document.createElement('canvas'); c.width = W; c.height = H
     const x = c.getContext('2d')!; x.imageSmoothingQuality = 'high'; x.drawImage(im, sel.x, sel.y, sel.w, h, 0, 0, W, H); onDone(c.toDataURL('image/png')) }
   return <div className="fixed inset-0 z-[90] flex items-center justify-center fade" style={{ background: 'rgba(2,8,14,.8)', backdropFilter: 'blur(6px)' }}>
     <div className="glass rounded-3xl p-5 flex flex-col gap-3" style={{ width: BOX + 40 }}>
@@ -53,8 +53,8 @@ function CropBox({ src, aspect, onDone, onCancel, title = 'Выберите об
 }
 const loadIm = (s: string) => new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = s })
 /** a 512x256 cape from two pictures: the outside and the inside ('mirror' = the outside mirrored and darker, 'dark' = one dark colour) */
-export async function buildCape(front: string, back: string): Promise<string> {
-  const K = 8, c = document.createElement('canvas'); c.width = 64 * K; c.height = 32 * K; const x = c.getContext('2d')!; x.imageSmoothingQuality = 'high'
+export async function buildCape(front: string, back: string, K = 8): Promise<string> {
+  const c = document.createElement('canvas'); c.width = 64 * K; c.height = 32 * K; const x = c.getContext('2d')!; x.imageSmoothingQuality = 'high'
   const f = await loadIm(front), W = 10 * K, H = 16 * K
   x.drawImage(f, K, K, W, H)
   if (back === 'mirror' || back === 'dark') { x.save(); x.translate(12 * K + W, K); x.scale(-1, 1); x.drawImage(f, 0, 0, W, H); x.restore(); x.fillStyle = back === 'dark' ? 'rgba(4,10,16,.82)' : 'rgba(0,0,0,.3)'; x.fillRect(12 * K, K, W, H) }
@@ -62,7 +62,25 @@ export async function buildCape(front: string, back: string): Promise<string> {
   // edges: the outer pixels of the outside picture stretched over the cape's thickness
   x.drawImage(c, K, K, 1, H, 0, K, K, H); x.drawImage(c, K + W - 1, K, 1, H, 11 * K, K, K, H)
   x.drawImage(c, K, K, W, 1, K, 0, W, K); x.drawImage(c, K, K + H - 1, W, 1, 11 * K, 0, W, K)
+  x.drawImage(f, 22 * K, 0, 24 * K, 22 * K); x.drawImage(f, 24 * K, 2 * K, W, 20 * K); x.drawImage(f, 36 * K, 2 * K, W, 20 * K) // elytra take the cape picture
   return c.toDataURL('image/png')
+}
+/** GIF -> animated cape: frames (up to 24) stacked top to bottom, 256x128 each; the game and the launcher play them */
+export function GifCapeMaker({ src, onDone, onCancel, onError }: { src: string; onDone: (png: string, frames: number) => void; onCancel: () => void; onError: (m: string) => void }) {
+  const [first, setFirst] = useState(''), [busy, setBusy] = useState(false), frames = useRef<{ bmp: ImageBitmap | VideoFrame; w: number; h: number }[]>([])
+  useEffect(() => { (async () => { try {
+      const D = (window as any).ImageDecoder; if (!D) return onError('Эта версия лаунчера не умеет читать GIF')
+      const blob = await (await fetch(src)).blob(), dec = new D({ data: blob.stream(), type: 'image/gif' }); await dec.tracks.ready
+      const n = Math.min(24, dec.tracks.selectedTrack.frameCount), step = Math.max(1, Math.ceil(dec.tracks.selectedTrack.frameCount / 24))
+      for (let i = 0; i < n * step && i < dec.tracks.selectedTrack.frameCount; i += step) { const r = await dec.decode({ frameIndex: i }); frames.current.push({ bmp: r.image, w: r.image.displayWidth, h: r.image.displayHeight }) }
+      const f = frames.current[0], c = document.createElement('canvas'); c.width = f.w; c.height = f.h; c.getContext('2d')!.drawImage(f.bmp as any, 0, 0); setFirst(c.toDataURL('image/png'))
+    } catch { onError('Не удалось прочитать GIF') } })() }, [src])
+  if (!first) return <div className="fixed inset-0 z-[90] flex items-center justify-center" style={{ background: 'rgba(2,8,14,.8)' }}><div className="glass rounded-3xl p-6 flex items-center gap-3"><span className="dlspin" />Читаем GIF…</div></div>
+  return <CropBox src={first} aspect={10 / 16} title={busy ? 'Собираем кадры…' : 'Область анимации на плаще'} okText="Сделать плащ" onCancel={onCancel} onDone={() => {}} onRect={async (r) => {
+    setBusy(true); const W = 40, H = 64, out = document.createElement('canvas'), list = frames.current; out.width = 256; out.height = 128 * list.length; const ox = out.getContext('2d')!
+    for (let i = 0; i < list.length; i++) { const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d')!; x.imageSmoothingQuality = 'high'; x.drawImage(list[i].bmp as any, r.x, r.y, r.w, r.h, 0, 0, W, H)
+      const cape = await buildCape(c.toDataURL('image/png'), 'mirror', 4); ox.drawImage(await loadIm(cape), 0, 128 * i) }
+    onDone(out.toDataURL('image/png'), list.length) }} />
 }
 /** any picture -> cape: pick the part for the outside, then the part for the inside */
 export function CapeMaker({ src, onDone, onCancel }: { src: string; onDone: (png: string) => void; onCancel: () => void }) {

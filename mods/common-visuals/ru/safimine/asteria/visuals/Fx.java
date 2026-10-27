@@ -20,6 +20,10 @@ public final class Fx {
         double[] cam();
         /** opaque textured quads with a texture id of the game (a player skin): 4 vt() per quad, then end() */
         default void beginSkin(Object texture) {}
+        /** opaque coloured quads (writes depth): v() x4 per quad, then end() */
+        default void beginSolid() { begin(QUADS, true); }
+        /** a texture of our mod (textures/fx/<path>.png) as a texture id for beginSkin */
+        default Object asset(String path) { return null; }
         /** a png from disk as a texture id (re-uploaded when the key changes; one texture per key prefix before ':') */
         default Object fileTex(String key, java.io.File png) { return null; }
         float camYaw();
@@ -28,38 +32,101 @@ public final class Fx {
     }
 
     // ------------------------------------------------------------------ markers: B puts a mark where you look (or removes it), Shift+B clears; per server
-    public static final List<double[]> MARKS = new ArrayList<>();
-    private static String marksFor = null;
+    /** a marker: position, name, colour (0 = theme), placed at */
+    public static final class Mark { public double x, y, z; public String name = ""; public int color; public long at; }
+    public static final List<Mark> MARKS = new ArrayList<>();
+    private static String marksFor = null; private static long marksMtime = -2, marksCheck;
     private static java.io.File marksFile() { return new java.io.File(V.dir(), "asteria-marks.json"); }
     /** loads the marks of the current server (single player = "local") */
     public static void marksServer(Game g) {
-        String srv = g.server(); if (srv == null) srv = "local"; if (srv.equals(marksFor)) return; marksFor = srv; MARKS.clear();
+        String srv = g.server(); if (srv == null) srv = "local"; long now = System.currentTimeMillis();
+        if (srv.equals(marksFor) && now - marksCheck < 1500) return; marksCheck = now; long m = marksFile().exists() ? marksFile().lastModified() : -1;
+        if (srv.equals(marksFor) && m == marksMtime) return; marksFor = srv; marksMtime = m; MARKS.clear(); // the launcher edits the same file
         try { com.google.gson.JsonObject o = new com.google.gson.JsonParser().parse(new String(java.nio.file.Files.readAllBytes(marksFile().toPath()), java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
-            if (o.has(srv)) for (com.google.gson.JsonElement e : o.getAsJsonArray(srv)) { com.google.gson.JsonArray a = e.getAsJsonArray(); MARKS.add(new double[]{a.get(0).getAsDouble(), a.get(1).getAsDouble(), a.get(2).getAsDouble(), System.currentTimeMillis() - 5000}); } } catch (Exception ignored) {}
+            if (o.has(srv)) for (com.google.gson.JsonElement e : o.getAsJsonArray(srv)) { Mark k = new Mark(); k.at = now - 5000;
+                if (e.isJsonArray()) { com.google.gson.JsonArray a = e.getAsJsonArray(); k.x = a.get(0).getAsDouble(); k.y = a.get(1).getAsDouble(); k.z = a.get(2).getAsDouble(); }
+                else { com.google.gson.JsonObject a = e.getAsJsonObject(); k.x = a.get("x").getAsDouble(); k.y = a.get("y").getAsDouble(); k.z = a.get("z").getAsDouble(); k.name = a.has("name") ? a.get("name").getAsString() : ""; k.color = a.has("color") ? V.parse(a.get("color").getAsString(), 0) : 0; }
+                MARKS.add(k); } } catch (Exception ignored) {}
     }
     private static void saveMarks() {
         try { java.io.File f = marksFile(); com.google.gson.JsonObject o = f.exists() ? new com.google.gson.JsonParser().parse(new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject() : new com.google.gson.JsonObject();
-            com.google.gson.JsonArray l = new com.google.gson.JsonArray(); for (double[] m : MARKS) { com.google.gson.JsonArray a = new com.google.gson.JsonArray(); a.add(new com.google.gson.JsonPrimitive(m[0])); a.add(new com.google.gson.JsonPrimitive(m[1])); a.add(new com.google.gson.JsonPrimitive(m[2])); l.add(a); }
-            o.add(marksFor == null ? "local" : marksFor, l); java.nio.file.Files.write(f.toPath(), new com.google.gson.Gson().toJson(o).getBytes(java.nio.charset.StandardCharsets.UTF_8)); } catch (Exception ignored) {}
+            com.google.gson.JsonArray l = new com.google.gson.JsonArray(); for (Mark m : MARKS) { com.google.gson.JsonObject a = new com.google.gson.JsonObject(); a.addProperty("x", m.x); a.addProperty("y", m.y); a.addProperty("z", m.z); a.addProperty("name", m.name); if (m.color != 0) a.addProperty("color", V.hex(m.color)); l.add(a); }
+            o.add(marksFor == null ? "local" : marksFor, l); java.nio.file.Files.write(f.toPath(), new com.google.gson.Gson().toJson(o).getBytes(java.nio.charset.StandardCharsets.UTF_8)); marksMtime = f.lastModified(); } catch (Exception ignored) {}
     }
     public static void markKey(Game g, boolean clear) {
         if (!V.on("markers")) return; marksServer(g);
         if (clear) { if (!MARKS.isEmpty()) { MARKS.clear(); saveMarks(); Hud.notify("Метки", "Все метки убраны", false); sound("pop", 0.5f); } return; }
         double[] at = g.lookAt(256); if (at == null) { Hud.notify("Метки", "Посмотрите на блок", false); return; }
-        for (int i = 0; i < MARKS.size(); i++) { double[] m = MARKS.get(i); if (Math.abs(m[0] - at[0]) + Math.abs(m[1] - at[1]) + Math.abs(m[2] - at[2]) < 3) { MARKS.remove(i); saveMarks(); Hud.notify("Метки", "Метка убрана", false); sound("pop", 0.5f); return; } }
-        MARKS.add(new double[]{at[0], at[1], at[2], System.currentTimeMillis()}); while (MARKS.size() > (int) V.num("markers", "max")) MARKS.remove(0);
-        saveMarks(); Hud.notify("Метки", "Метка поставлена", true); sound("blip", 0.5f);
+        // the marker nearest to where you look (within 6 blocks of that spot) is removed
+        Mark near = null; double best = 6; for (Mark m : MARKS) { double d = Math.abs(m.x - at[0]) + Math.abs(m.y - at[1]) + Math.abs(m.z - at[2]); if (d < best) { best = d; near = m; } }
+        if (near != null) { MARKS.remove(near); saveMarks(); Hud.notify("Метки", "Метка «" + (near.name.isEmpty() ? "без названия" : near.name) + "» убрана", false); sound("pop", 0.5f); return; }
+        addMark(at[0], at[1], at[2], "Метка " + (MARKS.size() + 1));
+    }
+    static void addMark(double x, double y, double z, String name) {
+        Mark k = new Mark(); k.x = x; k.y = y; k.z = z; k.name = name; k.at = System.currentTimeMillis(); MARKS.add(k);
+        while (MARKS.size() > (int) V.num("markers", "max")) MARKS.remove(0);
+        saveMarks(); Hud.notify("Метки", "«" + name + "» поставлена", true); sound("blip", 0.5f);
+    }
+    /** chat: ".метка X Y Z [название]" / ".mark ..." adds a marker, ".метки очистить" removes all; true = the message is ours, don't send it */
+    public static boolean chatCommand(Game g, String msg) {
+        String s = msg.trim(), low = s.toLowerCase();
+        if (!(low.startsWith(".метк") || low.startsWith(".mark"))) return false;
+        marksServer(g);
+        if (low.contains("очист") || low.contains("clear")) { MARKS.clear(); saveMarks(); Hud.notify("Метки", "Все метки убраны", false); return true; }
+        String[] p = s.split("\\s+");
+        try { double x = Double.parseDouble(p[1].replace(",", "")), y = Double.parseDouble(p[2].replace(",", "")), z = Double.parseDouble(p[3].replace(",", ""));
+            StringBuilder n = new StringBuilder(); for (int i = 4; i < p.length; i++) n.append(i > 4 ? " " : "").append(p[i]);
+            addMark(Math.floor(x) + 0.5, Math.floor(y), Math.floor(z) + 0.5, n.length() == 0 ? "Метка " + (MARKS.size() + 1) : n.toString());
+        } catch (Exception e) { Hud.notify("Метки", "Пример: .метка 100 64 -200 База", false); }
+        return true;
     }
     private static void markBeams(R3 r, Game g, long now) {
         if (!V.bool("markers", "beam")) return;
-        for (int k = 0; k < MARKS.size(); k++) { double[] m = MARKS.get(k); float in = (float) Math.min(1, (now - m[3]) / 500.0); int c = V.grad(k * 0.17f);
+        for (int k = 0; k < MARKS.size(); k++) { Mark m = MARKS.get(k); float in = (float) Math.min(1, (now - m.at) / 500.0); int c = m.color != 0 ? m.color : V.grad(k * 0.17f);
             r.begin(R3.STRIP, true);
-            for (int i = 0; i <= 16; i++) { double a = Math.PI * 2 * i / 16, rr = 0.18; r.v(m[0] + Math.cos(a) * rr, m[1], m[2] + Math.sin(a) * rr, D.a(c, 0.55f * in)); r.v(m[0] + Math.cos(a) * rr, m[1] + 80 * in, m[2] + Math.sin(a) * rr, D.a(c, 0)); }
+            for (int i = 0; i <= 16; i++) { double a = Math.PI * 2 * i / 16, rr = 0.16; r.v(m.x + Math.cos(a) * rr, m.y, m.z + Math.sin(a) * rr, D.a(c, 0.6f * in)); r.v(m.x + Math.cos(a) * rr, m.y + 90 * in, m.z + Math.sin(a) * rr, D.a(c, 0)); }
+            r.end();
+            r.begin(R3.STRIP, true); double pr = 0.5 + 0.12 * Math.sin(now / 300.0 + k); // a soft pulsing ring on the ground
+            for (int i = 0; i <= 32; i++) { double a = Math.PI * 2 * i / 32; r.v(m.x + Math.cos(a) * pr, m.y + 0.02, m.z + Math.sin(a) * pr, D.a(c, 0.75f * in)); r.v(m.x + Math.cos(a) * (pr - 0.18), m.y + 0.02, m.z + Math.sin(a) * (pr - 0.18), D.a(c, 0)); }
             r.end(); }
     }
 
     // ------------------------------------------------------------------ target
     private static Object target; private static long targetAt, killMsgAt;
+    // ------------------------------------------------------------------ alerts
+    private static final java.util.Map<String, Long> ALERTED = new java.util.HashMap<>(); private static int lastTotems = -1; private static long alertAll;
+    private static boolean once(String k, long now, long gap) { Long t = ALERTED.get(k); if (t != null && now - t < gap) return false; ALERTED.put(k, now); return true; }
+    private static void alerts(Game g, long now) {
+        if (!V.on("alerts") || now - alertAll < 300) return; alertAll = now; Object self = g.self(); if (self == null) return;
+        if (V.bool("alerts", "armor")) for (Game.Item it : g.armor()) if (it.max > 0) { float left = 1f - it.damage / (float) it.max;
+            if (left * 100 < V.num("alerts", "armorpct") && once("arm" + it.name, now, 60000)) Hud.alert("Броня ломается!", it.name + " — осталось " + Math.round(left * 100) + "%", 0xFFFFB547, "shield"); }
+        if (V.bool("alerts", "hp")) { float hp = g.hp(self); if (hp > 0 && hp <= V.num("alerts", "hpval") * 2 && once("hp", now, 8000)) Hud.alert("Мало здоровья!", String.format(java.util.Locale.ROOT, "%.1f ❤", hp / 2).replace("❤", "сердца"), 0xFFFF4D6A, "heart"); }
+        if (V.bool("alerts", "food")) { int f = g.food(); if (f >= 0 && f <= 6 && once("food", now, 30000)) Hud.alert("Голод", "Поешьте — бег скоро отключится", 0xFFF59E0B, "shop"); }
+        if (V.bool("alerts", "totem")) { int tot = 0; for (Object st : g.inventory()) if (st != null && g.itemId(st).endsWith("totem_of_undying")) tot += g.count(st); Object off = g.offhand(); if (off != null && g.itemId(off).endsWith("totem_of_undying")) tot += g.count(off);
+            if (lastTotems >= 0 && tot < lastTotems) Hud.alert("Тотем использован", tot == 0 ? "Тотемов больше нет!" : "Осталось: " + tot, tot == 0 ? 0xFFFF4D6A : 0xFFFACC15, "shield"); lastTotems = tot; }
+        if (V.bool("alerts", "effect")) for (Game.Effect e : g.effects()) if (e.ticks > 0 && e.ticks < 100 && once("ef" + e.name, now, 20000)) Hud.alert("Эффект заканчивается", e.name + " — 5 сек", 0xFF60A5FA, "clock");
+    }
+    // ------------------------------------------------------------------ pets: following and looks
+    static final class Follow { double[] pos, prev, owner, spot; double phase, speed, yaw, idleYaw; long wanderAt; }
+    private static Follow selfF; private static final java.util.Map<String, Follow> OTHER_F = new java.util.HashMap<>();
+    static boolean onGroundKind(int k) { return k == MINI || (k >= 10 && k != 14); } // 3D pets walk, the pictures and the bee float
+    /** one tick of a pet near its owner: wanders around when the owner stands, follows behind (never in front) when the owner moves */
+    static void follow(Follow f, double[] o, boolean ground, long seed) {
+        double oy = o[1] + (ground ? 0 : 1.35);
+        if (f.pos == null || Math.abs(f.pos[0] - o[0]) + Math.abs(f.pos[2] - o[2]) > 16) { f.pos = new double[]{o[0] - 1.5, oy, o[2] - 1.5}; f.prev = f.pos.clone(); f.owner = o.clone(); }
+        f.prev = f.pos.clone();
+        double vx = o[0] - f.owner[0], vz = o[2] - f.owner[2], v = Math.sqrt(vx * vx + vz * vz); f.owner = o.clone();
+        long now = System.currentTimeMillis(); java.util.Random rn = new java.util.Random(seed / 3000);
+        if (v > 0.06) { double nx = vx / v, nz = vz / v, side = (seed & 1) == 0 ? 1 : -1; // behind and a bit aside: out of the way in a fight
+            f.spot = new double[]{o[0] - nx * 2.1 - nz * 0.8 * side, o[2] - nz * 2.1 + nx * 0.8 * side}; f.wanderAt = now + 1500; }
+        else if (f.spot == null || now > f.wanderAt) { double a = rn.nextDouble() * Math.PI * 2, d = 1.3 + rn.nextDouble() * 1.1; f.spot = new double[]{o[0] + Math.cos(a) * d, o[2] + Math.sin(a) * d}; f.wanderAt = now + 2500 + rn.nextInt(3500); }
+        double dx = f.spot[0] - f.pos[0], dz = f.spot[1] - f.pos[2], d = Math.sqrt(dx * dx + dz * dz), far = Math.sqrt(Math.pow(o[0] - f.pos[0], 2) + Math.pow(o[2] - f.pos[2], 2));
+        double max = Math.max(0.12, Math.min(0.6, v * 1.15 + (far > 4 ? 0.2 : 0))), step = d < 0.12 ? 0 : Math.min(max, d * 0.16 + 0.02);
+        if (step > 0) { f.pos[0] += dx / d * step; f.pos[2] += dz / d * step; double want = Math.toDegrees(Math.atan2(-dx, dz)), dd = ((want - f.yaw) % 360 + 540) % 360 - 180; f.yaw += dd * 0.3; }
+        else { double want = Math.toDegrees(Math.atan2(-(o[0] - f.pos[0]), o[2] - f.pos[2])), dd = ((want - f.yaw) % 360 + 540) % 360 - 180; f.yaw += dd * 0.08; } // standing: looks at you
+        f.pos[1] += (oy - f.pos[1]) * 0.25;
+        f.speed = f.speed * 0.7 + step * 0.3; f.phase += f.speed * 5.5;
+    }
     // ------------------------------------------------------------------ free look: the camera turns around the player, the player keeps looking ahead
     public static boolean freeLook; public static float flYaw, flPitch; private static int flPrev = -1;
     /** called every tick with the free-look key state */
@@ -78,8 +145,8 @@ public final class Fx {
     }
     /** what the target HUD / marker show: last attacked (3 s) or the living entity under the crosshair */
     public static Object target(Game g) {
-        if (target != null && (!g.alive(target) || System.currentTimeMillis() - targetAt > 3500)) target = null;
-        if (target != null) return target;
+        if (target != null && g.alive(target) && System.currentTimeMillis() - targetAt > 3500) target = null;
+        if (target != null && g.alive(target)) return target;
         Object c = g.crosshairEntity(); return c != null && g.living(c) && g.alive(c) ? c : null;
     }
 
@@ -95,11 +162,11 @@ public final class Fx {
     private static final List<double[]> JPARTS = new ArrayList<>();  // jump particles: x,y,z,vx,vy,vz,born,life,seed
     private static final List<double[]> PTRAIL = new ArrayList<>();  // walking particle trail: same layout
     private static final List<double[]> SONAR = new ArrayList<>();   // x,y,z,start
-    private static final List<double[]> DMG = new ArrayList<>();     // floating damage numbers: x,y,z,born,value,drift
+    public static final List<double[]> DMG = new ArrayList<>();     // floating damage numbers: x,y,z,born,value,drift
     private static Object dmgEnt; private static float dmgHp = -1; private static long sonarAt;
     private static double[] lastStep;
     private static final List<double[]> DASH = new ArrayList<>();    // sprint-start streaks: x,y,z,dx,dz,start
-    private static boolean wasSprint; private static double[] petPos, petPrev;
+    private static boolean wasSprint; public static long dashAt; private static double[] petPos, petPrev;
     /** pets of other launcher players: name -> {kind, size}; from <api>/cosmetics (the launcher sends each player's pet with its heartbeat) */
     private static volatile java.util.Map<String, double[]> PET_OF = new java.util.HashMap<>();
     /** halo / hat of other launcher players: name -> "halo,hat" */
@@ -169,7 +236,7 @@ public final class Fx {
             OTRAIL.keySet().retainAll(seen);
         } else OTRAIL.clear();
         boolean ground = g.onGround();
-        if (V.on("jumpcircles") && ground != wasGround) CIRCLES.add(new double[]{p[0], p[1], p[2], System.currentTimeMillis()});
+        if (V.on("jumpcircles") && ground != wasGround && (ground ? V.bool("jumpcircles", "land") : V.bool("jumpcircles", "jump"))) CIRCLES.add(new double[]{p[0], p[1], p[2], System.currentTimeMillis()});
         if (ground != wasGround) {
             boolean jump = !ground; // left the ground = jump, touched it = landing
             if (V.on("jumpparticles") && (jump || V.bool("jumpparticles", "land"))) jumpBurst(p, jump, now0);
@@ -180,25 +247,19 @@ public final class Fx {
         wasGround = ground;
         // dash: a short streak when sprinting starts
         boolean spr = g.sprinting();
-        if (V.on("dash") && spr && !wasSprint) { double yr = Math.toRadians(g.yaw()); DASH.add(new double[]{p[0], p[1], p[2], -Math.sin(yr), Math.cos(yr), now0}); }
+        if (V.on("dash") && spr && !wasSprint) { dashAt = now0; double yr = Math.toRadians(g.yaw()); DASH.add(new double[]{p[0], p[1], p[2], -Math.sin(yr), Math.cos(yr), now0}); }
         wasSprint = spr; DASH.removeIf(q -> now0 - q[5] > 600);
-        // pet follows a spot behind the right shoulder
-        if (V.on("pet")) { double yr = Math.toRadians(g.yaw()), tx = p[0] - Math.sin(yr) * -0.2 + Math.cos(yr) * -0.75, tz = p[2] + Math.cos(yr) * -0.2 + Math.sin(yr) * -0.75, ty = p[1] + (V.mode("pet", "kind") == MINI ? 0 : 1.9);
-            if (petPos == null || dist(petPos, new double[]{tx, ty, tz}) > 12) petPos = new double[]{tx, ty, tz};
-            petPrev = petPos.clone(); // drawn between petPrev and petPos with the partial tick: smooth, not 20 jumps a second
-            petPos[0] += (tx - petPos[0]) * 0.18; petPos[1] += (ty - petPos[1]) * 0.18; petPos[2] += (tz - petPos[2]) * 0.18; } else petPos = null;
-        // pets of other Asteria players (refreshed every 30 s)
-        if (now0 - petsAt > 30000) { petsAt = now0; fetchPets(); }
+        alerts(g, now0);
+        // our pet
+        if (V.on("pet")) { if (selfF == null) selfF = new Follow(); follow(selfF, p, onGroundKind(V.mode("pet", "kind")), now0); petPos = selfF.pos; petPrev = selfF.prev; } else { selfF = null; petPos = null; }
+        // pets of other Asteria players (list refreshed every 10 s)
+        if (now0 - petsAt > 10000) { petsAt = now0; fetchPets(); }
         if (V.bool("pet", "others") && !PET_OF.isEmpty()) {
             java.util.Set<String> seen = new java.util.HashSet<>();
-            for (Object e : g.players()) { String n = g.playerName(e).toLowerCase(); if (!PET_OF.containsKey(n)) continue; seen.add(n); OTHER_E.put(n, e);
-                double[] q = g.pos(e, 1); double yr = Math.toRadians(g.yawOf(e)), tx = q[0] + 0.2 * Math.sin(yr) - 0.75 * Math.cos(yr), tz = q[2] - 0.2 * Math.cos(yr) - 0.75 * Math.sin(yr), ty = q[1] + ((int) PET_OF.get(n)[0] == MINI ? 0 : 1.9);
-                double[] st = OTHER.get(n);
-                if (st == null || Math.abs(st[3] - tx) + Math.abs(st[5] - tz) > 12) st = new double[]{tx, ty, tz, tx, ty, tz};
-                st[0] = st[3]; st[1] = st[4]; st[2] = st[5];
-                st[3] += (tx - st[3]) * 0.18; st[4] += (ty - st[4]) * 0.18; st[5] += (tz - st[5]) * 0.18; OTHER.put(n, st); }
-            OTHER.keySet().retainAll(seen); OTHER_E.keySet().retainAll(seen);
-        } else OTHER.clear();
+            for (Object e : g.players()) { String n = g.playerName(e).toLowerCase(); double[] k = PET_OF.get(n); if (k == null) continue; seen.add(n); OTHER_E.put(n, e);
+                Follow f = OTHER_F.computeIfAbsent(n, x -> new Follow()); follow(f, g.pos(e, 1), onGroundKind((int) k[0]), now0 + n.hashCode()); }
+            OTHER_F.keySet().retainAll(seen); OTHER_E.keySet().retainAll(seen);
+        } else OTHER_F.clear();
         // particles left behind while moving
         if (V.on("particletrail")) {
             if (lastStep == null || dist(lastStep, p) > 0.9 / V.num("particletrail", "density")) { lastStep = p.clone();
@@ -243,6 +304,8 @@ public final class Fx {
             r.end();
         }
     }
+    /** true = don't play this Minecraft sound (our hit sounds replace the vanilla attack sounds) */
+    public static boolean muteVanilla(String id) { return id != null && id.contains("entity.player.attack") && V.on("sounds") && V.bool("sounds", "mute") && V.mode("sounds", "hit") > 0; }
     public static void sound(String id, float vol) { if (game != null) try { game.sound(id, vol, 0.95f + (float) Math.random() * 0.1f); } catch (Throwable ignored) {} }
     private static void jumpBurst(double[] p, boolean jump, long now) {
         int n = (int) V.num("jumpparticles", "count");
@@ -287,7 +350,11 @@ public final class Fx {
         if (V.on("targetesp") && t != null && t != self) targetEsp(r, g, t, pt, now);
         if (V.on("chinahat") && g.thirdPerson()) hat(r, g, self, pt, now, g.bodyYaw(pt));
         if (!FX_OF.isEmpty()) for (Object e : g.players()) { String fx = FX_OF.get(g.playerName(e).toLowerCase()); if (fx == null || !g.alive(e)) continue;
-            if (fx.contains("halo")) halo(r, g, e, pt, now); if (fx.contains("hat")) hat(r, g, e, pt, now, g.yawOf(e)); }
+            if (fx.contains("halo")) halo(r, g, e, pt, now); if (fx.contains("hat,") || fx.endsWith("hat")) hat(r, g, e, pt, now, g.yawOf(e));
+            if (V.bool("cosmetics", "others") && fx.contains("c:")) try { String[] c = fx.substring(fx.indexOf("c:") + 2).split("[,;]")[0].split("\\."); double[] q = g.pos(e, pt);
+                Cosmetics.draw(r, q, g.yawOf(e), g.yawOf(e), g.height(e), Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2]), c.length > 3 ? (int) Long.parseLong(c[3], 16) : -1, false, Math.max(0.2f, g.light(q[0], q[1] + 1, q[2])), now); } catch (Throwable ignored) {} }
+        if (V.on("cosmetics") && g.thirdPerson()) try { double[] q = g.pos(self, pt);
+            Cosmetics.draw(r, q, g.bodyYaw(pt), g.yaw(), g.height(self), V.mode("cosmetics", "wings"), V.mode("cosmetics", "hat"), V.mode("cosmetics", "back"), V.bool("cosmetics", "tint") ? -1 : V.color("cosmetics", "color"), !g.onGround(), Math.max(0.2f, g.light(q[0], q[1] + 1, q[2])), now); } catch (Throwable ignored) {}
         if (V.on("markers") && !MARKS.isEmpty()) markBeams(r, g, now);
         if (!PARTS.isEmpty()) { if (V.mode("hitparticles", "style") >= 5) texParticles(r, PARTS, V.mode("hitparticles", "style") - 5, 0.16, now, pt, false); else particles(r, now); }
         if (!KPARTS.isEmpty()) { r.begin(R3.QUADS, true); for (double[] q : KPARTS) { float life = (float) ((now - q[6]) / q[7]), al = 1 - life; int c = D.a(V.grad((float) q[8]), al);
@@ -299,14 +366,15 @@ public final class Fx {
         if (!PTRAIL.isEmpty()) shapes(r, PTRAIL, V.mode("particletrail", "style"), 0.045, now, pt);
         if (!SONAR.isEmpty()) sonar(r, now);
         if (V.on("halo") && g.thirdPerson()) halo(r, g, self, pt, now);
-        if (!DMG.isEmpty()) damage(r, now);
+
         if (!DASH.isEmpty()) dash(r, now);
-        if (petPos != null && (g.thirdPerson() || !V.bool("pet", "third"))) pet(r, now);
-        if (!OTHER.isEmpty()) { float pf = r.partial();
-            for (java.util.Map.Entry<String, double[]> en : OTHER.entrySet()) { double[] st = en.getValue(), k = PET_OF.get(en.getKey()); if (k == null) continue;
-                if ((int) k[0] == MINI) { Object e = OTHER_E.get(en.getKey()), skin = k[2] > 0 ? miniSkinOf(r, en.getKey()) : null; if (skin == null && e != null) skin = g.skin(e);
-                    if (skin != null) { drawMini(r, en.getKey(), new double[]{st[0] + (st[3] - st[0]) * pf, st[1] + (st[4] - st[1]) * pf, st[2] + (st[5] - st[2]) * pf}, skin, k[1]); continue; } }
-                drawPet(r, new double[]{st[0] + (st[3] - st[0]) * pf, st[1] + (st[4] - st[1]) * pf, st[2] + (st[5] - st[2]) * pf}, (int) k[0], k[1], now + en.getKey().hashCode()); } }
+        if (selfF != null && selfF.pos != null && (g.thirdPerson() || !V.bool("pet", "third"))) {
+            Object skin = null; int kind = V.mode("pet", "kind");
+            if (kind == MINI) { if (V.mode("pet", "miniskin") == 1) { java.io.File f = new java.io.File(System.getProperty("asteria.root", "."), "skins/mini.png"); if (f.exists()) skin = r.fileTex("mini:" + f.lastModified(), f); } if (skin == null) skin = g.skin(self); }
+            drawAny(r, g, selfF, kind, V.num("pet", "size"), skin, "", now); }
+        for (java.util.Map.Entry<String, Follow> en : OTHER_F.entrySet()) { double[] k = PET_OF.get(en.getKey()); if (k == null || en.getValue().pos == null) continue; Object skin = null;
+            if ((int) k[0] == MINI) { Object e = OTHER_E.get(en.getKey()); skin = k[2] > 0 ? miniSkinOf(r, en.getKey()) : null; if (skin == null && e != null) skin = g.skin(e); }
+            drawAny(r, g, en.getValue(), (int) k[0], k[1], skin, en.getKey(), now + en.getKey().hashCode()); }
     }
 
     /** small particle shapes shared by jump particles and the particle trail: 0 sparks, 1 stars, 2 hearts, 3 snow, 4 bubbles */
@@ -367,15 +435,89 @@ public final class Fx {
                 r.v(x0, y - 0.02, z0, D.a(c, a * 0.85f)); r.v(x0, y + 0.02, z0, D.a(c, a * 0.85f)); r.v(x1, y + 0.02, z1, D.a(c, 0)); r.v(x1, y - 0.02, z1, D.a(c, 0)); } }
         r.end();
     }
-    /** a little glowing companion: a soft glow plus its picture, bobbing */
-    private static void pet(R3 r, long now) {
-        float t = r.partial(); double[] pp = petPrev == null ? petPos : new double[]{petPrev[0] + (petPos[0] - petPrev[0]) * t, petPrev[1] + (petPos[1] - petPrev[1]) * t, petPrev[2] + (petPos[2] - petPrev[2]) * t};
-        if (V.mode("pet", "kind") == MINI && game != null) { Object skin = null;
-            if (V.mode("pet", "miniskin") == 1) { java.io.File f = new java.io.File(System.getProperty("asteria.root", "."), "skins/mini.png"); if (f.exists()) skin = r.fileTex("mini:" + f.lastModified(), f); }
-            if (skin == null) skin = game.skin(game.self());
-            if (skin != null) { drawMini(r, "", pp, skin, V.num("pet", "size")); return; } }
-        drawPet(r, pp, V.mode("pet", "kind"), V.num("pet", "size"), now);
+    /** a pet of any kind at its interpolated place, lit like the world around it, with a soft shadow under it */
+    static void drawAny(R3 r, Game g, Follow f, int kind, double size, Object skin, String who, long now) {
+        float t = r.partial(); double[] pp = {f.prev[0] + (f.pos[0] - f.prev[0]) * t, f.prev[1] + (f.pos[1] - f.prev[1]) * t, f.prev[2] + (f.pos[2] - f.prev[2]) * t};
+        float lt = Math.max(0.16f, g.light(pp[0], pp[1] + 0.4, pp[2]));
+        shadow(r, pp[0], pp[1] - (onGroundKind(kind) ? 0 : 1.35) + 0.02, pp[2], 0.32 * size, lt);
+        if (kind == MINI && skin != null) { drawMini(r, who, pp, skin, size, lt); return; }
+        if (kind >= 10 && kind - 10 < VOX.length) { drawVox(r, VOX[kind - 10], pp, f, size, lt, now); return; }
+        drawPet(r, pp, kind, size, now, f, lt);
     }
+    private static void shadow(R3 r, double x, double y, double z, double rad, float lt) {
+        r.begin(R3.TRIS, true); int n = 20;
+        for (int i = 0; i < n; i++) { double a0 = Math.PI * 2 * i / n, a1 = Math.PI * 2 * (i + 1) / n; r.v(x, y, z, D.alpha(0, (int) (90 * lt))); r.v(x + Math.cos(a0) * rad, y, z + Math.sin(a0) * rad, 0); r.v(x + Math.cos(a1) * rad, y, z + Math.sin(a1) * rad, 0); }
+        r.end();
+    }
+    static int shade(int argb, float f) { int a = argb >>> 24, rr = (int) (((argb >> 16) & 255) * f), gg = (int) (((argb >> 8) & 255) * f), bb = (int) ((argb & 255) * f); return (a << 24) | (Math.min(255, rr) << 16) | (Math.min(255, gg) << 8) | Math.min(255, bb); }
+    // ------------------------------------------------------------------ 3D pets made of boxes (pixel units, feet at y = 0, looking at +z)
+    // box: x0,y0,z0,x1,y1,z1, colour, part (0 body, 1 head, 2 tail, 3 ears, 4..7 legs FL FR BL BR, 8 wings, 9 eyes)
+    // pivots: head x,y,z; tail x,y,z; leg top y; style (0 walk, 1 hop, 2 squash, 3 fly)
+    static final class Vox { final float[][] b; final float[] pv; Vox(float[] pv, float[]... b) { this.pv = pv; this.b = b; } }
+    private static float[] bx(double x0, double y0, double z0, double x1, double y1, double z1, int c, int part) { return new float[]{(float) x0, (float) y0, (float) z0, (float) x1, (float) y1, (float) z1, c >>> 16, part, c & 0xFFFF}; } // colour kept exactly as two 16-bit halves
+    static final Vox[] VOX = {
+        new Vox(new float[]{0, 6, 4.5f, 0, 6.8f, -4, 3, 0}, // kitten
+            bx(-2.5, 3, -4, 2.5, 7.5, 4, 0xFFF0A050, 0), bx(-2.6, 7.4, -2.6, 2.6, 7.6, -1.8, 0xFFD27F2E, 0), bx(-2.6, 7.4, 0.2, 2.6, 7.6, 1, 0xFFD27F2E, 0), bx(-1.5, 3.4, 4, 1.5, 6.6, 4.3, 0xFFFFF4E6, 0),
+            bx(-3, 5, 3, 3, 10.5, 8.5, 0xFFF4AE60, 1), bx(-1.6, 5.5, 8.5, 1.6, 7.4, 9.4, 0xFFFFF0DC, 1), bx(-0.5, 7.1, 9.4, 0.5, 7.7, 9.6, 0xFFFF8FA8, 1),
+            bx(-2.3, 8, 8.5, -0.9, 9.4, 8.7, 0xFF20242E, 9), bx(0.9, 8, 8.5, 2.3, 9.4, 8.7, 0xFF20242E, 9), bx(-1.9, 8.9, 8.7, -1.5, 9.3, 8.8, 0xFFFFFFFF, 9), bx(1.3, 8.9, 8.7, 1.7, 9.3, 8.8, 0xFFFFFFFF, 9),
+            bx(-3, 10.5, 4.5, -1.2, 12.5, 6.5, 0xFFE08840, 3), bx(1.2, 10.5, 4.5, 3, 12.5, 6.5, 0xFFE08840, 3), bx(-2.6, 10.5, 6.5, -1.6, 11.8, 6.7, 0xFFFFA6BF, 3), bx(1.6, 10.5, 6.5, 2.6, 11.8, 6.7, 0xFFFFA6BF, 3),
+            bx(-2.3, 0, 2, -0.8, 3, 3.5, 0xFFE89A4C, 4), bx(0.8, 0, 2, 2.3, 3, 3.5, 0xFFE89A4C, 5), bx(-2.3, 0, -3.5, -0.8, 3, -2, 0xFFE89A4C, 6), bx(0.8, 0, -3.5, 2.3, 3, -2, 0xFFE89A4C, 7),
+            bx(-0.7, 6, -9, 0.7, 7.4, -4, 0xFFE08840, 2), bx(-0.75, 6, -10, 0.75, 7.45, -9, 0xFFFFF4E6, 2)),
+        new Vox(new float[]{0, 6.5f, 4.5f, 0, 6.5f, -4, 3, 0}, // fox
+            bx(-2.4, 3, -4, 2.4, 7.4, 4, 0xFFE8742C, 0), bx(-1.6, 3.2, 3.9, 1.6, 6.2, 4.2, 0xFFFFF4EA, 0),
+            bx(-3, 5, 3, 3, 10.3, 8, 0xFFEE8236, 1), bx(-1.8, 5, 8, 1.8, 7.3, 10.2, 0xFFFFF4EA, 1), bx(-0.6, 6.6, 10.2, 0.6, 7.4, 10.5, 0xFF231A18, 1),
+            bx(-2.3, 8, 8, -1, 9.3, 8.2, 0xFF231A18, 9), bx(1, 8, 8, 2.3, 9.3, 8.2, 0xFF231A18, 9), bx(-1.9, 8.8, 8.2, -1.5, 9.2, 8.3, 0xFFFFFFFF, 9), bx(1.4, 8.8, 8.2, 1.8, 9.2, 8.3, 0xFFFFFFFF, 9),
+            bx(-3, 10.3, 4.5, -1, 13.4, 6.3, 0xFFEE8236, 3), bx(1, 10.3, 4.5, 3, 13.4, 6.3, 0xFFEE8236, 3), bx(-3, 12.6, 4.5, -1, 13.4, 6.3, 0xFF231A18, 3), bx(1, 12.6, 4.5, 3, 13.4, 6.3, 0xFF231A18, 3),
+            bx(-2.2, 0, 2, -0.8, 3, 3.4, 0xFF2A2020, 4), bx(0.8, 0, 2, 2.2, 3, 3.4, 0xFF2A2020, 5), bx(-2.2, 0, -3.4, -0.8, 3, -2, 0xFF2A2020, 6), bx(0.8, 0, -3.4, 2.2, 3, -2, 0xFF2A2020, 7),
+            bx(-1.6, 4.6, -10, 1.6, 7.6, -4, 0xFFEE8236, 2), bx(-1.65, 4.6, -12, 1.65, 7.65, -10, 0xFFFFF4EA, 2)),
+        new Vox(new float[]{0, 6, 3.5f, 0, 5, -3.5f, 2, 1}, // bunny
+            bx(-2.6, 1.6, -3.6, 2.6, 6.6, 3, 0xFFF6F0E8, 0),
+            bx(-2.4, 5, 2, 2.4, 9.6, 6.6, 0xFFFBF6F0, 1), bx(-0.5, 6.6, 6.6, 0.5, 7.3, 6.8, 0xFFFF8FA8, 1), bx(-1.2, 5.6, 6.6, 1.2, 6.6, 6.8, 0xFFFFFFFF, 1),
+            bx(-2, 7.4, 6.6, -0.8, 8.7, 6.8, 0xFF2A2430, 9), bx(0.8, 7.4, 6.6, 2, 8.7, 6.8, 0xFF2A2430, 9), bx(-1.7, 8.2, 6.8, -1.3, 8.6, 6.9, 0xFFFFFFFF, 9), bx(1.1, 8.2, 6.8, 1.5, 8.6, 6.9, 0xFFFFFFFF, 9),
+            bx(-1.9, 9.4, 3.6, -0.6, 15, 4.6, 0xFFF6F0E8, 3), bx(0.6, 9.4, 3.6, 1.9, 15, 4.6, 0xFFF6F0E8, 3), bx(-1.6, 9.8, 4.6, -0.9, 14.4, 4.7, 0xFFFFB3C6, 3), bx(0.9, 9.8, 4.6, 1.6, 14.4, 4.7, 0xFFFFB3C6, 3),
+            bx(-2.2, 0, 1.4, -0.9, 2, 2.8, 0xFFEFE6DA, 4), bx(0.9, 0, 1.4, 2.2, 2, 2.8, 0xFFEFE6DA, 5), bx(-2.4, 0, -3.4, -0.8, 2, -1, 0xFFEFE6DA, 6), bx(0.8, 0, -3.4, 2.4, 2, -1, 0xFFEFE6DA, 7),
+            bx(-1.2, 3.6, -4.8, 1.2, 6, -3.6, 0xFFFFFFFF, 2)),
+        new Vox(new float[]{0, 4, 0, 0, 4, 0, 0, 2}, // slime
+            bx(-2.2, 1.8, -2.2, 2.2, 6.2, 2.2, 0xFF3F8F33, 0), bx(-4, 0, -4, 4, 8, 4, 0x9C7CDB5E, 0),
+            bx(-2.6, 4.4, 4.02, -0.8, 6.2, 4.12, 0xFF1E3A1A, 9), bx(0.8, 4.4, 4.02, 2.6, 6.2, 4.12, 0xFF1E3A1A, 9), bx(-0.8, 2.4, 4.02, 0.8, 3, 4.12, 0xFF1E3A1A, 0)),
+        new Vox(new float[]{0, 10, 3, 0, 10, -3.5f, 8, 3}, // bee
+            bx(-2.5, 8, -3.5, 2.5, 12, 3.5, 0xFFF7C948, 0), bx(-2.6, 7.9, -1.4, 2.6, 12.1, -0.4, 0xFF2B2118, 0), bx(-2.6, 7.9, 0.8, 2.6, 12.1, 1.8, 0xFF2B2118, 0), bx(-0.4, 9.6, -4.4, 0.4, 10.4, -3.5, 0xFF2B2118, 2),
+            bx(-2, 10, 3.5, -0.8, 11.3, 3.7, 0xFF2B2118, 9), bx(0.8, 10, 3.5, 2, 11.3, 3.7, 0xFF2B2118, 9), bx(-1.6, 10.8, 3.7, -1.2, 11.2, 3.8, 0xFFFFFFFF, 9), bx(1.2, 10.8, 3.7, 1.6, 11.2, 3.8, 0xFFFFFFFF, 9),
+            bx(-1.6, 12, 2.6, -1.2, 14, 3, 0xFF2B2118, 3), bx(1.2, 12, 2.6, 1.6, 14, 3, 0xFF2B2118, 3),
+            bx(-6, 12, -1.6, -0.5, 12.2, 1.6, 0xB8E8F6FF, 8), bx(0.5, 12, -1.6, 6, 12.2, 1.6, 0xB8E8F6FF, 8)),
+        new Vox(new float[]{0, 2.2f, 3, 0, 2.2f, -5, 1.2f, 0}, // axolotl
+            bx(-2, 0.6, -5, 2, 3.6, 3, 0xFFF7A6C4, 0),
+            bx(-3, 0.5, 3, 3, 4, 7, 0xFFF9B4CE, 1), bx(-1.6, 1.4, 7, 1.6, 1.8, 7.1, 0xFFC2507E, 1),
+            bx(-2.4, 2.4, 7, -1.2, 3.4, 7.15, 0xFF2A1A24, 9), bx(1.2, 2.4, 7, 2.4, 3.4, 7.15, 0xFF2A1A24, 9),
+            bx(-4.6, 2.4, 4, -3, 4.8, 5.4, 0xFFE5508A, 3), bx(3, 2.4, 4, 4.6, 4.8, 5.4, 0xFFE5508A, 3), bx(-1, 4, 4.6, 1, 5.4, 5.4, 0xFFE5508A, 3),
+            bx(-3, 0, 1.4, -2, 1.2, 2.4, 0xFFF7A6C4, 4), bx(2, 0, 1.4, 3, 1.2, 2.4, 0xFFF7A6C4, 5), bx(-3, 0, -3.6, -2, 1.2, -2.6, 0xFFF7A6C4, 6), bx(2, 0, -3.6, 3, 1.2, -2.6, 0xFFF7A6C4, 7),
+            bx(-0.4, 0.8, -11, 0.4, 4.4, -5, 0xFFF3C0D4, 2)),
+    };
+    static void drawVox(R3 r, Vox m, double[] pos, Follow f, double size, float lt, long now) {
+        double t = now / 1000.0, mv = Math.min(1, f.speed * 9), ph = f.phase, style = m.pv[7], k = size * 0.04, yaw = Math.toRadians(f.yaw), cy = Math.cos(yaw), sy = Math.sin(yaw);
+        double hop = style == 1 ? Math.abs(Math.sin(ph * 0.8)) * 3.2 * mv : style == 3 ? 1.2 * Math.sin(t * 2.2) : style == 2 ? Math.abs(Math.sin(ph * 0.7)) * 2.4 * mv : Math.abs(Math.sin(ph)) * 0.5 * mv;
+        double squash = style == 2 ? 1 - 0.18 * Math.sin(ph * 1.4) * mv + 0.04 * Math.sin(t * 3) : 1 + 0.03 * Math.sin(t * 2.4);
+        boolean blink = (now / 100) % 38 == 0;
+        double headTilt = Math.sin(t * 1.3) * 0.12 * (1 - mv), tailWag = Math.sin(t * (mv > 0.2 ? 9 : 3.5)) * (style == 2 ? 0 : 0.55), earTw = ((now / 1700) % 5 == 0) ? Math.sin(t * 30) * 0.3 : 0, wing = Math.sin(t * 38) * 0.9;
+        r.beginSolid();
+        for (float[] b : m.b) { int part = (int) b[7], col = ((int) b[6] << 16) | (int) b[8];
+            double[][] c = new double[8][];
+            for (int n = 0; n < 8; n++) { double x = (n & 1) == 0 ? b[0] : b[3], y = (n & 2) == 0 ? b[1] : b[4], z = (n & 4) == 0 ? b[2] : b[5];
+                if (part == 9 && blink) y = (b[1] + b[4]) / 2 + (y - (b[1] + b[4]) / 2) * 0.15;
+                if (part == 1 || part == 3 || part == 9) { double[] q = rotX(y, z, m.pv[1], m.pv[2], headTilt); y = q[0]; z = q[1]; if (part == 3) { double[] e = rotX(y, z, m.pv[1] + 5, m.pv[2], earTw); y = e[0]; z = e[1]; } }
+                else if (part == 2) { double[] q = rotY(x, z, m.pv[3], m.pv[5], tailWag); x = q[0]; z = q[1]; }
+                else if (part >= 4 && part <= 7) { double sgn = (part == 4 || part == 7) ? 1 : -1; double[] q = rotX(y, z, m.pv[6], (b[2] + b[5]) / 2, Math.sin(ph) * 0.8 * mv * sgn); y = q[0]; z = q[1]; }
+                else if (part == 8) { double side = b[0] < 0 ? -1 : 1; double ang = wing * side; double yy = m.pv[6] + 4 + (y - (m.pv[6] + 4)) * Math.cos(ang) + Math.abs(x) * Math.sin(ang * 0.6); y = yy; }
+                y = y * squash; double hx = x * (style == 2 ? 2 - squash : 1);
+                c[n] = new double[]{pos[0] + (hx * cy - z * sy) * k, pos[1] + (y + hop) * k, pos[2] + (hx * sy + z * cy) * k}; }
+            quad(r, c[6], c[7], c[5], c[4], shade(col, 0.95f * lt)); quad(r, c[3], c[2], c[0], c[1], shade(col, 0.8f * lt));
+            quad(r, c[2], c[6], c[4], c[0], shade(col, 0.85f * lt)); quad(r, c[7], c[3], c[1], c[5], shade(col, 0.85f * lt));
+            quad(r, c[2], c[3], c[7], c[6], shade(col, 1.05f * lt)); quad(r, c[4], c[5], c[1], c[0], shade(col, 0.6f * lt)); }
+        r.end();
+    }
+    private static double[] rotX(double y, double z, double py, double pz, double a) { double dy = y - py, dz = z - pz; return new double[]{py + dy * Math.cos(a) - dz * Math.sin(a), pz + dy * Math.sin(a) + dz * Math.cos(a)}; }
+    private static double[] rotY(double x, double z, double px, double pz, double a) { double dx = x - px, dz = z - pz; return new double[]{px + dx * Math.cos(a) + dz * Math.sin(a), pz - dx * Math.sin(a) + dz * Math.cos(a)}; }
+    private static void quad(R3 r, double[] a, double[] b, double[] c, double[] d, int col) { r.v(a[0], a[1], a[2], col); r.v(b[0], b[1], b[2], col); r.v(c[0], c[1], c[2], col); r.v(d[0], d[1], d[2], col); }
     static final int MINI = 9;
     private static long miniAt;
     /** the custom mini-me skin of another player (uploaded in their launcher), cached in config/asteria-minis */
@@ -393,7 +535,8 @@ public final class Fx {
         {0, 0, 8, 8, 8, -4, 24, -4, 24, 0}, {16, 16, 8, 12, 4, -4, 12, -2, 12, 0},      // head, body
         {40, 16, 4, 12, 4, -8, 12, -2, 22, 1}, {32, 48, 4, 12, 4, 4, 12, -2, 22, -1},   // right arm, left arm
         {0, 16, 4, 12, 4, -4, 0, -2, 12, -1}, {16, 48, 4, 12, 4, 0, 0, -2, 12, 1}};     // right leg, left leg
-    static void drawMini(R3 r, String who, double[] pos, Object skin, double size) {
+    static void drawMini(R3 r, String who, double[] pos, Object skin, double size) { drawMini(r, who, pos, skin, size, 1); }
+    static void drawMini(R3 r, String who, double[] pos, Object skin, double size, float lt) {
         double[] w = WALK.get(who); if (w == null) { w = new double[]{0, pos[0], pos[2], 0, 0}; WALK.put(who, w); }
         double dx = pos[0] - w[1], dz = pos[2] - w[2], sp = Math.sqrt(dx * dx + dz * dz); w[1] = pos[0]; w[2] = pos[2];
         w[4] = w[4] * 0.85 + Math.min(0.3, sp) * 0.15; w[0] += w[4] * 4.5;
@@ -410,12 +553,12 @@ public final class Fx {
                 double ry = py + (ly - py) * Math.cos(a) - lz * Math.sin(a), rz = (ly - py) * Math.sin(a) + lz * Math.cos(a);
                 c[n] = new double[]{pos[0] + (lx * cy - rz * sy) * k, pos[1] + (ry + bob) * k, pos[2] + (lx * sy + rz * cy) * k}; }
             // faces seen from outside: top-left, top-right, bottom-right, bottom-left + their skin rectangle
-            face(r, c[6], c[7], c[5], c[4], u + bd, v + bd, bw, bh, 0xFFFFFFFF);                 // front (+z)
-            face(r, c[3], c[2], c[0], c[1], u + bd * 2 + bw, v + bd, bw, bh, 0xFFC8C8C8);        // back
-            face(r, c[2], c[6], c[4], c[0], u, v + bd, bd, bh, 0xFFDCDCDC);                      // right side (-x)
-            face(r, c[7], c[3], c[1], c[5], u + bd + bw, v + bd, bd, bh, 0xFFDCDCDC);            // left side (+x)
-            face(r, c[2], c[3], c[7], c[6], u + bd, v, bw, bd, 0xFFFFFFFF);                      // top
-            face(r, c[4], c[5], c[1], c[0], u + bd + bw, v, bw, bd, 0xFFA8A8A8);                 // bottom
+            face(r, c[6], c[7], c[5], c[4], u + bd, v + bd, bw, bh, shade(0xFFFFFFFF, lt));                 // front (+z)
+            face(r, c[3], c[2], c[0], c[1], u + bd * 2 + bw, v + bd, bw, bh, shade(0xFFC8C8C8, lt));        // back
+            face(r, c[2], c[6], c[4], c[0], u, v + bd, bd, bh, shade(0xFFDCDCDC, lt));                      // right side (-x)
+            face(r, c[7], c[3], c[1], c[5], u + bd + bw, v + bd, bd, bh, shade(0xFFDCDCDC, lt));            // left side (+x)
+            face(r, c[2], c[3], c[7], c[6], u + bd, v, bw, bd, shade(0xFFFFFFFF, lt));                      // top
+            face(r, c[4], c[5], c[1], c[0], u + bd + bw, v, bw, bd, shade(0xFFA8A8A8, lt));                 // bottom
         }
         r.end();
     }
@@ -423,10 +566,13 @@ public final class Fx {
         float u0 = u / 64f, v0 = v / 64f, u1 = (u + w) / 64f, v1 = (v + h) / 64f;
         r.vt(tl[0], tl[1], tl[2], u0, v0, c); r.vt(tr[0], tr[1], tr[2], u1, v0, c); r.vt(br[0], br[1], br[2], u1, v1, c); r.vt(bl[0], bl[1], bl[2], u0, v1, c);
     }
-    static void drawPet(R3 r, double[] pp, int kind, double size, long now) {
-        double bob = Math.sin(now / 420.0) * 0.08, s = 0.22 * size; int c = V.grad(0.2f);
-        r.beginTex("particles/bloom/bloom_soft", true); tq(r, pp[0], pp[1] + bob, pp[2], s * 2.6, 0, D.a(c, 0.5f)); r.end();
-        r.beginTex(PETS[Math.max(0, Math.min(PETS.length - 1, kind))], true); tq(r, pp[0], pp[1] + bob, pp[2], s, Math.sin(now / 900.0) * 0.15, 0xFFFFFFFF); r.end();
+    static void drawPet(R3 r, double[] pp, int kind, double size, long now) { Follow f = new Follow(); drawPet(r, pp, kind, size, now, f, 1); }
+    static void drawPet(R3 r, double[] pp, int kind, double size, long now, Follow f, float lt) {
+        double mv = Math.min(1, f.speed * 9), bob = Math.sin(now / 420.0) * 0.06 + Math.abs(Math.sin(f.phase)) * 0.12 * mv, s = 0.22 * size; int c = V.grad(0.2f);
+        if (lt > 0.5f) { r.beginTex("particles/bloom/bloom_soft", true); tq(r, pp[0], pp[1] + bob, pp[2], s * 2.2, 0, D.a(c, 0.18f * lt)); r.end(); } // a faint glow only in the light
+        Object tex = r.asset(PETS[Math.max(0, Math.min(PETS.length - 1, kind))]);
+        if (tex != null) { r.beginSkin(tex); tq(r, pp[0], pp[1] + bob, pp[2], s, Math.sin(now / 700.0) * 0.12 - mv * 0.12, shade(0xFFFFFFFF, lt)); r.end(); }
+        else { r.beginTex(PETS[Math.max(0, Math.min(PETS.length - 1, kind))], true); tq(r, pp[0], pp[1] + bob, pp[2], s, Math.sin(now / 900.0) * 0.15, shade(0xFFFFFFFF, lt)); r.end(); }
     }
     /** glowing ring floating above the head, slowly turning and bobbing */
     private static void halo(R3 r, Game g, Object self, float pt, long now) {
@@ -474,9 +620,10 @@ public final class Fx {
     private static void trail(R3 r, List<double[]> pts) {
         int n = pts.size(); boolean ribbon = V.mode("trails", "mode") == 0; double h = V.num("trails", "height");
         if (V.mode("trails", "mode") == 2) { // spiral: two twisting ribbons around the path
-            double t0 = System.currentTimeMillis() / 300.0;
+            double t0 = System.currentTimeMillis() / 420.0;
+            double[] dh = new double[n]; for (int i = n - 2; i >= 0; i--) dh[i] = dh[i + 1] + dist(pts.get(i), pts.get(i + 1));
             for (int k = 0; k < 2; k++) { r.begin(R3.STRIP, true);
-                for (int i = 0; i < n; i++) { double[] p = pts.get(i); float f = i / (float) (n - 1); int c = V.grad(f * 0.6f + k * 0.5f); double a = t0 + i * 0.45 + k * Math.PI, ox = Math.cos(a) * 0.35, oz = Math.sin(a) * 0.35, yy = p[1] + h * 0.5 + Math.sin(a) * 0.15;
+                for (int i = 0; i < n; i++) { double[] p = pts.get(i); float f = i / (float) (n - 1); int c = V.grad(f * 0.6f + k * 0.5f); double a = t0 - dh[i] * 2.4 + k * Math.PI, ox = Math.cos(a) * 0.35, oz = Math.sin(a) * 0.35, yy = p[1] + h * 0.5 + Math.sin(a) * 0.15;
                     r.v(p[0] + ox, yy, p[2] + oz, D.a(c, 0.8f * f)); r.v(p[0] + ox, yy + 0.08, p[2] + oz, D.a(c, 0.15f * f)); }
                 r.end(); }
             return;
@@ -692,6 +839,7 @@ public final class Fx {
             (float) V.num("viewmodel", p + "rx"), (float) V.num("viewmodel", p + "ry"), (float) V.num("viewmodel", p + "rz"), (float) V.num("viewmodel", "scale")};
     }
     /** first person swing presets: {tx, ty, tz, rotX, rotY, rotZ} for swing progress 0..1 (main hand) */
+    private static float ease(float x) { x = Math.max(0, Math.min(1, x)); return x < 0.5f ? 4 * x * x * x : 1 - (float) Math.pow(-2 * x + 2, 3) / 2; }
     public static float[] swingPose(float swing) {
         if (!V.on("swing")) return null;
         int preset = V.mode("swing", "preset");
@@ -703,6 +851,9 @@ public final class Fx {
             case 2: return new float[]{-0.05f * s, 0.03f * s, 0, -12 * s, -35 * s2, 15 * s};     // "1.7 block": sword turns across the screen
             case 3: return new float[]{0, 0, -0.05f * s, 0, -360 * swing, 0};                    // spin
             case 4: return new float[]{0, 0.06f * s, 0.04f * s, 28 * s2, 0, 0};                  // chop: up and down
+            case 6: { float e = ease(swing); return new float[]{0.04f * s, 0.02f * s, 0, -25 * s2, -40 + 80 * e, -20 * s}; } // wide sweep from right to left
+            case 7: return new float[]{0, -0.02f * s, -0.18f * s, -10 * s, 0, 0};                // stab: straight forward
+            case 8: return new float[]{-0.04f, 0.02f, 0, -20 - 25 * s2, -30, 20 * s};            // soft block: sword held across, a gentle tap
             default: return null;
         }
     }

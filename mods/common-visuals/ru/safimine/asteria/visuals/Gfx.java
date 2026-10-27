@@ -35,6 +35,8 @@ public interface Gfx {
     }
     /** a living entity's model fitted into a size x size box; false if this version can't */
     default boolean entity(Object e, float x, float y, float size) { return false; }
+    /** draws everything collected so far (batched shapes) */
+    default void flush() {}
     void push(float x, float y, float scale);
     void pop();
     /** clip to a rectangle (GUI coordinates, not affected by push) */

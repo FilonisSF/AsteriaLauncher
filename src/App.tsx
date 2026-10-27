@@ -7,9 +7,9 @@ import defConf from './config.default.json'
 import avatar from './assets/avatar.png'
 import Fx from './Fx'
 import Skin3D from './Skin3D'
-import SkinStudio, { CapeMaker } from './SkinStudio'
+import SkinStudio, { CapeMaker, GifCapeMaker } from './SkinStudio'
 import GameSettings from './GameSettings'
-import VisualsTab, { visDefaults, PET_PIC, PET_FILES } from './VisualsTab'
+import VisualsTab, { visDefaults, petPic } from './VisualsTab'
 import { EventsBlock } from './Clans'
 import Versions, { ALL_VERSIONS, ASTERIA, fabricFor } from './Versions'
 import { VINFO } from './versionInfo'
@@ -17,6 +17,7 @@ import { Splash, LaunchOverlay, UpdateModal, LogModal } from './Overlays'
 import { Icon, Gem, Wordmark, FLAGS } from './Icons'
 import { Check, ColorPick, Dropdown, LoaderIcon, Modal, Palette, Switch, Tilt, type Cmd } from './ui'
 import { LANGS, tr } from './i18n'
+import { setUiLang } from './autoTranslate'
 declare global { interface Window { api: any } }
 const api = window.api
 const glob = (g: Record<string, string>, key: string) => Object.entries(g).filter(([k]) => k.includes(key)).map(([k, v]) => [k.split(key)[1].replace(/\.(png|jpg)$/, ''), v] as [string, string])
@@ -65,16 +66,34 @@ function NumInput({ v, on }: { v: number; on: (n: number) => void }) { // free t
   const [txt, setTxt] = useState(String(v)); useEffect(() => { if (+txt !== v) setTxt(String(v)) }, [v])
   return <input inputMode="numeric" className="w-24 text-center" value={txt} onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setTxt(d); if (d) on(+d) }} onBlur={() => { if (!txt || +txt < 320) setTxt(String(v)) }} />
 }
+/** 3D cosmetics on the Skins page: wings, hat, item on the back (pictures are rendered from the same models the game draws) */
+const COSM_PIC: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob('./assets/cosm/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>).map(([k, v]) => [k.split('/').pop()!.replace('.png', ''), v]))
+function CosmCard() {
+  const [v, setV] = useState<any>(null)
+  useEffect(() => { window.api.visGet().then((x: any) => { const d = visDefaults() as any; const m = x || d; m.modules = m.modules || {}; m.modules.cosmetics = { ...d.modules.cosmetics, ...(m.modules.cosmetics || {}), s: { ...d.modules.cosmetics?.s, ...(m.modules.cosmetics?.s || {}) } }; setV(m) }) }, [])
+  if (!v || !v.modules.cosmetics) return null
+  const c = v.modules.cosmetics, put = (patch: any) => { const n = { ...v, modules: { ...v.modules, cosmetics: { ...c, ...patch, s: { ...c.s, ...(patch.s || {}) } } } }; setV(n); window.api.visSet(n) }
+  const rows: [string, string, string, string[]][] = [['wings', 'w', 'Крылья', ['Ангел', 'Демон', 'Фея', 'Дракон']], ['hat', 'h', 'Головной убор', ['Корона', 'Цилиндр', 'Кошачьи ушки', 'Шляпа ведьмы', 'Рога']], ['back', 'b', 'За спиной', ['Коса', 'Молот', 'Катана']]]
+  return <div className="card rounded-3xl p-5 flex flex-col gap-3">
+    <div className="flex items-center justify-between"><div><b className="text-lg">Косметика 3D</b><div className="muted text-xs">Детализированные крылья, головные уборы и оружие за спиной. Видят все игроки Asteria</div></div><Switch on={!!c.on} set={(on) => put({ on })} /></div>
+    {rows.map(([id, pre, title, names]) => <div key={id}><div className="text-sm mb-1.5 font-semibold">{title}</div>
+      <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', opacity: c.on ? 1 : 0.55 }}>
+        <button onClick={() => put({ s: { [id]: 0 } })} className="rounded-xl flex flex-col items-center justify-center gap-1 p-1.5 muted text-[10.5px]" style={{ background: +c.s[id] === 0 ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: +c.s[id] === 0 ? '#fff' : undefined, minHeight: 66 }}><Icon n="close" s={16} />Нет</button>
+        {names.map((n, i) => { const sel = +c.s[id] === i + 1; return <button key={n} title={n} onClick={() => put({ on: true, s: { [id]: i + 1 } })} className="rounded-xl flex flex-col items-center gap-1 p-1.5 transition hover:-translate-y-0.5" style={{ background: sel ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: sel ? '#fff' : undefined }}>
+          <img src={COSM_PIC[pre + '-' + (i + 1)]} className="w-11 h-11 object-contain" draggable={false} /><span className="text-[10.5px] font-semibold truncate w-full text-center">{n}</span></button> })}</div></div>)}
+    <div className="flex items-center justify-between gap-3"><Switch on={c.s.tint !== false} set={(x) => put({ s: { tint: x } })} label="Цвет темы визуалов" />{c.s.tint === false && <ColorPick value={c.s.color || '#ffb36b'} set={(x) => put({ s: { color: x } })} size="sm" />}</div>
+  </div>
+}
 /** the pet right on the Skins page: who, size, on / off (same settings as Visuals -> Pet) */
 function PetCard({ face }: { face: string }) {
   const [v, setV] = useState<any>(null)
   useEffect(() => { window.api.visGet().then((x: any) => { const d = visDefaults() as any; const m = x || d; m.modules = m.modules || {}; m.modules.pet = { ...d.modules.pet, ...(m.modules.pet || {}), s: { ...d.modules.pet.s, ...(m.modules.pet?.s || {}) } }; setV(m) }) }, [])
   if (!v) return null
   const p = v.modules.pet, put = (patch: any) => { const n = { ...v, modules: { ...v.modules, pet: { ...p, ...patch, s: { ...p.s, ...(patch.s || {}) } } } }; setV(n); window.api.visSet(n) }
-  const names = ['Котик', 'Призрак', 'Огонёк', 'Кристалл', 'Атом', 'Цветок', 'Пончик', 'Мячик', 'Банан', 'Мини-я']
+  const names = ['Котик', 'Призрак', 'Огонёк', 'Кристалл', 'Атом', 'Цветок', 'Пончик', 'Мячик', 'Банан', 'Мини-я', 'Котёнок', 'Лисёнок', 'Зайчик', 'Слайм', 'Пчёлка', 'Аксолотль'], order = [10, 11, 12, 13, 14, 15, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8]
   return <div className="card rounded-3xl p-5 flex flex-col gap-3">
     <div className="flex items-center justify-between"><div><b className="text-lg">Питомец</b><div className="muted text-xs">Бегает рядом с вами в игре. Его видят все игроки Asteria</div></div><Switch on={!!p.on} set={(on) => put({ on })} /></div>
-    <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', opacity: p.on ? 1 : 0.5 }}>{names.map((n, i) => { const pic = PET_PIC[PET_FILES[i]], sel = +p.s.kind === i
+    <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', opacity: p.on ? 1 : 0.5 }}>{order.map((i) => { const n = names[i], pic = petPic(i), sel = +p.s.kind === i
       return <button key={n} onClick={() => put({ on: true, s: { kind: i } })} className="rounded-xl flex flex-col items-center gap-1 p-1.5 transition hover:-translate-y-0.5" style={{ background: sel ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: sel ? '#fff' : undefined }}>
         {pic ? <img src={pic} className="w-10 h-10 object-contain" draggable={false} /> : <span className="w-10 h-10 rounded-lg" style={{ backgroundImage: `url(${face})`, backgroundSize: '800% 800%', backgroundPosition: `${8 / 56 * 100}% ${8 / 56 * 100}%`, imageRendering: 'pixelated' }} />}
         <span className="text-[10.5px] font-semibold truncate w-full text-center">{n}</span></button> })}</div>
@@ -82,6 +101,14 @@ function PetCard({ face }: { face: string }) {
     <Switch on={p.s.others !== false} set={(x) => put({ s: { others: x } })} label="Показывать питомцев других игроков Asteria" />
   </div>
 }
+/** fills the elytra area (x 22..46, y 0..22 of 64x32) with the cape's outside picture when it is empty: elytra then look like the cape */
+const withElytra = (url: string): Promise<string> => new Promise((res) => { const im = new Image(); im.onload = () => {
+  const k = im.width / 64, c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d')!; x.drawImage(im, 0, 0)
+  const a = x.getImageData(Math.round(24 * k), Math.round(2 * k), Math.round(10 * k), Math.round(20 * k)).data; let filled = 0; for (let i = 3; i < a.length; i += 16) if (a[i] > 10) filled++
+  if (filled > a.length / 64) return res(url) // the texture already has elytra
+  x.imageSmoothingQuality = 'high'; const src = [1 * k, 1 * k, 10 * k, 16 * k] as const
+  x.drawImage(im, ...src, 22 * k, 0, 24 * k, 22 * k); x.drawImage(im, ...src, 24 * k, 2 * k, 10 * k, 20 * k); x.drawImage(im, ...src, 36 * k, 2 * k, 10 * k, 20 * k)
+  res(c.toDataURL('image/png')) }; im.onerror = () => res(url); im.src = url })
 /** a picture as a data: URL (bigger assets come as file URLs; the launcher saves data: URLs) */
 const toData = async (u: string): Promise<string> => u.startsWith('data:') ? u : await fetch(u).then((r) => r.blob()).then((b) => new Promise<string>((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsDataURL(b) }))
 type Saved = { id: string; data: string }
@@ -95,10 +122,12 @@ function SkinTile({ url, on, pick, del, title }: { url: string; on: boolean; pic
     {del && <button className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full hidden group-hover:flex items-center justify-center" style={{ background: '#ef4444', color: '#fff' }} title="Удалить" onClick={del}><Icon n="close" s={12} /></button>}</div>
 }
 function CapeTile({ name, url, on, pick, del }: { name: string; url: string; on: boolean; pick: () => void; del?: () => void }) {
-  const [hd, setHd] = useState(false); useEffect(() => { const im = new Image(); im.onload = () => setHd(im.width > 64); im.src = url }, [url])
+  const [hd, setHd] = useState(false), [frames, setFrames] = useState(1), [fi, setFi] = useState(0)
+  useEffect(() => { const im = new Image(); im.onload = () => { setHd(im.width > 64); setFrames(Math.max(1, Math.round(im.height / (im.width / 2)))) }; im.src = url }, [url])
+  useEffect(() => { if (frames < 2) return; const id = setInterval(() => setFi((x) => (x + 1) % frames), 90); return () => clearInterval(id) }, [frames])
   const k = 6.4
   return <div className="relative group"><button onClick={pick} title={name} className={'w-full rounded-xl flex items-center justify-center transition hover:-translate-y-0.5 ' + (on ? 'ring-2 ring-[var(--a1)]' : '')} style={{ height: 112, background: 'var(--chip)' }}>
-    <span className="rounded-[3px] shadow-lg" style={{ width: 10 * k, height: 16 * k, backgroundImage: `url(${url})`, backgroundSize: `${64 * k}px ${32 * k}px`, backgroundPosition: `${-1 * k}px ${-1 * k}px`, imageRendering: hd ? 'auto' : 'pixelated' }} /></button>
+    <span className="rounded-[3px] shadow-lg" style={{ width: 10 * k, height: 16 * k, backgroundImage: `url(${url})`, backgroundSize: `${64 * k}px ${32 * k * frames}px`, backgroundPosition: `${-1 * k}px ${-1 * k - fi * 32 * k}px`, imageRendering: hd ? 'auto' : 'pixelated' }} /></button>
     {del && <button className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full hidden group-hover:flex items-center justify-center" style={{ background: '#ef4444', color: '#fff' }} title="Удалить плащ" onClick={del}><Icon n="close" s={12} /></button>}</div>
 }
 const PageHead = ({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) => <div className="ph"><div><h1 className="grad-text">{title}</h1>{sub && <div className="sub">{sub}</div>}</div>{right}</div>
@@ -137,8 +166,9 @@ function MiniPlayer() {
 
 export default function App() {
   const [tab, setTab] = useState('home'), [menu, setMenu] = useState(''), [addOpen, setAddOpen] = useState(false), [st, setSt] = useState({ online: false, ping: 0, players: 0, max: 500 })
-  const [lang, setLang] = usePref('lang', 'ru'), [theme, setTheme] = usePref('theme', 'dark'), [accent, setAccent] = usePref('accent', 'aqua'), [fx, setFx] = usePref('fx', 'stars'), [custom, setCustom] = usePref('customAccent', '#22d3ee')
-  const [skinSpin, setSkinSpin] = usePref('skinSpin', '1'), [ver, setVer] = usePref('ver', '1.16.5'), [capeId, setCape] = usePref('cape', ''), [badgeId] = usePref('badge', 'crystal')
+  const [lang, setLang] = usePref('lang', 'ru'); useEffect(() => { setUiLang(lang) }, [lang]) // every Russian text left on screen follows the language too
+  const [theme, setTheme] = usePref('theme', 'dark'), [accent, setAccent] = usePref('accent', 'aqua'), [fx, setFx] = usePref('fx', 'stars'), [custom, setCustom] = usePref('customAccent', '#22d3ee')
+  const [skinSpin, setSkinSpin] = usePref('skinSpin', '1'), [ver, setVer] = usePref('ver', '1.16.5'), [capeId, setCapeS] = useState(''), [badgeId] = usePref('badge', 'crystal')
   const [acc, setAcc] = useState<{ list: any[]; active?: string }>({ list: [] }), [cfg, setCfg] = useState<any>(null), [sys, setSys] = useState({ totalMb: 16384 })
   const [prog, setProg] = useState<any>({ stage: '', pct: 0, detail: '', step: 0 }), [toast, setToast] = useState(''), [skin, setSkin] = useState(''), [variant, setVariant] = usePref('variant', 'classic')
   const [q, setQ] = useState(''), [sort, setSort] = useState('downloads'), [cat, setCat] = useState(''), [hits, setHits] = useState<any[]>([]), [mods, setMods] = useState<any[]>([]), [busy, setBusy] = useState(''), [lq, setLq] = useState(''), [offNick, setOffNick] = useState('')
@@ -164,7 +194,7 @@ export default function App() {
     if (r.bad.length) say('Это не мод (.jar): ' + r.bad.join(', '), 'err'); loadMods() }
   const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDropOn(false); if (kind !== 'mod') return
     const paths = [...e.dataTransfer.files].map((f) => api.filePath(f)).filter(Boolean); if (paths.length) upload(paths) }
-  const reqId = useRef(0), search = async () => { const id = ++reqId.current; setBusy('s'); const r = kind === 'mod' ? await api.modsSearch({ q, ver, sort, cat }) : await api.pkSearch({ q, ver, sort, kind }); if (id !== reqId.current) return; setHits(r); setBusy('') }
+  const reqId = useRef(0), search = async () => { const id = ++reqId.current; setBusy('s'); const r = kind === 'mod' ? await api.modsSearch({ q, ver, sort, cat, pvp }) : await api.pkSearch({ q, ver, sort, kind, pvp }); if (id !== reqId.current) return; setHits(r); setBusy('') }
   useEffect(() => { (async () => { const st1 = (pct: number, k: string) => setBoot({ pct, msg: tr(localStorage.getItem('lang') ?? 'ru', k) })
     st1(10, 'boot1'); api.onStatus((d: any) => { setSt(d); setHist((h) => [...h.slice(-29), d.players]) }); api.onProgress(setProg); api.onGame(setRunning); api.onUpdate(setUpd); addEventListener('focus', () => api.checkUpdate?.()); api.onApi?.(setApiSt)
     setCfg(await api.getSettings()); api.config().then((c: any) => c && setConf({ ...defConf, ...c })); api.tgFeed('safimine_grief').then(setFeed); api.versionArt().then((a: any) => { ART = a || {}; setArtTick((x) => x + 1) }).catch(() => {}); api.profList().then(setProfiles); api.apiInfo?.().then(setApiSt)
@@ -173,8 +203,12 @@ export default function App() {
   useEffect(() => { api.stats().then(setStats) }, [running])
   // "Download" installs the version completely (Java, libraries, mods, visuals), then "Play"; "Update" when newer mods came with the launcher
   const [vst, setVst] = useState<any>({ installed: true }), [dling, setDling] = useState(false)
-  const [miniSkin, setMiniSkin] = useState<string | null>(null), [capeSrc, setCapeSrc] = useState('')
-  useEffect(() => { api.miniGet?.().then(setMiniSkin).catch(() => {}); api.skinCurrent?.().then((d: string | null) => d && setSkin((s) => s || d)).catch(() => {}) }, [])
+  const [miniSkin, setMiniSkin] = useState<string | null>(null), [capeSrc, setCapeSrc] = useState(''), [gifSrc, setGifSrc] = useState('')
+  // each account has its own skin, cape and mini-me skin
+  const setCape = (v: string) => { setCapeS(v); try { localStorage.setItem('cape:' + (acc.active || ''), v) } catch {} }
+  useEffect(() => { if (!acc.active) return; (async () => { await api.accTextures?.()
+    try { setCapeS(localStorage.getItem('cape:' + acc.active) ?? localStorage.getItem('cape') ?? '') } catch {}
+    setSkin((await api.skinCurrent?.().catch(() => null)) || ''); setMiniSkin((await api.miniGet?.().catch(() => null)) || null) })() }, [acc.active])
   const refreshVst = () => api.verStatus?.(ver).then(setVst).catch(() => {})
   useEffect(() => { refreshVst() }, [ver, running])
   // newer mods / visuals for an installed version are fetched quietly — nothing to press
@@ -203,14 +237,19 @@ export default function App() {
   useEffect(() => { if (!shotView) return; const f = (e: KeyboardEvent) => { if (e.key === 'Escape') setShotView(null); if (e.key === 'ArrowRight') shotStep(1); if (e.key === 'ArrowLeft') shotStep(-1) }; addEventListener('keydown', f); return () => removeEventListener('keydown', f) }, [shotView, shots, shotQ])
   const copy = (x: string) => { navigator.clipboard.writeText(x); say(t('copied') + (sm ? '' : ': ' + x)) }
   // favourite mods / resource packs / shaders (the AL mark on a card)
+  const [pvp, setPvp] = useState(false), [prevInfo, setPrevInfo] = useState<any>(null)
+  useEffect(() => { search() }, [pvp])
+  // preview of any mod / pack / shader: pictures + description translated into the launcher language
+  const openPrev = async (h: any) => { setPrev(h); setPrevInfo(null); setPrevInfo(await api.mrProject?.(h.slug, lang).catch(() => null) || { desc: h.description, text: '' }) }
   const [favs, setFavsS] = useState<any[]>(() => { try { return JSON.parse(localStorage.getItem('favs') || '[]') } catch { return [] } }), [favOnly, setFavOnly] = useState(false)
   const setFavs = (l: any[]) => { setFavsS(l); try { localStorage.setItem('favs', JSON.stringify(l)) } catch {} }
   const isFav = (slug: string) => favs.some((f) => f.slug === slug && f.kind === kind)
   const toggleFav = (h: any) => isFav(h.slug) ? setFavs(favs.filter((f) => !(f.slug === h.slug && f.kind === kind))) : setFavs([{ kind, slug: h.slug, title: h.title, description: h.description, icon_url: h.icon_url, downloads: h.downloads, gallery: h.gallery, featured_gallery: h.featured_gallery }, ...favs])
   // sharing with a friend
   const [friend, setFriend] = useState<{ open: boolean; code: string; busy: boolean; got?: any }>({ open: false, code: '', busy: false })
-  const share = async (k: string, data: any) => { const r = await api.shareMake(k, data); r?.id ? say('Код ' + r.id + ' скопирован — отправьте его другу') : say(r?.error || 'Не удалось', 'err') }
-  const sharePack = async () => { const p = await api.packExport(ver); if (!p.mods.length && !p.packs.length && !p.shaders.length) return say('В этой версии пока нет модов, ресурспаков и шейдеров из каталога', 'info'); share('modpack', p) }
+  const share = async (k: string, data: any) => { const r = await api.shareMake(k, data); r?.id ? say(r.long ? 'Код скопирован (длинный: сервер Asteria сейчас недоступен) — отправьте его другу целиком' : 'Код ' + r.id + ' скопирован — отправьте его другу') : say(r?.error || 'Не удалось', 'err') }
+  const sharePack = async (part: 'all' | 'mods' | 'packs' | 'shaders' = 'all') => { const p = await api.packExport(ver); const q = { ver: p.ver, mods: part === 'all' || part === 'mods' ? p.mods : [], packs: part === 'all' || part === 'packs' ? p.packs : [], shaders: part === 'all' || part === 'shaders' ? p.shaders : [] }
+    if (!q.mods.length && !q.packs.length && !q.shaders.length) return say('Здесь пока нечего отправить: нет модов, ресурспаков или шейдеров из каталога', 'info'); share('modpack', q) }
   const applyFriend = async (got: any) => { const d = got.data
     if (got.kind === 'skin') { addSkin(d); await useSkin(d) }
     else if (got.kind === 'cape') await addCape(d)
@@ -220,13 +259,13 @@ export default function App() {
       for (const [list, k] of [[d.packs, 'resourcepack'], [d.shaders, 'shader']] as [string[], string][]) for (const s of list || []) { n++; const r = await api.pkInstall(s, ver, k).catch(() => null); if (r?.ok) ok++ }
       say(`Сборка установлена: ${ok} из ${n}` + (d.ver !== ver ? ` (сделана для ${d.ver})` : '')); loadMods() }
     setFriend({ open: false, code: '', busy: false }) }
-  const pickCape = async (n: string, u: string) => { setCape(n); api.saveTexture({ data: await toData(u), kind: 'cape' }) }
+  const pickCape = async (n: string, u: string) => { setCape(n); api.saveTexture({ data: await withElytra(await toData(u)), kind: 'cape' }) }
   // your own capes and skins: kept in a list, any of them can be put on again or removed
   const [myCapes, setMyCapesS] = useState<Saved[]>(() => { const l = readList('myCapes'); try { const old = localStorage.getItem('ccape'); if (old && !l.length) { l.push({ id: 'custom', data: old }); writeList('myCapes', l) } } catch {} return l })
   const [mySkins, setMySkinsS] = useState<Saved[]>(() => readList('mySkins')), [presetSkin, setPresetSkin] = usePref('presetSkin', '')
   const myCapesUrl = (id: string) => myCapes.find((c) => c.id === id)?.data
   const setMyCapes = (l: Saved[]) => { setMyCapesS(l); writeList('myCapes', l) }, setMySkins = (l: Saved[]) => { setMySkinsS(l); writeList('mySkins', l) }
-  const addCape = async (data: string) => { const it = { id: 'my' + Date.now().toString(36), data }; setMyCapes([it, ...myCapes]); setCape(it.id); const r = await api.saveTexture({ data, kind: 'cape' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
+  const addCape = async (data: string) => { const it = { id: 'my' + Date.now().toString(36), data }; setMyCapes([it, ...myCapes]); setCape(it.id); const r = await api.saveTexture({ data: await withElytra(data), kind: 'cape' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
   const addSkin = (data: string) => { setPresetSkin(''); if (!mySkins.some((x) => x.data === data)) setMySkins([{ id: 'my' + Date.now().toString(36), data }, ...mySkins]) }
   const useSkin = async (data: string) => { setSkin(data); const r = await api.saveTexture({ data, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
   const play = async (v: string, join = false, server?: any) => { if (!me) { setAddOpen(true); return say('Сначала добавьте аккаунт', 'info') } let r: any; try { r = await api.launch({ version: v, join, lang, server }) } catch (e: any) { r = { error: 'Не удалось запустить: ' + (e?.message || e) } } if (r?.warn) say(r.warn, 'info'); if (r?.error) say(r.error, 'err') }
@@ -360,12 +399,13 @@ export default function App() {
                       <div key={x.key} className="target"><Check on={tsel.includes(x.key)} set={(v) => setTsel(v ? [...tsel, x.key] : tsel.filter((k) => k !== x.key))} label={<span><b>{x.name}</b><span className="muted text-xs block">{x.profile ? 'Профиль · ' : ''}Minecraft {x.version}{x.key === instKeyNow ? ' · сейчас выбрана' : ''}</span></span>} /></div>)}
                     <p className="muted text-[11px] px-2 pt-1">Для каждой сборки скачается версия мода под её Minecraft.</p></div></>}</div>}</div>
               {kind === 'mod' && <div className="flex gap-1.5 flex-wrap mb-4"><button className={'pill ' + (!cat ? 'on' : '')} onClick={() => setCat('')}>{t('allCats')}</button>{CATS.map((c) => <button key={c} className={'pill ' + (cat === c ? 'on' : '')} onClick={() => setCat(c)}>{t('cat_' + c)}</button>)}</div>}
-              <div className="flex gap-1.5 mb-3"><button className={'pill ' + (favOnly ? 'on' : '')} onClick={() => setFavOnly(!favOnly)}><Icon n="star" s={13} />Избранное {favs.filter((f) => f.kind === kind).length || ''}</button>
-                {kind === 'mod' && <button className="pill" onClick={sharePack}><Icon n="share" s={13} />Поделиться сборкой</button>}<button className="pill" onClick={() => setFriend({ open: true, code: '', busy: false })}><Icon n="link" s={13} />Код от друга</button></div>
-              <div className="flex flex-col gap-2">{(favOnly ? favs.filter((f) => f.kind === kind) : hits).map((h) => { const have = mods.some((m) => m.slug === h.slug); return <div key={h.slug} className="mcard"><button onClick={() => kind !== 'mod' && setPrev(h)} className="shrink-0"><Pic src={kind !== 'mod' && (h.featured_gallery || h.gallery?.[0]) ? (h.featured_gallery || h.gallery[0]) : h.icon_url} cls={kind === 'mod' ? 'w-14 h-14 rounded-xl object-cover' : 'w-28 h-16 rounded-xl object-cover'} /></button>
+              <div className="flex gap-1.5 mb-3 flex-wrap"><button className={'pill ' + (pvp ? 'on' : '')} onClick={() => setPvp(!pvp)} title="Для PVP: удобные ресурспаки, моды и шейдеры"><Icon n="swords" s={13} />PVP</button><button className={'pill ' + (favOnly ? 'on' : '')} onClick={() => setFavOnly(!favOnly)}><Icon n="star" s={13} />Избранное {favs.filter((f) => f.kind === kind).length || ''}</button>
+                <button className="pill" onClick={() => sharePack(kind === 'mod' ? 'mods' : kind === 'shader' ? 'shaders' : 'packs')}><Icon n="share" s={13} />{kind === 'mod' ? 'Поделиться модами' : kind === 'shader' ? 'Поделиться шейдерами' : 'Поделиться ресурспаками'}</button>
+                <button className="pill" onClick={() => sharePack('all')}><Icon n="share" s={13} />Вся сборка</button><button className="pill" onClick={() => setFriend({ open: true, code: '', busy: false })}><Icon n="link" s={13} />Код от друга</button></div>
+              <div className="flex flex-col gap-2">{(favOnly ? favs.filter((f) => f.kind === kind) : hits).map((h) => { const have = mods.some((m) => m.slug === h.slug); return <div key={h.slug} className="mcard"><button onClick={() => openPrev(h)} className="shrink-0" title="Подробнее"><Pic src={kind !== 'mod' && (h.featured_gallery || h.gallery?.[0]) ? (h.featured_gallery || h.gallery[0]) : h.icon_url} cls={kind === 'mod' ? 'w-14 h-14 rounded-xl object-cover' : 'w-28 h-16 rounded-xl object-cover'} /></button>
                 <div className="min-w-0 flex-1"><div className="font-bold truncate">{h.title}</div><div className="muted text-xs line-clamp-2">{h.description}</div><div className="muted text-xs mt-0.5 flex items-center gap-1"><Icon n="download" s={11} />{h.downloads?.toLocaleString()}</div></div>
                 <button className="iconbtn shrink-0" title={isFav(h.slug) ? 'Убрать из избранного' : 'В избранное'} onClick={() => toggleFav(h)} style={isFav(h.slug) ? { color: 'var(--a1)' } : { opacity: 0.45 }}><Icon n="star" s={18} /></button>
-                <button disabled={have && tsel.length <= 1} className={'btn flex items-center gap-1.5 ' + (have && tsel.length <= 1 ? '' : 'btn-primary')} onClick={() => install(h.slug)}>{have && tsel.length <= 1 ? <><Icon n="check" s={16} />{t('installedBadge')}</> : busy === h.slug ? '…' : <><Icon n="download" s={16} />{t('install')}</>}</button></div> })}</div></div>
+                <button disabled={have && tsel.length <= 1} className={'btn flex items-center gap-1.5 ' + (have && tsel.length <= 1 ? '' : 'btn-primary')} onClick={() => install(h.slug)}>{have && tsel.length <= 1 ? <><Icon n="check" s={16} />{t('installedBadge')}</> : busy === h.slug ? <span className="flex items-center gap-2"><span className="dlspin" />Скачиваем</span> : <><Icon n="download" s={16} />{t('install')}</>}</button></div> })}</div></div>
               <div><div className="flex items-center justify-between mb-2"><h3 className="text-lg font-bold">{t(kind === 'mod' ? 'installed' : kind === 'shader' ? 'installedShaders' : 'installedPacks')} <span className="muted text-sm">{mods.length}</span></h3>{kind === 'mod' && <button className="pill" title={t('verifyHint')} onClick={async () => { const r = await api.modsVerify(ver, true); say(`${t('verifyDone')}: ${r.total} · ${t('updated2')} ${r.updated} · ${t('fixed')} ${r.fixed}`); loadMods() }}><Icon n="shield" s={14} />{t('verify')}</button>}</div>
                 {kind === 'mod' && (fps ? <div className="pill mb-3" style={{ background: 'rgba(16,185,129,.18)' }}><Icon n="check" s={14} />{t('fps')}</div>
                   : <div className="mcard mb-3 !items-start" style={{ borderColor: 'rgba(245,158,11,.45)', background: 'rgba(245,158,11,.10)' }}><span className="cmd-ic !w-9 !h-9 shrink-0" style={{ color: '#f59e0b' }}><Icon n="close" s={16} /></span><div className="min-w-0"><b className="text-sm">FPS-бусты неактивны</b><div className="muted text-xs">{cfg?.optimize === false ? 'Оптимизация выключена в настройках лаунчера — включите её, и моды добавятся при следующем запуске.' : 'Установите эту версию игры (кнопка «Скачать» или «Играть») — моды-оптимизаторы Sodium, Lithium и другие добавятся сами.'}</div></div></div>)}
@@ -405,6 +445,7 @@ export default function App() {
                   {SKINS.map(([n, u]) => <SkinTile key={n} url={u} on={presetSkin === n && !mySkins.some((x) => x.data === skin)} title={'HD-скин ' + n} pick={async () => { setPresetSkin(n); useSkin(await toData(u)) }} />)}</div></div></div>
             <div className="flex flex-col gap-4">
               <PetCard face={miniSkin || skinUrl} />
+              <CosmCard />
               <div className="card rounded-3xl p-5 flex gap-4 items-center"><div className="w-16 h-16 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center" style={{ background: 'var(--chip)' }}>{miniSkin ? <div className="w-full h-full" style={{ backgroundImage: `url(${miniSkin})`, backgroundSize: '512px 512px', backgroundPosition: '-64px -64px', imageRendering: 'pixelated' }} /> : <Icon n="user" s={26} />}</div>
                 <div className="flex-1 min-w-0"><b>Питомец «Мини-я»</b><div className="muted text-sm">Маленькая копия вас бегает следом. Включите в Визуалы → Питомец → «Мини-я»; скин — ваш или отдельный отсюда. Его видят все игроки Asteria</div>
                   <div className="flex gap-2 mt-2 flex-wrap"><button className="btn !py-1.5 text-sm flex items-center gap-2" onClick={async () => { const d = await api.pickSkin(); if (d) { setMiniSkin(d); const r = await api.saveTexture({ data: d, kind: 'mini' }); say(r?.uploaded ? 'Скин «Мини-я» сохранён' : 'Скин сохранён на этом компьютере', r?.uploaded ? 'ok' : 'info') } }}><Icon n="upload" s={15} />Свой скин для «Мини-я»</button>
@@ -414,7 +455,7 @@ export default function App() {
                 <div className="grid grid-cols-5 gap-2.5"><button className={'rounded-xl flex flex-col items-center justify-center gap-1 muted text-xs ' + (!capeId ? 'ring-2 ring-[var(--a1)]' : '')} style={{ height: 112, background: 'var(--chip)' }} onClick={() => { setCape(''); api.saveTexture({ data: null, kind: 'cape' }) }}><Icon n="close" s={18} />Без плаща</button>
                   {myCapes.map((c) => <CapeTile key={c.id} name="Мой плащ" url={c.data} on={capeId === c.id} pick={() => pickCape(c.id, c.data)} del={() => { setMyCapes(myCapes.filter((x) => x.id !== c.id)); if (capeId === c.id) { setCape(''); api.saveTexture({ data: null, kind: 'cape' }) } say('Плащ удалён') }} />)}
                   {CAPES.map(([n, u]) => <CapeTile key={n} name={n} url={u} on={capeId === n} pick={() => pickCape(n, u)} />)}</div>
-                <div className="flex gap-2 mt-3 flex-wrap"><button className="btn flex items-center gap-2 text-sm" onClick={async () => { const d = await api.pickImage(); if (!d) return; const im = new Image(); im.onload = () => Math.abs(im.width / im.height - 2) < 0.02 ? addCape(d) : setCapeSrc(d); im.src = d }}><Icon n="upload" s={15} />Загрузить картинку для плаща</button>
+                <div className="flex gap-2 mt-3 flex-wrap"><button className="btn flex items-center gap-2 text-sm" onClick={async () => { const d = await api.pickImage(); if (!d) return; if (d.startsWith('data:image/gif')) return setGifSrc(d); const im = new Image(); im.onload = () => Math.abs(im.width / im.height - 2) < 0.02 ? addCape(d) : setCapeSrc(d); im.src = d }}><Icon n="upload" s={15} />Картинка или GIF для плаща</button>
                   <button className="btn flex items-center gap-2 text-sm" onClick={() => setEdit('cape')}><Icon n="image" s={15} />Плащ из своей картинки</button></div></div>
               <div className="card rounded-3xl p-5 flex gap-4 items-center"><div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#0b2a3c,#0e7490)' }}><Gem s={30} /></div>
                 <div><b>Значок Asteria</b><div className="muted text-sm">Знак AL перед ником в табе и над головой. Его видите вы и все игроки с AsteriaLauncher.</div></div></div>
@@ -501,7 +542,11 @@ export default function App() {
         <input placeholder="PvP / PvE / Гриф" value={pName} onChange={(e) => setPName(e.target.value)} autoFocus /><Dropdown value={pVer} set={setPVer} options={verOpts} w={380} className="w-full" />
         <p className="muted text-xs">Профиль — отдельная сборка со своими модами, настройками и мирами.</p>
         <button className="btn btn-primary" onClick={async () => { if (!pName.trim()) return; const p = await api.profAdd({ name: pName.trim(), version: pVer }); setVer(p.version); setProfiles(await api.profList()); setPName(''); setProfModal(false) }}>{t('create')}</button></div></Modal>
-      <Modal open={!!prev} onClose={() => setPrev(null)} title={prev?.title} w={780}>{prev && <><div className="grid grid-cols-2 gap-2">{(prev.gallery?.length ? prev.gallery : [prev.featured_gallery].filter(Boolean)).slice(0, 6).map((u: string) => <Pic key={u} src={u} cls="w-full h-36 rounded-xl object-cover" />)}</div><p className="muted text-sm mt-3">{prev.description}</p>
+      <Modal open={!!prev} onClose={() => setPrev(null)} title={prev?.title} w={780}>{prev && <>
+        <div className="flex gap-3 items-start mb-3"><Pic src={prev.icon_url} cls="w-16 h-16 rounded-2xl object-cover shrink-0" /><div className="min-w-0"><div className="text-sm">{prevInfo ? prevInfo.desc : <span className="muted">Загружаем описание…</span>}</div>
+          <div className="muted text-xs mt-1 flex gap-3 flex-wrap"><span className="flex items-center gap-1"><Icon n="download" s={11} />{(prevInfo?.downloads ?? prev.downloads)?.toLocaleString()}</span>{prevInfo?.categories && <span>{prevInfo.categories.slice(0, 5).join(' · ')}</span>}</div></div></div>
+        {prevInfo?.text && <div className="card rounded-2xl p-3 mb-3 text-sm whitespace-pre-line overflow-auto" style={{ maxHeight: 220 }}>{prevInfo.text}</div>}
+        <div className="grid grid-cols-2 gap-2">{(prevInfo?.gallery?.length ? prevInfo.gallery : prev.gallery?.length ? prev.gallery : [prev.featured_gallery].filter(Boolean)).slice(0, 6).map((u: string) => <Pic key={u} src={u} cls="w-full h-36 rounded-xl object-cover" />)}</div><p className="muted text-sm mt-3">{prev.description}</p>
         <button className="btn btn-primary mt-3" onClick={() => { install(prev.slug); setPrev(null) }}>{t('install')}</button></>}</Modal>
       {shotView && <div className="fixed inset-0 z-[75] flex items-center justify-center modal-bg" onClick={() => setShotView(null)}><div className="glass rounded-3xl p-4 relative pop-in" style={{ maxWidth: '92vw' }} onClick={(e) => e.stopPropagation()}><button className="absolute top-6 right-6 z-10 w-10 h-10 rounded-full flex items-center justify-center text-white" style={{ background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(6px)' }} title="Закрыть (Esc)" onClick={() => setShotView(null)}><Icon n="close" s={18} /></button><ShotImg file={shotView.file} w={1400} cls="rounded-2xl max-h-[72vh]" />
         {shotList.length > 1 && <><button className="shot-nav left-6" title="Предыдущий (←)" onClick={() => shotStep(-1)}><Icon n="left" s={22} /></button><button className="shot-nav right-6" title="Следующий (→)" onClick={() => shotStep(1)}><Icon n="right" s={22} /></button>
@@ -509,16 +554,17 @@ export default function App() {
         <div className="flex gap-2 mt-3"><button className="btn btn-ghost flex items-center gap-2 mr-auto" onClick={() => setShotView(null)}><Icon n="left" s={16} />Назад</button><button className="btn flex items-center gap-2" onClick={() => { api.shotAct(shotView.file, 'copy'); say(t('copiedImg')) }}><Icon n="copy" s={16} /> {t('copyImg')}</button><button className="btn flex items-center gap-2" onClick={() => api.shotAct(shotView.file, 'open')}><Icon n="folder" s={16} /> {t('openIn')}</button>
           <button className="btn flex items-center gap-2" onClick={async () => { await api.shotAct(shotView.file, 'delete'); setShots(shots.filter((x) => x.file !== shotView.file)); setShotView(null) }}><Icon n="trash" s={16} /> {t('del')}</button></div></div></div>}
       {edit && <SkinStudio mode={edit === 'skin' ? 'skin' : 'cape'} src={edit === 'skin' ? skinUrl : (capeUrl || '')} skin={skinUrl} cape={capeUrl} slim={variant === 'slim'} pickImage={() => api.pickImage()} onClose={() => setEdit('')}
-        onSave={async (d) => { const kind = edit === 'skin' ? 'skin' : 'cape'; if (kind === 'skin') { setSkin(d); addSkin(d) } else { const it = { id: 'my' + Date.now().toString(36), data: d }; setMyCapes([it, ...myCapes]); setCape(it.id) } setEdit(''); const r = await api.saveTexture({ data: d, kind, slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }} />}
+        onSave={async (d) => { const kind = edit === 'skin' ? 'skin' : 'cape'; if (kind === 'skin') { setSkin(d); addSkin(d) } else { const it = { id: 'my' + Date.now().toString(36), data: d }; setMyCapes([it, ...myCapes]); setCape(it.id) } setEdit(''); const r = await api.saveTexture({ data: kind === 'cape' ? await withElytra(d) : d, kind, slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }} />}
       <Palette cmds={cmds} open={pal} setOpen={setPal} />
       {friend.open && <Modal open onClose={() => setFriend({ open: false, code: '', busy: false })} title="Код от друга">
         <p className="muted text-sm mb-3">Друг нажал «Поделиться» — сборкой модов, скином, плащом или прицелом — и прислал вам 6 символов.</p>
-        <input className="w-full text-center font-mono text-2xl tracking-[.3em] uppercase" maxLength={6} autoFocus value={friend.code} placeholder="K7Q2XD" onChange={(e) => setFriend({ ...friend, code: e.target.value.toUpperCase(), got: undefined })} />
+        <input className="w-full text-center font-mono text-2xl tracking-[.3em]" autoFocus value={friend.code} placeholder="K7Q2XD" onChange={(e) => { const v = e.target.value.trim(); setFriend({ ...friend, code: v.startsWith('ASH1:') ? v : v.toUpperCase().slice(0, 6), got: undefined }) }} />
         {friend.got && <div className="card rounded-2xl p-3 mt-3 text-sm">{friend.got.kind === 'modpack' ? <><b>Сборка для Minecraft {friend.got.data.ver}</b><div className="muted">Моды: {friend.got.data.mods.length} · ресурспаки: {friend.got.data.packs.length} · шейдеры: {friend.got.data.shaders.length}. Поставим на {ver}.</div></>
           : friend.got.kind === 'crosshair' ? <b>Прицел</b> : <div className="flex items-center gap-3"><img src={friend.got.data} className="h-12 rounded" style={{ imageRendering: 'pixelated' }} /><b>{friend.got.kind === 'skin' ? 'Скин' : 'Плащ'}</b></div>}</div>}
-        <div className="flex gap-2 justify-end mt-4">{!friend.got ? <button className="btn btn-primary" disabled={friend.code.length !== 6 || friend.busy} onClick={async () => { setFriend({ ...friend, busy: true }); const r = await api.shareGet(friend.code); r?.error ? (say(r.error, 'err'), setFriend({ ...friend, busy: false })) : setFriend({ ...friend, busy: false, got: r }) }}>{friend.busy ? '…' : 'Найти'}</button>
+        <div className="flex gap-2 justify-end mt-4">{!friend.got ? <button className="btn btn-primary" disabled={(friend.code.length !== 6 && !friend.code.startsWith('ASH1:')) || friend.busy} onClick={async () => { setFriend({ ...friend, busy: true }); const r = await api.shareGet(friend.code); r?.error ? (say(r.error, 'err'), setFriend({ ...friend, busy: false })) : setFriend({ ...friend, busy: false, got: r }) }}>{friend.busy ? '…' : 'Найти'}</button>
           : <button className="btn btn-primary" onClick={() => applyFriend(friend.got)}>Установить</button>}</div></Modal>}
       {capeSrc && <CapeMaker src={capeSrc} onCancel={() => setCapeSrc('')} onDone={(png) => { setCapeSrc(''); addCape(png) }} />}
+      {gifSrc && <GifCapeMaker src={gifSrc} onCancel={() => setGifSrc('')} onDone={(png, n) => { setGifSrc(''); addCape(png); say('Анимированный плащ: ' + n + ' кадров') }} onError={(m) => { setGifSrc(''); say(m, 'err') }} />}
       <LaunchOverlay prog={prog} img={hero} t={t} /><LogModal open={logOpen} onClose={() => setLogOpen(false)} t={t} /><UpdateModal upd={upd} t={t} compact={running} /><Splash pct={boot.pct} msg={boot.msg} />
       {toast && <div className="toastx pop-in"><span className={'ic ' + toastKind}>{toastKind === 'err' ? <Icon n="close" s={18} /> : toastKind === 'info' ? <Icon n="eye" s={18} /> : <Gem s={20} glow={false} />}</span><div className="min-w-0"><b className="block text-sm">{toastKind === 'err' ? 'Ошибка' : toastKind === 'info' ? 'Внимание' : 'Готово'}</b><span className="muted text-xs block">{toast}</span></div><button className="iconbtn !w-7 !h-7" onClick={() => setToast('')}><Icon n="close" s={12} /></button></div>}
     </div>

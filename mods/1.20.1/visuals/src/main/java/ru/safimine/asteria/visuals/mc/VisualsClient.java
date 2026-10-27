@@ -2,6 +2,7 @@ package ru.safimine.asteria.visuals.mc;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.util.Identifier;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.render.Camera;
@@ -29,7 +30,7 @@ public class VisualsClient implements ClientModInitializer {
 
     @Override public void onInitializeClient() { V.init(MinecraftClient.getInstance().getSession().getUsername()); ru.safimine.asteria.visuals.Menu.tr = k -> net.minecraft.client.resource.language.I18n.translate(k); }
 
-    public static void hud(DrawContext ctx) { try { Hud.render(new Gfx120(ctx), Game120.I); } catch (Throwable ignored) {} }
+    public static void hud(DrawContext ctx) { Gfx120 g = new Gfx120(ctx, true); try { Hud.render(g, Game120.I); } catch (Throwable ignored) {} finally { try { g.flush(); } catch (Throwable ignored) {} } }
     public static void world(MatrixStack ms, Camera cam, float pt) { try { Fx.render(new R3_120(ms, cam, pt), Game120.I); } catch (Throwable ignored) {} }
 
     public static void tick(MinecraftClient c) {
@@ -59,5 +60,14 @@ public class VisualsClient implements ClientModInitializer {
         int abgr = (0xB2 << 24) | (b << 16) | (g << 8) | r;
         for (int y = 0; y < 8; y++) for (int x = 0; x < 16; x++) img.setColor(x, y, abgr);
         tex.upload();
+    }
+    /** chat messages of ours (.метка ...) stay in the client */
+    public static boolean chat(String msg) { return Fx.chatCommand(Game120.I, msg); }
+    /** our font for every text of Minecraft (theme "font for all text"): minecraft:default -> asteria_visuals:f<N>s<scale> */
+    private static final Identifier[][] ALL = new Identifier[16][7];
+    public static Identifier allFont(Identifier id) {
+        if (!V.allFont || V.font <= 0 || id == null || !"minecraft".equals(id.getNamespace()) || !"default".equals(id.getPath())) return id;
+        int i = Math.min(15, V.font), k = Math.max(1, Math.min(6, (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor())));
+        if (ALL[i][k] == null) ALL[i][k] = new Identifier("asteria_visuals", "f" + i + "s" + k); return ALL[i][k];
     }
 }

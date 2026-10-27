@@ -60,8 +60,17 @@ public final class Menu {
     /** the Asteria background on menu screens (cover fit) with a soft dark veil for readable text */
     public static void background(Gfx g, int w, int h) {
         D.g = g;
-        float s = Math.max(w / 1280f, h / 720f), bw = 1280 * s, bh = 720 * s;
-        g.texture("textures/gui/menu_bg.png", 1280, 720, (w - bw) / 2, (h - bh) / 2, bw, bh);
-        D.vgrad(0, 0, w, h, D.alpha(0x02070A, 70), D.alpha(0x02070A, 140));
+        if (V.menuBg == 1) { float s = Math.max(w / 1280f, h / 720f), bw = 1280 * s, bh = 720 * s;
+            g.texture("textures/gui/menu_bg.png", 1280, 720, (w - bw) / 2, (h - bh) / 2, bw, bh);
+            D.vgrad(0, 0, w, h, D.alpha(0x02070A, 70), D.alpha(0x02070A, 140)); return; }
+        // smooth HD background: deep gradient, slow aurora, twinkling stars, the theme glow — no pixels at any resolution
+        double t = System.currentTimeMillis() / 1000.0;
+        D.vgrad(0, 0, w, h, 0xFF040B16, 0xFF071A26);
+        for (int k = 0; k < 3; k++) { float cx = (float) (w * (0.25 + 0.25 * k) + Math.sin(t * 0.13 + k * 2) * w * 0.08), cy = (float) (h * (0.32 + 0.12 * Math.sin(t * 0.1 + k))), rr = h * (0.55f + 0.1f * k);
+            int c = k == 1 ? V.a2() : V.a1(); for (int i = 8; i >= 1; i--) D.circle(cx, cy, rr * i / 8f, D.a(c, 0.022f)); }
+        java.util.Random rn = new java.util.Random(7);
+        for (int i = 0; i < 140; i++) { float x = rn.nextFloat() * w, y = rn.nextFloat() * h * 0.85f, tw = (float) (0.5 + 0.5 * Math.sin(t * (0.6 + rn.nextFloat() * 1.4) + i)), sz = 0.35f + rn.nextFloat() * 0.9f;
+            D.circle(x, y, sz, D.alpha(0xFFFFFF, (int) (50 + 170 * tw))); }
+        D.vgrad(0, h * 0.62f, w, h, D.alpha(0x02070A, 0), D.alpha(0x02070A, 200));
     }
 }

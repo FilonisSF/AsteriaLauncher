@@ -96,6 +96,10 @@ public interface Game {
     default void setPerspective(int p) {}
     /** the block the player looks at up to dist blocks away: {x, y, z} of its top centre, or null */
     default double[] lookAt(double dist) { return null; }
+    /** light at a point, 0..1 (block light or sky light, night included) */
+    default float light(double x, double y, double z) { return 1; }
+    /** food level 0..20 (-1 unknown) */
+    default int food() { return -1; }
     /** opens / closes the Asteria menu screen */
     void openMenu();
     void closeMenu();

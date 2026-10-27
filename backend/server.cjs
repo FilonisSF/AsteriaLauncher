@@ -141,7 +141,7 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/heartbeat') {
       if (tokens[n] && !authed(n, j.token)) return json({ error: 'owned' }, 403)
-      online.set(n, Date.now()); seenDb[n] = Date.now(); cosm.set(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?(:m)?$/.test(String(j.pet || '')) ? String(j.pet) : '', fx: /^[a-z,]{0,40}$/.test(String(j.fx || '')) ? String(j.fx || '') : '' }) // pet: "<kind>:<size>" from the visuals, '' = none; return json({ ok: true, ...planOf(n) })
+      online.set(n, Date.now()); seenDb[n] = Date.now(); cosm.set(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?(:m)?$/.test(String(j.pet || '')) ? String(j.pet) : '', fx: /^[a-z0-9:.,]{0,60}$/.test(String(j.fx || '')) ? String(j.fx || '') : '' }) // pet: "<kind>:<size>" from the visuals, '' = none; return json({ ok: true, ...planOf(n) })
     }
     if (url === '/ticket') { // signed PREMIUM ticket, valid 3 days or until the subscription ends
       adopt(n, j.token); const p = planOf(n); if (p.plan !== 'PREMIUM') return json({ error: 'no premium', ...p }, 403)
