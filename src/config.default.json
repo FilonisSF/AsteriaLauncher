@@ -6,8 +6,8 @@
   "recommended": "1.16.5"
  },
  "about": {
-  "ru": "SafiMine — большой грифер-проект с кланами, казино, боевым пропуском, квестами и кейсами. Вайп прошёл 17 октября, каждое воскресенье — Эндер-Мир с наградами, а мобы, соты и мёд добываются в авто-спавнерах и авто-пасеках. Заходи, собирай клан и становись легендой сервера.",
-  "en": "SafiMine is a big grief project with clans, a casino, battle pass, quests and cases. The wipe was on October 17, the End World with rewards opens every Sunday, and mobs, honeycombs and honey come from auto-spawners and auto-apiaries."
+  "ru": "SafiMine — грифер-сервер на 1.16.5–1.21.x (mc.safimine.ru). Новый сезон стартовал 17 октября: обновлённое /menu, кланы с уникальной механикой и биржей, 7 видов казино, переработанные кейсы, боевой пропуск и квесты. По воскресеньям — Эндер-Мир с усиленным драконом, а фермы работают сами: авто-спавнеры, авто-пасеки, коптильни и плавильни.",
+  "en": "SafiMine is a grief server for 1.16.5–1.21.x (mc.safimine.ru). The new season started on October 17: a reworked /menu, clans with their own mechanics and exchange, 7 casino games, reworked cases, battle pass and quests. Every Sunday the End World opens with a stronger dragon, and farms run by themselves: auto-spawners, auto-apiaries, smokers and smelters."
  },
  "links": [
   {
@@ -68,72 +68,72 @@
    "id": "wipe",
    "image": "wipe",
    "title": {
-    "ru": "Глобальный вайп — 17 октября",
-    "en": "Global wipe — October 17"
+    "ru": "Новый сезон — вайп 17 октября",
+    "en": "New season — wipe on October 17"
    },
    "text": {
-    "ru": "17 октября в 15:00 по МСК прошёл глобальный вайп: мир, экономика и кланы начались с нуля. Займи лучшие территории и собери клан первым!",
-    "en": "On October 17 at 15:00 MSK the global wipe took place: the world, economy and clans started from zero. Claim the best land and build your clan first!"
+    "ru": "17.10 в 15:00 по МСК мир, экономика и кланы начались с нуля. Вместе с вайпом вышел большой патч: новое /menu, команды /rang, /bp, /quest, /case и все ссылки в /links.",
+    "en": "On 17.10 at 15:00 MSK the world, economy and clans started from zero, together with a big patch: a new /menu, /rang, /bp, /quest, /case and all links in /links."
    }
   },
   {
-   "id": "news",
+   "id": "casino",
    "image": "news",
    "title": {
-    "ru": "Новости проекта",
-    "en": "Project news"
+    "ru": "Казино и кейсы",
+    "en": "Casino and cases"
    },
    "text": {
-    "ru": "Следи за новостями в Telegram: обновления, ивенты, розыгрыши и акции магазина появляются там первыми.",
-    "en": "Follow Telegram: updates, events, giveaways and shop deals appear there first."
+    "ru": "В /casino и /warp casino — сразу 7 видов игр с честной механикой. Все кейсы в /cases обновлены, шансы на HUFRA в донат-кейсе сбалансированы.",
+    "en": "/casino and /warp casino have 7 games with fair mechanics. All cases in /cases were updated and the HUFRA odds in the donate case were balanced."
    }
   },
   {
    "id": "ender",
    "image": "ender",
    "title": {
-    "ru": "Эндер-Мир — воскресенье, 17:00 МСК",
-    "en": "End World — Sunday, 17:00 MSK"
+    "ru": "Эндер-Мир — воскресенье, 17:00",
+    "en": "End World — Sunday, 17:00"
    },
    "text": {
-    "ru": "Каждое воскресенье в 17:00 по МСК открывается Эндер-Мир. Игроки, занявшие 1–3 места, получают сапфиры и монеты, а один раз за вайп можно добыть яйцо дракона.",
-    "en": "Every Sunday at 17:00 MSK the End World opens. Players in places 1–3 get sapphires and coins, and once per wipe you can win the dragon egg."
+    "ru": "Портал открывается сам каждое воскресенье. Дракон стал сильнее и получил новые способности, а яйцо забирает тот, кто нанёс больше всего урона — один раз за вайп.",
+    "en": "The portal opens by itself every Sunday. The dragon is stronger with new abilities, and the egg goes to whoever dealt the most damage — once per wipe."
    }
   },
   {
    "id": "spawners",
    "image": "spawners",
    "title": {
-    "ru": "Авто-спавнеры мобов",
-    "en": "Auto mob spawners"
+    "ru": "Авто-спавнеры и фермы",
+    "en": "Auto-spawners and farms"
    },
    "text": {
-    "ru": "Теперь мобы добываются в авто-спавнерах — фарм ресурсов стал быстрее и удобнее для всех игроков.",
-    "en": "Mobs now come from auto-spawners — resource farming is faster and easier for everyone."
+    "ru": "В один спавнер можно загрузить до 10 разных яиц мобов и забирать лут прямо из интерфейса. Плюс авто-пасеки, скоростные воронки, коптильни и плавильни.",
+    "en": "One spawner takes up to 10 different mob eggs, and the loot is collected right from its menu. Plus auto-apiaries, fast hoppers, smokers and smelters."
    }
   },
   {
-   "id": "apiary",
-   "image": "apiary",
-   "title": {
-    "ru": "Авто-пасеки",
-    "en": "Auto apiaries"
-   },
-   "text": {
-    "ru": "Авто-пасеки работают как авто-спавнеры: сами добывают соты и бутылочки мёда, пока вы занимаетесь своими делами.",
-    "en": "Auto apiaries work like auto-spawners: they produce honeycombs and honey bottles by themselves while you do other things."
-   }
-  },
-  {
-   "id": "about",
+   "id": "clans",
    "image": "about",
    "title": {
-    "ru": "О сервере",
-    "en": "About the server"
+    "ru": "Кланы, бои и баланс",
+    "en": "Clans, fights and balance"
    },
    "text": {
-    "ru": "SafiMine — большой грифер-проект с кланами, казино, боевым пропуском, квестами и кейсами.",
-    "en": "SafiMine is a big grief project with clans, a casino, battle pass, quests and cases."
+    "ru": "Новые кланы с биржей. Удар по игроку в /god или /fly даёт ему слепоту и замедление, отдача работает и по незериту, а вещи из /kit при полном инвентаре падают под ноги.",
+    "en": "New clans with an exchange. Hitting someone in /god or /fly blinds and slows them, knockback works on netherite too, and /kit items drop at your feet when the inventory is full."
+   }
+  },
+  {
+   "id": "sub",
+   "image": "apiary",
+   "title": {
+    "ru": "Скоро: звуки и анимации в /sub",
+    "en": "Coming soon: sounds and animations in /sub"
+   },
+   "text": {
+    "ru": "В следующем обновлении — свои звуки удара, крита и взрыва кристалла, а также кастомные анимации убийства и смерти. Идеи для обновлений пишите в Telegram-канал.",
+    "en": "The next update brings your own hit, crit and crystal sounds plus custom kill and death animations. Send your ideas to the Telegram channel."
    }
   }
  ],

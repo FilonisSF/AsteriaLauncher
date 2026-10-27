@@ -37,6 +37,15 @@ public final class D {
             xy[k * 2] = px; xy[k * 2 + 1] = py; col[k] = cl == cr ? cl : mix(cl, cr, (px - x1) / Math.max(1, x2 - x1)); k++;
         }
         g.poly(xy, col);
+        // feather: a strip from the edge (full colour) to 0.6 px outside (transparent)
+        float f = 0.6f; float[] sx = new float[(n + 1) * 4]; int[] sc = new int[(n + 1) * 2]; k = 0;
+        for (float[] c : corners) for (int i = 0; i <= seg; i++) {
+            double ang = Math.toRadians(c[2] + 90.0 * i / seg); float ca = (float) Math.cos(ang), sa = (float) Math.sin(ang);
+            int idx = k / 2; sx[k * 2] = xy[idx * 2]; sx[k * 2 + 1] = xy[idx * 2 + 1]; sc[k] = col[idx]; k++;
+            sx[k * 2] = xy[idx * 2] + ca * f; sx[k * 2 + 1] = xy[idx * 2 + 1] + sa * f; sc[k] = col[idx] & 0x00FFFFFF; k++;
+        }
+        sx[k * 2] = sx[0]; sx[k * 2 + 1] = sx[1]; sc[k] = sc[0]; k++; sx[k * 2] = sx[2]; sx[k * 2 + 1] = sx[3]; sc[k] = sc[1];
+        g.strip(sx, sc);
     }
     public static void round(float x1, float y1, float x2, float y2, float r, int c) { round(x1, y1, x2, y2, r, c, c); }
     /** soft drop shadow made of a few expanding translucent rounded rects */
@@ -49,6 +58,7 @@ public final class D {
     public static void panel(float x1, float y1, float x2, float y2, float r) { panel(x1, y1, x2, y2, r, true); }
     public static void panel(float x1, float y1, float x2, float y2, float r, boolean gem) {
         if (V.hudStyle == 1) { lines(x1, y1, x2, y2); return; }
+        if (V.hudStyle == 2) { minimal(x1, y1, x2, y2, r); return; }
         if (V.shadow) for (int i = 3; i >= 1; i--) round(x1 - i, y1 - i, x2 + i, y2 + i, r + i, D.a(V.a1(), 0.10f / i), D.a(V.a2(), 0.10f / i));
         round(x1, y1, x2, y2, r, D.a(bright(V.a1(), 1.1f), 0.85f), D.a(V.a2(), 0.85f));                 // rim
         int body = alpha(0x050B16, (int) (255 * Math.max(0.35f, V.bg)));
@@ -58,16 +68,47 @@ public final class D {
         if (h > 8) round(x1 + 2, y1 + 1.5f, x2 - 2, y1 + Math.min(h * 0.42f, 9), Math.max(0, r - 2), alpha(0xFFFFFF, 14)); // glass sheen
         round(x1 + r * 0.6f, y1 + 0.5f, x2 - r * 0.6f, y1 + 1.3f, 0.4f, alpha(0xFFFFFF, 0), alpha(0xFFFFFF, 140));          // highlight line
         if (gem && x2 - x1 > 34 && h > 14) { crystal(x1 + 1.5f, y1 + 1.5f, 3.6f); sparkle(x2 - 3.5f, y2 - 3.5f, 1.8f, alpha(0xFFFFFF, 170)); }
+        if (V.glare) glare(x1, y1, x2, y2);
     }
+    /** a soft vertical sheen sliding across the panel every few seconds (all panels in sync by screen x) */
+    static void glare(float x1, float y1, float x2, float y2) {
+        float t = (System.currentTimeMillis() % 4200) / 1400f; if (t > 1) return;
+        float w = x2 - x1, cx = x1 - 14 + (w + 28) * t, a = Math.max(x1, cx - 14), b = Math.min(x2, cx + 14); if (b <= a) return;
+        float m = Math.max(a, Math.min(b, cx));
+        hgrad(a, y1 + 1, m, y2 - 1, 0x00FFFFFF, 0x22FFFFFF); hgrad(m, y1 + 1, b, y2 - 1, 0x22FFFFFF, 0x00FFFFFF);
+    }
+
     /** "Asteria lines" panel: barely-there backing, a stepped accent line on top (like the asset board) and a tiny diamond */
+    /** "Constellation": dark card, gradient bar on the left, a star-chart line on top and a comet running along it */
     public static void lines(float x1, float y1, float x2, float y2) {
-        round(x1, y1, x2, y2, 3, alpha(0x041B22, (int) (150 * Math.max(0.2f, V.bg))));
-        float w = x2 - x1, k = Math.min(36, w * 0.28f);
-        line(x1 + 4, y1, x1 + k, y1, 1.2f, V.a2());
-        line(x1 + k, y1, x1 + k + 4, y1 + 2.5f, 1.2f, V.a2());
-        hgrad(x1 + k + 4, y1 + 2f, x2 - 2, y1 + 3.1f, D.a(V.a2(), 0.9f), D.a(V.a1(), 0.05f));
-        diamond(x1 + 2.5f, y1 + 0.5f, 2.6f, V.a2());
-        hgrad(x1, y2 - 0.8f, x1 + w * 0.35f, y2, D.a(V.a1(), 0.55f), D.a(V.a1(), 0f));
+        float w = x2 - x1, h = y2 - y1;
+        round(x1, y1, x2, y2, 5, alpha(0x07060C, (int) (235 * Math.max(0.35f, V.bg))));
+        round(x1, y1, x2, y2, 5, D.a(V.a1(), 0.06f), D.a(V.a2(), 0.02f));
+        vgradRound(x1 + 1, y1 + 3, x1 + 2.6f, y2 - 3, D.a(V.a1(), 1f), D.a(V.a2(), 0.5f));
+        // star chart along the top: three nodes joined by a hairline
+        float n1 = x1 + 8, n2 = x1 + Math.min(w * 0.35f, 40), n3 = x2 - 8, ty = y1 + 0.6f;
+        hgrad(n1, ty - 0.3f, n3, ty + 0.3f, D.a(V.a2(), 0.7f), D.a(V.a1(), 0.15f));
+        float tw = (float) (0.6 + 0.4 * Math.sin(System.currentTimeMillis() / 500.0 + x1));
+        sparkle(n1, ty, 2.2f, D.a(0xFFFFFFFF, 0.9f)); sparkle(n2, ty, 1.6f, D.a(V.a2(), tw)); circle(n3, ty, 0.9f, D.a(V.a1(), 0.8f));
+        // comet: a bright dot with a fading tail, once every few seconds
+        float t = ((System.currentTimeMillis() + (long) (x1 * 37)) % 3600) / 2200f;
+        if (t < 1) { float cx = x1 + 4 + (w - 8) * t; hgrad(Math.max(x1 + 2, cx - 18), ty - 0.5f, cx, ty + 0.5f, D.a(V.a2(), 0f), D.a(0xFFFFFFFF, 0.9f)); circle(cx, ty, 1.1f, 0xFFFFFFFF); }
+        if (h > 20) circle(x2 - 4, y2 - 4, 0.7f, D.a(V.a2(), 0.6f));
+    }
+    /** vertical gradient pill (accent bars) */
+    static void vgradRound(float x1, float y1, float x2, float y2, int top, int bottom) {
+        float r = (x2 - x1) / 2; if (y2 - y1 < r * 2) return;
+        circle(x1 + r, y1 + r, r, top); circle(x1 + r, y2 - r, r, bottom); vgrad(x1, y1 + r, x2, y2 - r, top, bottom);
+    }
+    /** "Minimal": a calm dark card with a hairline border and a small accent tick (like modern clients) */
+    public static void minimal(float x1, float y1, float x2, float y2, float r) {
+        r = Math.max(4, r);
+        if (V.shadow) shadow(x1, y1, x2, y2, r, 0.8f);
+        round(x1, y1, x2, y2, r, alpha(0xFFFFFF, 18));                                              // hairline
+        round(x1 + 0.6f, y1 + 0.6f, x2 - 0.6f, y2 - 0.6f, r - 0.6f, alpha(0x0F0D12, (int) (245 * Math.max(0.4f, V.bg))));
+        round(x1 + 0.6f, y1 + 0.6f, x2 - 0.6f, y2 - 0.6f, r - 0.6f, D.a(V.a1(), 0.05f), D.a(V.a2(), 0.02f));
+        if (y2 - y1 > 14) vgradRound(x1 + 3, y1 + 4, x1 + 4.4f, Math.min(y2 - 4, y1 + 14), D.a(V.a1(), 1f), D.a(V.a2(), 1f));
+        if (V.glare) glare(x1, y1, x2, y2);
     }
     /** outlined diamond (crosshair / bullets from the asset board) */
     public static void diamond(float cx, float cy, float R, int c) {
@@ -151,14 +192,55 @@ public final class D {
     }
     public static int w(String s) { return g.width(s); }
 
+    // ------------------------------------------------------------------ icons (same set and look as the launcher's category icons)
+    private static void path(float x, float y, float k, float w, int c, boolean closed, float... p) {
+        for (int i = 0; i + 3 < p.length; i += 2) line(x + p[i] * k, y + p[i + 1] * k, x + p[i + 2] * k, y + p[i + 3] * k, w, c);
+        if (closed && p.length >= 4) line(x + p[p.length - 2] * k, y + p[p.length - 1] * k, x + p[0] * k, y + p[1] * k, w, c);
+        for (int i = 0; i + 1 < p.length; i += 2) circle(x + p[i] * k, y + p[i + 1] * k, w / 2, c); // round joints
+    }
+    private static void ringIcon(float x, float y, float k, float cx, float cy, float r, float w, int c) {
+        int n = 18; float[] p = new float[n * 2]; for (int i = 0; i < n; i++) { double a = Math.PI * 2 * i / n; p[i * 2] = (float) (cx + Math.cos(a) * r); p[i * 2 + 1] = (float) (cy + Math.sin(a) * r); }
+        for (int i = 0; i < n; i++) { int j = (i + 1) % n; line(x + p[i * 2] * k, y + p[i * 2 + 1] * k, x + p[j * 2] * k, y + p[j * 2 + 1] * k, w, c); }
+    }
+    /** icon "name" in a size x size box at x,y */
+    public static void icon(String name, float x, float y, float size, int c) {
+        float k = size / 24f, w = Math.max(0.9f, 2f * k);
+        switch (name) {
+            case "chevL": path(x, y, k, w, c, false, 15, 5, 8, 12, 15, 19); break;
+            case "chevR": path(x, y, k, w, c, false, 9, 5, 16, 12, 9, 19); break;
+            case "chevU": path(x, y, k, w, c, false, 5, 15, 12, 8, 19, 15); break;
+            case "chevD": path(x, y, k, w, c, false, 5, 9, 12, 16, 19, 9); break;
+            case "search": ringIcon(x, y, k, 10.5f, 10.5f, 6.5f, w, c); path(x, y, k, w, c, false, 15.5f, 15.5f, 20.5f, 20.5f); break;
+            case "play": g.poly(new float[]{x + 7 * k, y + 4 * k, x + 7 * k, y + 20 * k, x + 20 * k, y + 12 * k}, new int[]{c, c, c}); break;
+            case "pause": path(x, y, k, w * 1.3f, c, false, 8, 5, 8, 19); path(x, y, k, w * 1.3f, c, false, 16, 5, 16, 19); break;
+            case "prev": g.poly(new float[]{x + 18 * k, y + 5 * k, x + 8 * k, y + 12 * k, x + 18 * k, y + 19 * k}, new int[]{c, c, c}); path(x, y, k, w, c, false, 6, 5, 6, 19); break;
+            case "next": g.poly(new float[]{x + 6 * k, y + 5 * k, x + 6 * k, y + 19 * k, x + 16 * k, y + 12 * k}, new int[]{c, c, c}); path(x, y, k, w, c, false, 18, 5, 18, 19); break;
+            case "keyboard": path(x, y, k, w, c, true, 3, 6, 21, 6, 21, 18, 3, 18); path(x, y, k, w, c, false, 7, 14, 17, 14); circle(x + 7 * k, y + 10 * k, w * 0.6f, c); circle(x + 12 * k, y + 10 * k, w * 0.6f, c); circle(x + 17 * k, y + 10 * k, w * 0.6f, c); break;
+            case "grid": path(x, y, k, w, c, true, 4, 4, 10, 4, 10, 10, 4, 10); path(x, y, k, w, c, true, 14, 4, 20, 4, 20, 10, 14, 10); path(x, y, k, w, c, true, 4, 14, 10, 14, 10, 20, 4, 20); path(x, y, k, w, c, true, 14, 14, 20, 14, 20, 20, 14, 20); break;
+            case "cube": path(x, y, k, w, c, true, 12, 3, 20, 7.5f, 20, 16.5f, 12, 21, 4, 16.5f, 4, 7.5f); path(x, y, k, w, c, false, 4, 7.5f, 12, 12, 20, 7.5f); path(x, y, k, w, c, false, 12, 12, 12, 21); break;
+            case "swords": path(x, y, k, w, c, false, 4, 4, 16, 16); path(x, y, k, w, c, false, 20, 4, 8, 16); path(x, y, k, w, c, false, 13, 19, 19, 13); path(x, y, k, w, c, false, 5, 13, 11, 19); path(x, y, k, w, c, false, 17, 17, 20, 20); path(x, y, k, w, c, false, 7, 17, 4, 20); break;
+            case "eye": path(x, y, k, w, c, true, 2, 12, 6, 7.5f, 12, 5.5f, 18, 7.5f, 22, 12, 18, 16.5f, 12, 18.5f, 6, 16.5f); ringIcon(x, y, k, 12, 12, 3, w, c); break;
+            case "palette": ringIcon(x, y, k, 12, 12, 8.5f, w, c); circle(x + 8 * k, y + 9 * k, w * 0.9f, c); circle(x + 12.5f * k, y + 7.5f * k, w * 0.9f, c); circle(x + 16 * k, y + 10.5f * k, w * 0.9f, c); circle(x + 9 * k, y + 14 * k, w * 0.9f, c); break;
+            case "folder": path(x, y, k, w, c, true, 3, 6, 9, 6, 11, 8.5f, 21, 8.5f, 21, 19, 3, 19); break;
+            case "move": path(x, y, k, w, c, false, 12, 3, 12, 21); path(x, y, k, w, c, false, 3, 12, 21, 12); path(x, y, k, w, c, false, 9, 6, 12, 3, 15, 6); path(x, y, k, w, c, false, 9, 18, 12, 21, 15, 18); path(x, y, k, w, c, false, 6, 9, 3, 12, 6, 15); path(x, y, k, w, c, false, 18, 9, 21, 12, 18, 15); break;
+            case "music": path(x, y, k, w, c, false, 9, 17, 9, 5, 19, 3, 19, 15); circle(x + 6.5f * k, y + 17 * k, 2.6f * k + w / 2, c); circle(x + 16.5f * k, y + 15 * k, 2.6f * k + w / 2, c); break;
+            case "dot": circle(x + 12 * k, y + 12 * k, 3.5f * k, c); break;
+            default: circle(x + 12 * k, y + 12 * k, 4 * k, c);
+        }
+    }
+
     // ------------------------------------------------------------------ animation
     private static final java.util.Map<String, float[]> AN = new java.util.HashMap<>();
     private static long lastFrame = System.nanoTime(); public static float dt = 0.016f;
-    public static void frame() { long n = System.nanoTime(); dt = Math.min(0.1f, (n - lastFrame) / 1e9f); lastFrame = n; }
+    /** once per rendered frame. The HUD and the menu both call it in the same frame: a second call within 4 ms keeps the
+     *  frame's dt (otherwise the menu got dt ~ 0 and every animation in it crawled) */
+    public static void frame() { long n = System.nanoTime(); if (n - lastFrame < 4_000_000L) return; dt = Math.min(0.1f, (n - lastFrame) / 1e9f); lastFrame = n; }
     /** smoothly moves a named value towards target (exponential), speed ~ 1/seconds */
     public static float anim(String key, float target, float speed) {
         float[] v = AN.get(key); if (v == null) { AN.put(key, new float[]{target}); return target; }
-        v[0] += (target - v[0]) * Math.min(1f, dt * speed); if (Math.abs(target - v[0]) < 0.001f) v[0] = target; return v[0];
+        // 2x faster than the nominal speed and snaps once close, so nothing lingers in a long exponential tail
+        v[0] += (target - v[0]) * Math.min(1f, dt * speed * 2); if (Math.abs(target - v[0]) < (Math.abs(target) > 2 ? 0.4f : 0.015f)) v[0] = target; return v[0];
     }
+    public static void set(String key, float value) { AN.put(key, new float[]{value}); }
     public static float ease(float t) { t = Math.max(0, Math.min(1, t)); return 1 - (float) Math.pow(1 - t, 3); }
 }

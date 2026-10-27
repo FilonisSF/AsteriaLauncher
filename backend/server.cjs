@@ -47,6 +47,7 @@ const server = http.createServer((req, res) => {
     if (url === '/' ) return json({ ok: true, name: 'AsteriaLauncher backend', version: VERSION })
     if (url === '/admin') return file(path.join(__dirname, 'admin.html'), 'text/html; charset=utf-8')
     let m
+    if ((m = url.match(/^\/vcfg\/([A-Z0-9]{6})$/i))) return file(path.join(DATA, 'vcfg', m[1].toUpperCase() + '.json'), 'application/json') // shared Asteria Visuals configs
     if ((m = url.match(/^\/(skin|cape)\/(\w{3,16})\.png$/))) return file(path.join(DATA, 'skins', `${m[1]}-${m[2].toLowerCase()}.png`), 'image/png')
     if ((m = url.match(/^\/skinmeta\/(\w{3,16})$/))) return json({ slim: fs.existsSync(path.join(DATA, 'skins', `slim-${m[1].toLowerCase()}`)) })
     if ((m = url.match(/^\/player\/(\w{3,16})$/))) { const n = m[1].toLowerCase(), c = clanOf(n); return json({ ...planOf(n), ...(stats[n] || { stats: null }), clan: c ? { name: c.name, display: c.display, level: c.level, role: c.members.find((x) => x.name.toLowerCase() === n)?.roleText } : null }) }
@@ -113,6 +114,14 @@ const server = http.createServer((req, res) => {
       else { if (typeof j.events !== 'object' || !j.events) return json({ error: 'bad data' }, 400); events = { time: Date.now(), events: j.events }; wr('events.json', events) }
       return json({ ok: true })
     }
+    if (url === '/vcfg') { // { code: 'AST1:...' } -> { id: 'K7Q2XD' } short share code for a visuals config
+      const c = String(j.code || ''); if (!/^AST1:[\w-]{8,60000}$/.test(c)) return json({ error: 'bad code' }, 400)
+      const dir = path.join(DATA, 'vcfg'); fs.mkdirSync(dir, { recursive: true })
+      const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', h = crypto.createHash('sha1').update(c).digest()
+      for (let k = 0; k < 8; k++) { let id = ''; for (let i = 0; i < 6; i++) id += A[h[(i + k * 6) % h.length] % A.length]; const f = path.join(dir, id + '.json')
+        try { if (JSON.parse(fs.readFileSync(f, 'utf8')).code === c) return json({ id }) } catch { fs.writeFileSync(f, JSON.stringify({ code: c, at: Date.now() })); return json({ id }) } }
+      return json({ error: 'busy' }, 500)
+    }
     // ------------------------------------------------------------------ launcher
     if (!NAME.test(j.name || '')) return json({ error: 'bad name' }, 400)
     const n = j.name.toLowerCase()
@@ -122,7 +131,7 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/heartbeat') {
       if (tokens[n] && !authed(n, j.token)) return json({ error: 'owned' }, 403)
-      online.set(n, Date.now()); seenDb[n] = Date.now(); cosm.set(n, { cape: String(j.cape || ''), badge: String(j.badge || '') }); return json({ ok: true, ...planOf(n) })
+      online.set(n, Date.now()); seenDb[n] = Date.now(); cosm.set(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?$/.test(String(j.pet || '')) ? String(j.pet) : '' }) // pet: "<kind>:<size>" from the visuals, '' = none; return json({ ok: true, ...planOf(n) })
     }
     if (url === '/ticket') { // signed PREMIUM ticket, valid 3 days or until the subscription ends
       adopt(n, j.token); const p = planOf(n); if (p.plan !== 'PREMIUM') return json({ error: 'no premium', ...p }, 403)

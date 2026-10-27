@@ -1,0 +1,167 @@
+{
+ "8bit": {
+  "sounds": [
+   "asteria_visuals:8bit"
+  ]
+ },
+ "aimbooster_hit": {
+  "sounds": [
+   "asteria_visuals:aimbooster_hit"
+  ]
+ },
+ "bell": {
+  "sounds": [
+   "asteria_visuals:bell"
+  ]
+ },
+ "blip": {
+  "sounds": [
+   "asteria_visuals:blip"
+  ]
+ },
+ "bonk": {
+  "sounds": [
+   "asteria_visuals:bonk"
+  ]
+ },
+ "brick": {
+  "sounds": [
+   "asteria_visuals:brick"
+  ]
+ },
+ "bubble": {
+  "sounds": [
+   "asteria_visuals:bubble"
+  ]
+ },
+ "change_category": {
+  "sounds": [
+   "asteria_visuals:change_category"
+  ]
+ },
+ "click": {
+  "sounds": [
+   "asteria_visuals:click"
+  ]
+ },
+ "drum_bass": {
+  "sounds": [
+   "asteria_visuals:drum_bass"
+  ]
+ },
+ "get": {
+  "sounds": [
+   "asteria_visuals:get"
+  ]
+ },
+ "glass": {
+  "sounds": [
+   "asteria_visuals:glass"
+  ]
+ },
+ "gui_close": {
+  "sounds": [
+   "asteria_visuals:gui_close"
+  ]
+ },
+ "gui_open": {
+  "sounds": [
+   "asteria_visuals:gui_open"
+  ]
+ },
+ "magic_pok": {
+  "sounds": [
+   "asteria_visuals:magic_pok"
+  ]
+ },
+ "module_disable": {
+  "sounds": [
+   "asteria_visuals:module_disable"
+  ]
+ },
+ "module_enable": {
+  "sounds": [
+   "asteria_visuals:module_enable"
+  ]
+ },
+ "off": {
+  "sounds": [
+   "asteria_visuals:off"
+  ]
+ },
+ "on": {
+  "sounds": [
+   "asteria_visuals:on"
+  ]
+ },
+ "plastic_ball": {
+  "sounds": [
+   "asteria_visuals:plastic_ball"
+  ]
+ },
+ "pop": {
+  "sounds": [
+   "asteria_visuals:pop"
+  ]
+ },
+ "slider_step": {
+  "sounds": [
+   "asteria_visuals:slider_step"
+  ]
+ },
+ "squish": {
+  "sounds": [
+   "asteria_visuals:squish"
+  ]
+ },
+ "trinket_hit": {
+  "sounds": [
+   "asteria_visuals:trinket_hit"
+  ]
+ },
+ "turn_off_click": {
+  "sounds": [
+   "asteria_visuals:turn_off_click"
+  ]
+ },
+ "turn_on_click": {
+  "sounds": [
+   "asteria_visuals:turn_on_click"
+  ]
+ },
+ "kill.abmiss": {
+  "sounds": [
+   "asteria_visuals:kill/abmiss"
+  ]
+ },
+ "kill.critow": {
+  "sounds": [
+   "asteria_visuals:kill/critow"
+  ]
+ },
+ "kill.final_blink": {
+  "sounds": [
+   "asteria_visuals:kill/final_blink"
+  ]
+ },
+ "kill.final_pok": {
+  "sounds": [
+   "asteria_visuals:kill/final_pok"
+  ]
+ },
+ "kill.neptune": {
+  "sounds": [
+   "asteria_visuals:kill/neptune"
+  ]
+ },
+ "kill.rust_headshot": {
+  "sounds": [
+   "asteria_visuals:kill/rust_headshot"
+  ]
+ },
+ "kill.whii": {
+  "sounds": [
+   "asteria_visuals:kill/whii"
+  ]
+ }
+}

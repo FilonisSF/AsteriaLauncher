@@ -1,3 +1,4 @@
+const zlib = require('zlib')
 const { app, BrowserWindow, ipcMain, shell, dialog, net, nativeImage, clipboard, screen } = require('electron')
 const { spawnSync, execFileSync } = require('child_process')
 app.commandLine.appendSwitch('proxy-bypass-list', '<local>')
@@ -122,7 +123,29 @@ ipcMain.handle('vis:get', () => { let best = store.get('visuals', null), t = sto
   if (best !== store.get('visuals', null)) { store.set('visuals', best); store.set('visualsAt', t) }
   return best })
 ipcMain.handle('vis:set', (_, v) => { store.set('visuals', v); store.set('visualsAt', Date.now()); for (const d of instanceDirs()) writeVisuals(d, v); return { live: !!game } }) // the mod re-reads the file every second
-const OFFLINE = ['auth', 'account', 'session', 'services'].map((h) => `-Dminecraft.api.${h}.host=https://invalid.invalid`) // lets offline accounts open Multiplayer
+// visuals presets: the list lives in the launcher store and is mirrored to config/asteria-visuals-presets.json, so the in-game menu can switch them
+function writePresets(dir, p = store.get('visPresets')) { if (!p) return; try { const c = path.join(dir, 'config'); fs.mkdirSync(c, { recursive: true }); fs.writeFileSync(path.join(c, 'asteria-visuals-presets.json'), JSON.stringify(p)) } catch {} }
+ipcMain.handle('visp:get', () => { const p = store.get('visPresets', null); if (!p) return null; let t = store.get('visPresetsAt', 0)
+  for (const d of instanceDirs()) { const f = path.join(d, 'config', 'asteria-visuals-presets.json'); try { const m = fs.statSync(f).mtimeMs; if (m > t + 1500) { const a = JSON.parse(fs.readFileSync(f, 'utf8')).active; if (a && p.list.some((x) => x.id === a)) p.active = a; t = m } } catch {} }
+  return p })
+ipcMain.handle('visp:set', (_, p) => { store.set('visPresets', p); store.set('visPresetsAt', Date.now()); for (const d of instanceDirs()) writePresets(d, p) })
+// share codes: AST1:<base64url(deflate(json))>; short codes go through the backend (/vcfg)
+const visCode = (cfg) => 'AST1:' + zlib.deflateRawSync(Buffer.from(JSON.stringify(cfg))).toString('base64url')
+const visDecode = (s) => { try { s = String(s || '').trim(); if (!s.startsWith('AST1:')) return null; const o = JSON.parse(zlib.inflateRawSync(Buffer.from(s.slice(5), 'base64url')).toString()); return o && o.modules ? o : null } catch { return null } }
+ipcMain.handle('vis:code', (_, cfg) => { const c = visCode(cfg); clipboard.writeText(c); return c })
+ipcMain.handle('vis:share', async (_, cfg) => { const code = visCode(cfg); await resolveApi().catch(() => {})
+  const r = await net.fetch(apiBase() + '/vcfg', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }), signal: AbortSignal.timeout(6000) }).then((x) => x.json()).catch(() => null)
+  const out = r?.id || code; clipboard.writeText(out); return { id: r?.id || null, code } })
+ipcMain.handle('vis:decode', async (_, text) => { const t = String(text ?? clipboard.readText()).trim()
+  if (/^[A-Z0-9]{6}$/i.test(t)) { await resolveApi().catch(() => {}); const r = await net.fetch(`${apiBase()}/vcfg/${t.toUpperCase()}`, { signal: AbortSignal.timeout(6000) }).then((x) => x.ok ? x.json() : null).catch(() => null); return r ? visDecode(r.code) : null }
+  return visDecode(t) })
+ipcMain.handle('vis:export', async (_, cfg, name) => { const r = await dialog.showSaveDialog(win, { defaultPath: String(name || 'config').replace(/[\/:*?"<>|]/g, '_') + '.asteria', filters: [{ name: 'Asteria config', extensions: ['asteria'] }] })
+  if (!r.filePath) return false; fs.writeFileSync(r.filePath, visCode(cfg)); return true })
+ipcMain.handle('vis:import', async () => { const r = await dialog.showOpenDialog(win, { filters: [{ name: 'Asteria config', extensions: ['asteria', 'json', 'txt'] }] }); const f = r.filePaths[0]; if (!f) return null
+  const t = fs.readFileSync(f, 'utf8'); let o = visDecode(t); if (!o) try { o = JSON.parse(t); if (!o.modules) o = null } catch {}; return o ? { ...o, name: o.name || path.basename(f).replace(/\.\w+$/, '') } : { error: true } })
+// lets offline accounts open Multiplayer. The services host stays real: the game takes Mojang's public key from it to verify
+// signed skins of other players and NPCs (without it everyone looks like Steve); a bad token there just falls back to offline mode.
+const OFFLINE = ['auth', 'account', 'session'].map((h) => `-Dminecraft.api.${h}.host=https://invalid.invalid`)
 const ENC = encodeURIComponent
 const mrJ = async (u) => (await net.fetch(u, { headers: { 'user-agent': 'AsteriaLauncher/1.0' } })).json()
 const instKey = (ver) => { const a = store.get('activeProfile'); return a && a.version === ver ? a.id : ver }
@@ -149,14 +172,20 @@ async function installSlug(slug, ver, md, depth = 0) { // installs a Fabric mod 
     const p = await mrJ(`https://api.modrinth.com/v2/project/${d.project_id}`); await installSlug(p.slug, ver, md, depth + 1).catch(() => {}) }
   return true
 }
+/** a Fabric profile already downloaded earlier (newest loader), used when the Fabric servers can't be reached */
+function cachedFabric(s, ver, legacy) { try { const pre = `${legacy ? 'legacy-' : ''}fabric-loader-`
+  return fs.readdirSync(path.join(s.dir, 'versions')).filter((n) => n.startsWith(pre) && n.endsWith('-' + ver) && fs.existsSync(path.join(s.dir, 'versions', n, n + '.json'))).sort().pop() || null } catch { return null } }
 async function prepareFabric(s, ver, send, legacy = false) { // legacy = Legacy Fabric for 1.8.9 / 1.12.2 (only our own mods there)
   const meta = legacy ? 'https://meta.legacyfabric.net' : 'https://meta.fabricmc.net'
-  const loaders = await mrJ(`${meta}/v2/versions/loader/${ver}`)
-  if (!loaders.length) return null
-  const id = `${legacy ? 'legacy-' : ''}fabric-loader-${loaders[0].loader.version}-${ver}`, vd = path.join(s.dir, 'versions', id)
-  fs.mkdirSync(vd, { recursive: true })
-  const prof = await mrJ(`${meta}/v2/versions/loader/${ver}/${loaders[0].loader.version}/profile/json`); prof.id = id
-  fs.writeFileSync(path.join(vd, id + '.json'), JSON.stringify(prof))
+  let id
+  try {
+    const loaders = await mrJ(`${meta}/v2/versions/loader/${ver}`)
+    if (!loaders.length) return cachedFabric(s, ver, legacy)
+    id = `${legacy ? 'legacy-' : ''}fabric-loader-${loaders[0].loader.version}-${ver}`; const vd = path.join(s.dir, 'versions', id)
+    if (!fs.existsSync(path.join(vd, id + '.json'))) { fs.mkdirSync(vd, { recursive: true })
+      const prof = await mrJ(`${meta}/v2/versions/loader/${ver}/${loaders[0].loader.version}/profile/json`); prof.id = id
+      fs.writeFileSync(path.join(vd, id + '.json'), JSON.stringify(prof)) }
+  } catch { id = cachedFabric(s, ver, legacy); if (!id) throw new Error('fabric meta unreachable'); return id } // offline: keep the profile we have, skip mod updates
   const md = path.join(inst(s, ver), 'mods'); fs.mkdirSync(md, { recursive: true })
   if (legacy) return id
   send('Fabric API', 40); await installSlug('fabric-api', ver, md).catch(() => {})
@@ -185,13 +214,39 @@ ipcMain.handle('mods:install', async (_, slug, ver) => {
   try { const md = path.join(inst(settings(), ver), 'mods'); fs.mkdirSync(md, { recursive: true })
     return (await installSlug(slug, ver, md)) ? { ok: true } : { error: 'Нет версии под ' + ver } } catch { return { error: 'Ошибка загрузки' } }
 })
+// own mods: jars the player added by hand. Name, description and icon come from the jar itself (fabric.mod.json / quilt.mod.json / mods.toml)
+const JMETA = new Map()
+function jarMeta(f) { try { const st = fs.statSync(f), k = f + ':' + st.mtimeMs; if (JMETA.has(k)) return JMETA.get(k)
+    const AdmZip = require('adm-zip'), z = new AdmZip(f), rd = (n) => { const e = z.getEntry(n); return e ? z.readAsText(e) : null }
+    let m = null, raw = rd('fabric.mod.json')
+    if (raw) { const j = JSON.parse(raw.replace(/^\uFEFF/, '').replace(/[\u0000-\u001f]+/g, ' ')); m = { title: j.name || j.id, desc: j.description || '', version: j.version, mc: j.depends?.minecraft, icon: typeof j.icon === 'string' ? j.icon : j.icon && Object.values(j.icon).pop(), loader: 'Fabric' } }
+    else if ((raw = rd('quilt.mod.json'))) { const j = JSON.parse(raw).quilt_loader || {}; m = { title: j.metadata?.name || j.id, desc: j.metadata?.description || '', version: j.version, icon: j.metadata?.icon, loader: 'Quilt' } }
+    else if ((raw = rd('META-INF/mods.toml') || rd('META-INF/neoforge.mods.toml'))) { const g = (k) => (raw.match(new RegExp('^\\s*' + k + '\\s*=\\s*"([^"]*)"', 'm')) || [])[1]; m = { title: g('displayName') || g('modId'), desc: (g('description') || '').trim(), version: g('version'), icon: g('logoFile'), loader: 'Forge' } }
+    if (m && m.icon) { const e = z.getEntry(String(m.icon).replace(/^\//, '')); m.icon = e ? 'data:image/png;base64,' + e.getData().toString('base64') : undefined }
+    JMETA.set(k, m); return m } catch { return null } }
+const myModsDir = () => { const d = path.join(app.getPath('userData'), 'my-mods'); fs.mkdirSync(d, { recursive: true }); return d }
+const isJar = (f) => { try { const b = Buffer.alloc(2), fd = fs.openSync(f, 'r'); fs.readSync(fd, b, 0, 2, 0); fs.closeSync(fd); return b.toString() === 'PK' } catch { return false } }
+/** adds jars to "My mods" (kept in the launcher) and installs them into the given builds */
+ipcMain.handle('mods:upload', async (_, paths, targets) => {
+  if (!paths) { const r = await dialog.showOpenDialog(win, { title: 'Свои моды', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Моды (.jar)', extensions: ['jar'] }] }); paths = r.filePaths }
+  const added = [], bad = []
+  for (const f of paths || []) { const n = path.basename(f); if (!/\.jar$/i.test(n) || !isJar(f)) { bad.push(n); continue }
+    fs.copyFileSync(f, path.join(myModsDir(), n)); added.push(n)
+    for (const t of targets || []) { try { const md = path.join(instOf(t), 'mods'); fs.mkdirSync(md, { recursive: true }); fs.copyFileSync(f, path.join(md, n)) } catch {} } }
+  return { added, bad } })
+ipcMain.handle('mods:mine', (_, key) => { const md = path.join(instOf(key), 'mods'), d = myModsDir()
+  return fs.readdirSync(d).filter((n) => /\.jar$/i.test(n)).map((file) => ({ file, ...(jarMeta(path.join(d, file)) || { title: file.replace(/\.jar$/i, ''), desc: '' }), size: fs.statSync(path.join(d, file)).size, installed: fs.existsSync(path.join(md, file)) || fs.existsSync(path.join(md, file + '.disabled')) })) })
+ipcMain.handle('mods:mineInstall', (_, file, targets) => { const f = path.join(myModsDir(), path.basename(file)); for (const t of targets || []) { const md = path.join(instOf(t), 'mods'); fs.mkdirSync(md, { recursive: true }); fs.copyFileSync(f, path.join(md, path.basename(file))) } })
+ipcMain.handle('mods:mineRemove', (_, file) => fs.rmSync(path.join(myModsDir(), path.basename(file)), { force: true }))
+ipcMain.handle('mods:openMine', () => shell.openPath(myModsDir()))
 ipcMain.handle('mods:list', async (_, ver) => {
   const md = path.join(inst(settings(), ver), 'mods'); if (!fs.existsSync(md)) return []
   const meta = store.get('meta', {}), out = []
   for (const file of fs.readdirSync(md).filter((n) => /\.jar(\.disabled)?$/.test(n) && !/^asteria-/.test(n))) {
     const slug = (file.match(/^mod-(.+?)\.jar/) || [])[1]
     if (slug && !meta[slug]) { try { const p = await mrJ(`https://api.modrinth.com/v2/project/${slug}`); meta[slug] = { title: p.title, icon: p.icon_url, desc: p.description } } catch {} }
-    out.push({ file, slug, enabled: !file.endsWith('.disabled'), ...(meta[slug] || { title: file.replace(/\.jar(\.disabled)?$/, ''), desc: '' }) })
+    const own = !slug || !meta[slug], jm = own ? jarMeta(path.join(md, file)) : null
+    out.push({ file, slug, own, enabled: !file.endsWith('.disabled'), ...(meta[slug] || jm || { title: file.replace(/\.jar(\.disabled)?$/, ''), desc: '' }) })
   }
   store.set('meta', meta); return out
 })
@@ -253,13 +308,70 @@ function findJava(s) { // javaw has no console window
   if (s.java) return s.java.replace(/java\.exe$/i, 'javaw.exe')
   try { return require('child_process').execFileSync('where', ['javaw'], { encoding: 'utf8' }).split(/\r?\n/)[0].trim() || undefined } catch { return undefined }
 }
-let game = null, gameVer = null, logBuf = [], pendingOpts = {}
-ipcMain.handle('game:kill', () => { try { game?.kill() } catch {} if (game && (game.exitCode !== null || game.killed)) { game = null; gameVer = null; try { win?.webContents.send('game', false) } catch {} } })
+let game = null, gameVer = null, gameDirNow = null, logBuf = [], pendingOpts = {}
+// "Now playing": a small PowerShell reader of the Windows media controls (electron/media.ps1) runs while the launcher is open.
+// The track goes to the launcher UI ('media' events) and, while a game runs, to <game dir>/config/asteria-media.json (+ cover png);
+// play/pause/next/prev come from the UI or from the mod (config/asteria-media-cmd.txt). -EncodedCommand: no script file, no policy prompt.
+let mediaProc = null, media = { playing: false }, mediaCover = null, mediaCoverKey = '', coverWritten = {}, mediaRetry = 0
+const mediaScript = () => fs.readFileSync(path.join(__dirname, 'media.ps1'), 'utf8')
+const enc = (t) => Buffer.from(t, 'utf16le').toString('base64')
+function liveGameDir() { if (game && gameDirNow) return gameDirNow; return extGame?.dir || null }
+function mediaStart() {
+  if (process.platform !== 'win32' || mediaProc) return
+  try {
+    mediaProc = require('child_process').spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', enc(mediaScript())], { windowsHide: true }); let buf = ''
+    mediaProc.stdout.setEncoding('utf8') // keeps Cyrillic letters split between chunks intact
+    mediaProc.stdout.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); try { mediaLine(JSON.parse(line)) } catch {} } })
+    mediaProc.on('exit', () => { mediaProc = null; if (mediaRetry++ < 20) setTimeout(mediaStart, 5000) })
+  } catch { mediaProc = null } }
+function mediaLine(o) {
+  mediaRetry = 0
+  if (o.cover !== undefined) { mediaCover = o.cover ? Buffer.from(o.cover, 'base64') : null; mediaCoverKey = o.key || ''; delete o.cover }
+  o.at = Date.now(); media = o
+  try { win?.webContents.send('media', { ...o, cover: mediaCover ? 'data:image/png;base64,' + mediaCover.toString('base64') : '' }) } catch {}
+  const dir = liveGameDir(); if (!dir) return
+  try { const cfg = path.join(dir, 'config'); fs.mkdirSync(cfg, { recursive: true })
+    if (coverWritten[dir] !== mediaCoverKey) { coverWritten[dir] = mediaCoverKey; const cf = path.join(cfg, 'asteria-media-cover.png'); if (mediaCover) fs.writeFileSync(cf, mediaCover); else fs.rmSync(cf, { force: true }) }
+    fs.writeFileSync(path.join(cfg, 'asteria-media.json'), JSON.stringify({ ...o, cover: mediaCover ? mediaCoverKey : '' }))
+    const cmdF = path.join(cfg, 'asteria-media-cmd.txt') // buttons in the in-game Asteria menu
+    if (fs.existsSync(cmdF)) { const c = fs.readFileSync(cmdF, 'utf8').trim(); fs.rmSync(cmdF, { force: true }); mediaCmd(c) }
+  } catch {} }
+function mediaCmd(c) {
+  if (process.platform !== 'win32' || !['toggle', 'next', 'prev'].includes(c)) return
+  try { require('child_process').spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', enc(`$Cmd = '${c}'\n` + mediaScript())], { windowsHide: true }) } catch {} }
+ipcMain.handle('media:get', () => ({ ...media, cover: mediaCover ? 'data:image/png;base64,' + mediaCover.toString('base64') : '' }))
+ipcMain.handle('media:cmd', (_, c) => mediaCmd(String(c)))
+ipcMain.handle('game:kill', () => { if (!game && extGame) { try { process.kill(extGame.pid) } catch {} extGame = null; extAt = 0; try { win?.webContents.send('game', false) } catch {} return }
+  try { game?.kill() } catch {} if (game && (game.exitCode !== null || game.killed)) { game = null; gameVer = null; try { win?.webContents.send('game', false) } catch {} } })
 ipcMain.handle('game:log', () => logBuf.slice(-400).join('\n'))
 ipcMain.handle('stats:get', () => ({ playMs: store.get('playMs', 0), launches: store.get('launches', 0), perVer: store.get('perVer', {}) }))
+async function cacheVanillaJson(s, ver) {
+  const f = path.join(s.dir, 'versions', ver, ver + '.json'); if (fs.existsSync(f)) return
+  try { const m = await mrJ('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'), v = m.versions.find((x) => x.id === ver); if (!v) return
+    const j = await (await net.fetch(v.url)).text(); JSON.parse(j); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, j) } catch {}
+}
+// a Minecraft started by this launcher may still be running after the launcher was closed / updated: find it by our -Dasteria.gamedir
+let extGame = null, extAt = 0, extBusy = null
+/** cached result; refreshed in the background (PowerShell takes ~1 s, so never on the main thread's critical path) */
+function externalGame(force) {
+  if (process.platform !== 'win32') return Promise.resolve(null)
+  if (extGame && !alive(extGame.pid)) extGame = null
+  if (!force && Date.now() - extAt < 15000) return Promise.resolve(extGame)
+  if (extBusy) return extBusy
+  extAt = Date.now()
+  extBusy = new Promise((res) => require('child_process').execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      "Get-CimInstance Win32_Process -Filter \"Name like 'java%'\" | Where-Object { $_.CommandLine -like '*-Dasteria.gamedir=*' } | ForEach-Object { \"$($_.ProcessId)|$($_.CommandLine)\" }"],
+    { encoding: 'utf8', windowsHide: true, timeout: 8000 }, (err, out) => {
+      const line = !err && String(out).split(/\r?\n/).find((l) => l.includes('|'))
+      extGame = line ? { pid: +line.split('|')[0], version: (line.match(/--version (\S+)/) || [])[1] || null, dir: (line.match(/-Dasteria\.gamedir=(.+?) -D/) || [])[1] || null } : null
+      extBusy = null; res(extGame) }))
+  return extBusy
+}
+const alive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } }
 ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
   const srv = server && server.host ? { host: String(server.host), port: +server.port || 25565 } : { host: HOST, port: PORT }
   if (game) return { error: 'Игра уже запущена' }
+  const ext = await externalGame(true); if (ext) { try { win?.webContents.send('game', true) } catch {} return { error: `Minecraft ${ext.version || ''} уже запущен — закройте его или нажмите «Остановить»` } }
   const s = settings(), acc = store.get('accounts', []).find((a) => a.id === store.get('active'))
   if (!acc) return { error: 'Выберите аккаунт' }
   const send = (stage, pct, detail = '', step = 0) => { try { win?.webContents.send('progress', { stage, pct, detail, step }) } catch {} }
@@ -273,7 +385,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
   for (const f of ['asteria-mod.jar', 'asteria-core.jar', 'asteria-visuals.jar']) fs.rmSync(path.join(md, f), { force: true })
   try {
     send('Подготовка', 0, '', 0); let custom = null, core = null, vis = null; await resolveApi().catch(() => {})
-    const javaPath = await ensureJava(s, version, send)
+    const javaPath = await ensureJava(s, version, send); await cacheVanillaJson(s, version)
     const modern = /^(1\.(1[6-9]|2\d)|26\.)/.test(version), legacy = /^1\.(8|12)\./.test(version)
     const wantFabric = (s.loaders || {})[version] ? s.loaders[version] === 'fabric' : s.fabric !== false
     if (wantFabric && (modern || legacy)) { // our mods come first: the loader for 1.8.9 / 1.12.2 is installed only if our mod exists for it
@@ -282,7 +394,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
     if (custom && core) fs.copyFileSync(core, path.join(md, 'asteria-core.jar'))
     if (custom && vis) fs.copyFileSync(vis, path.join(md, 'asteria-visuals.jar'))
     const warn = wantFabric && modern && !custom ? 'Fabric не установился (нет связи с meta.fabricmc.net?) — игра запущена без модов: без звезды, визуалов и FPS-буста' : ''
-    writeVisuals(dir)
+    writeVisuals(dir); writePresets(dir)
     const opts = { root: s.dir, overrides: { gameDirectory: dir }, authorization: acc.type === 'offline' ? offlineAuth(acc.name) : acc.auth, version: { number: version, type: 'release', ...(custom ? { custom } : {}) },
       memory: { max: s.ramMb + 'M', min: Math.min(s.ramMb, 2048) + 'M' }, customLaunchArgs: ['--width', String(winW), '--height', String(winH), ...(s.fullscreen ? ['--fullscreen'] : [])], javaPath,
       customArgs: [...s.jvm.split(/\s+/).filter(Boolean), '-Dasteria.launcher=1', '-Dasteria.api=' + apiBase(), '-Dasteria.user=' + acc.name, '-Dasteria.gamedir=' + dir, '-Dasteria.root=' + s.dir,
@@ -294,15 +406,17 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
     l.on('debug', (m) => { logBuf.push(String(m)); if (logBuf.length > 1000) logBuf.splice(0, 300) })
     l.on('data', (m) => { // NOTE: no per-line IPC — joining a world prints thousands of lines
       logBuf.push(String(m).trimEnd()); if (logBuf.length > 1000) logBuf.splice(0, 300)
-      if (!started) { started = true; t0 = Date.now(); rpcGame(version, dir, join ? srv.host : null); send('', 0); try { win?.webContents.send('game', true) } catch {}; if (s.hideOnLaunch !== false) win?.minimize() } })
-    l.on('close', () => { if (hb) clearInterval(hb); game = null; gameVer = null
+      if (!started) { started = true; t0 = Date.now(); gameDirNow = dir; coverWritten = {}; rpcGame(version, dir, join ? srv.host : null); send('', 0); try { win?.webContents.send('game', true) } catch {}; if (s.hideOnLaunch !== false) win?.minimize() } })
+    l.on('close', () => { if (hb) clearInterval(hb); game = null; gameVer = null; gameDirNow = null
       fs.rmSync(path.join(dir, 'asteria-live.flag'), { force: true })
       if (Object.keys(pendingOpts).length) { setOpts(dir, pendingOpts); pendingOpts = {} } // the game may rewrite options.txt on exit: keep what was changed in the launcher
       if (t0) { const el = Date.now() - t0, pv = store.get('perVer', {}); store.set('playMs', store.get('playMs', 0) + el); pv[version] = (pv[version] || 0) + el; store.set('perVer', pv); store.set('launches', store.get('launches', 0) + 1) }
       rpcIdle()
       try { send('', 0); win?.webContents.send('game', false); if (win?.isMinimized()) win.restore() } catch {} })
     const tok = await getToken(acc.name).catch(() => null)
-    const beat = () => fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}) }) }).catch(() => {}); beat(); hb = setInterval(beat, 45000) // registers right away, so other launcher players see the icon at once
+    const petOf = () => { try { const v = JSON.parse(fs.readFileSync(path.join(dir, 'config', 'asteria-visuals.json'), 'utf8')), p = v?.modules?.pet
+      return p?.on ? `${+p.s?.kind || 0}:${(+p.s?.size || 1).toFixed(2)}` : '' } catch { return '' } } // other Asteria players see your pet
+    const beat = () => fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf() }) }).catch(() => {}); beat(); hb = setInterval(beat, 45000) // registers right away, so other launcher players see the icon at once
     await addServer(dir).catch(() => {}); for (const x of (store.get('remoteConf') || {}).servers || []) if (x.ip && x.ip !== HOST) await addServerEntry(dir, x.name || x.ip, x.port && +x.port !== 25565 ? x.ip + ':' + x.port : x.ip).catch(() => {})
     game = await l.launch(opts); gameVer = version
     if (!game) { clearInterval(hb); send('', 0); return { error: 'Не удалось запустить игру' } }
@@ -327,6 +441,8 @@ process.on('uncaughtException', (e) => { try { logBuf.push('[launcher] ' + (e?.s
 process.on('unhandledRejection', (e) => { try { logBuf.push('[launcher] ' + e) } catch {} })
 app.on('render-process-gone', () => { try { win?.reload() } catch {} })
 app.whenReady().then(setupUpdates)
+app.whenReady().then(() => setTimeout(mediaStart, 300)) // 'Now playing' in the launcher and the game
+app.on('will-quit', () => { mediaRetry = 99; try { mediaProc?.kill() } catch {} })
 
 // ---------- Java auto-install (Adoptium Temurin JRE, version taken from Mojang's per-version metadata)
 function sysJava() { try { const r = spawnSync('java', ['-version'], { encoding: 'utf8', windowsHide: true }); const m = (r.stderr || '').match(/version "(\d+)(?:\.(\d+))?/); return m ? { major: m[1] === '1' ? +m[2] : +m[1] } : null } catch { return null } }
@@ -460,7 +576,7 @@ ipcMain.handle('prof:del', (_, id) => { store.set('profiles', store.get('profile
 // changes made inside the game (options menu, F11, Asteria menu) reach the launcher at once: options.txt / visuals config are watched
 const seenM = new Map()
 setInterval(() => { if (!win) return; const s = settings()
-  for (const d of instanceDirs()) for (const [kind, f] of [['opts', path.join(d, 'options.txt')], ['vis', path.join(d, 'config', 'asteria-visuals.json')]]) {
+  for (const d of instanceDirs()) for (const [kind, f] of [['opts', path.join(d, 'options.txt')], ['vis', path.join(d, 'config', 'asteria-visuals.json')], ['shots', path.join(d, 'screenshots')]]) {
     let m = 0; try { m = fs.statSync(f).mtimeMs } catch { continue }
     const k = f, old = seenM.get(k); seenM.set(k, m)
     if (old !== undefined && m !== old) try { win.webContents.send('files', { kind, dir: d, ver: path.basename(d) }) } catch {} } }, 1000)
@@ -468,7 +584,7 @@ ipcMain.handle('opts:get', (_, ver) => { const f = path.join(inst(settings(), ve
 ipcMain.handle('opts:set', (_, ver, patch) => { const d = inst(settings(), ver); fs.mkdirSync(d, { recursive: true }); setOpts(d, patch)
   if (game && gameVer === ver) { pendingOpts = { ...pendingOpts, ...patch }; try { fs.writeFileSync(path.join(d, 'asteria-live.flag'), String(Date.now())) } catch {} return { live: true, running: true } }
   return { live: false, running: !!game } })
-ipcMain.handle('game:state', () => ({ running: !!game, version: gameVer }))
+ipcMain.handle('game:state', async () => { if (game) return { running: true, version: gameVer }; const e = await externalGame(); return { running: !!e, version: e?.version || null, external: !!e } })
 ipcMain.handle('rpc:test', () => ({ id: !!rpcId(), connected: !!rpc?.user }))
 // ---------- mod integrity check (Modrinth hashes): re-downloads corrupted jars, updates outdated ones
 ipcMain.handle('mods:verify', async (_, ver, fix) => { const md = path.join(inst(settings(), ver), 'mods'); if (!fs.existsSync(md)) return { total: 0, ok: 0, updated: 0, fixed: 0 }

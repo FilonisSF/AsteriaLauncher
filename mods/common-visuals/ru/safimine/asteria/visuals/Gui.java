@@ -27,7 +27,7 @@ public final class Gui {
 
     private static final class Hit { float x1, y1, x2, y2; Runnable click; String id; Hit(float a, float b, float c, float d, String id, Runnable r) { x1 = a; y1 = b; x2 = c; y2 = d; this.id = id; click = r; } }
 
-    public static void opened() { openedAt = System.currentTimeMillis(); openT = 0; Hud.editing = false; listening = null; searchFocus = false; }
+    public static void opened() { openedAt = System.currentTimeMillis(); openT = 0; D.set("gui.open", 0); D.frame(); Hud.editing = false; listening = null; searchFocus = false; }
     public static void closed() { Hud.editing = false; listening = null; dragging = null; moving = null; V.changed(); }
 
     // ================================================================== render
@@ -50,7 +50,7 @@ public final class Gui {
         D.rect(SIDE, 8, SIDE + 0.6f, H - 8, 0x22FFFFFF);
         D.round(10, 0, W - 10, 1.2f, 0.5f, V.a1(), V.a2());
         sidebar(g, game, lmx, lmy);
-        if (cat.equals("theme")) theme(g, lmx, lmy); else modules(g, game, lmx, lmy);
+        if (cat.equals("theme")) theme(g, lmx, lmy); else if (cat.equals("configs")) configs(g, lmx, lmy); else modules(g, game, lmx, lmy);
         g.pop();
         if (listening != null) { String t = "Нажмите клавишу для «" + listening.name + "»  ·  Esc — убрать бинд"; float w = D.w(t) + 20;
             D.panel((screenW - w) / 2, screenH - 34, (screenW + w) / 2, screenH - 14, 6); D.textC(t, screenW / 2f, screenH - 28, 0xFFFFFFFF); }
@@ -62,12 +62,13 @@ public final class Gui {
         D.textS("VISUALS", 31, 24, 0.6f, 0xFF6F8B99);
         float y = 44;
         List<V.Cat> cats = new ArrayList<>(V.CATS); V.Cat th = new V.Cat(); th.id = "theme"; th.name = "Тема"; th.icon = "◐"; cats.add(th);
+        V.Cat cf = new V.Cat(); cf.id = "configs"; cf.name = "Конфиги"; cf.icon = "☰"; cats.add(cf);
         for (V.Cat c : cats) {
             boolean on = c.id.equals(cat), hov = in(mx, my, 8, y, SIDE - 8, y + 20);
             float p = D.anim("cat." + c.id, on ? 1 : 0, 12);
             if (hov && !on) D.round(8, y, SIDE - 8, y + 20, 6, 0x14FFFFFF);
             if (p > 0.01f) { D.round(8, y, 8 + (SIDE - 16) * p, y + 20, 6, D.a(V.a1(), 0.9f * p), D.a(V.a2(), 0.9f * p)); }
-            D.g.text(c.icon, 16, y + 6, on ? 0xFFFFFFFF : D.a(V.a1(), 1), false);
+            D.icon(catIcon(c.id), 13, y + 4.5f, 11, on ? 0xFFFFFFFF : D.a(V.a1(), 1));
             D.g.text(c.name, 30, y + 6, on ? 0xFFFFFFFF : 0xFFB9CBD4, false);
             int count = 0; for (V.Mod m : V.MODS) if (m.cat.equals(c.id) && m.on) count++;
             if (count > 0 && !c.id.equals("theme")) { String n = String.valueOf(count); D.round(SIDE - 22 - D.w(n) * 0.7f, y + 5, SIDE - 13, y + 15, 5, on ? 0x33FFFFFF : 0x22FFFFFF); D.textS(n, SIDE - 17.5f - D.w(n) * 0.7f, y + 7, 0.7f, 0xFFFFFFFF); }
@@ -76,7 +77,7 @@ public final class Gui {
         }
         // HUD editor button
         float by = H - 52; boolean hov = in(mx, my, 8, by, SIDE - 8, by + 20);
-        D.round(8, by, SIDE - 8, by + 20, 6, hov ? 0x30FFFFFF : 0x1AFFFFFF); D.textC("✥ Изменить HUD", SIDE / 2f, by + 6, 0xFFFFFFFF);
+        D.round(8, by, SIDE - 8, by + 20, 6, hov ? 0x30FFFFFF : 0x1AFFFFFF); float tw = D.w("Изменить HUD") + 14; D.icon("move", SIDE / 2f - tw / 2, by + 5, 10, 0xFFFFFFFF); D.g.text("Изменить HUD", SIDE / 2f - tw / 2 + 14, by + 6, 0xFFFFFFFF, false);
         hit(8, by, SIDE - 8, by + 20, "hud", () -> Hud.editing = true);
         // licence line
         D.round(8, H - 26, SIDE - 8, H - 10, 5, D.a(V.a1(), 0.18f), D.a(V.a2(), 0.18f));
@@ -92,7 +93,7 @@ public final class Gui {
         float sx = x1 - 120; boolean sh = in(mx, my, sx, 13, x1, 31);
         D.round(sx, 13, x1, 31, 6, searchFocus ? 0x30FFFFFF : sh ? 0x22FFFFFF : 0x16FFFFFF);
         if (searchFocus) D.round(sx, 30, x1, 31, 0.5f, V.a1(), V.a2());
-        D.g.text("⌕", sx + 6, 18, 0xFF8FA6B2, false);
+        D.icon("search", sx + 5, 17.5f, 9, 0xFF8FA6B2);
         String st = search.isEmpty() && !searchFocus ? "Найти функцию" : search + (searchFocus && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "");
         D.g.text(st, sx + 17, 18, search.isEmpty() && !searchFocus ? 0xFF6F8B99 : 0xFFFFFFFF, false);
         hit(sx, 13, x1, 31, "search", () -> searchFocus = true);
@@ -117,7 +118,7 @@ public final class Gui {
         float p = D.anim("on." + m.id, m.on ? 1 : 0, 12);
         D.round(x0, y, x1, y + h, 7, hov ? 0x1EFFFFFF : 0x12FFFFFF);
         if (p > 0.01f) D.round(x0, y, x0 + 2.5f, y + h, 1.2f, D.a(V.a1(), p), D.a(V.a2(), p));
-        hit(x0, y, x1, y + 32, "card", () -> { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); });
+        hit(x0, y, x1, y + 32, "card", () -> { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); if (V.on("sounds") && V.bool("sounds", "menu")) Fx.sound(m.on ? "module_enable" : "module_disable", (float) V.num("sounds", "volume")); });
         D.g.text(m.name, x0 + 10, y + 6, D.mix(0xFFCFE0E8, 0xFFFFFFFF, p), false);
         D.textS(m.desc, x0 + 10, y + 18, 0.72f, 0xFF7E97A4);
         // switch
@@ -127,19 +128,32 @@ public final class Gui {
         float bx = sx - 8 - (bl.isEmpty() ? 14 : D.w(bl) * 0.75f + 10);
         boolean bh = in(mx, my, bx, y + 10, sx - 6, y + 22);
         D.round(bx, y + 10, sx - 6, y + 22, 4, bh ? 0x33FFFFFF : 0x1AFFFFFF);
-        if (bl.isEmpty()) D.textS("⌨", bx + 4, y + 12, 0.75f, 0xFF8FA6B2); else D.textS(bl, bx + 5, y + 13, 0.75f, 0xFFFFFFFF);
+        if (bl.isEmpty()) D.icon("keyboard", bx + 2.5f, y + 11, 9, 0xFF8FA6B2); else D.textS(bl, bx + 5, y + 13, 0.75f, 0xFFFFFFFF);
         hit(bx, y + 10, sx - 6, y + 22, "bind", () -> listening = m);
+        // music controls (the launcher passes them to Spotify / Yandex Music / the browser)
+        if (m.id.equals("music")) { String[][] btn = {{"prev", "prev"}, {Media.active() ? "pause" : "play", "toggle"}, {"next", "next"}};
+            float qx = bx - 4 - 3 * 17;
+            for (String[] b : btn) { boolean qh = in(mx, my, qx, y + 9, qx + 15, y + 23);
+                D.round(qx, y + 9, qx + 15, y + 23, 4, qh ? D.a(V.a1(), 0.6f) : 0x1AFFFFFF, qh ? D.a(V.a2(), 0.6f) : 0x1AFFFFFF);
+                D.icon(b[0], qx + 3.5f, y + 12, 8, 0xFFFFFFFF); final String c = b[1];
+                hit(qx, y + 9, qx + 15, y + 23, "media", () -> Media.cmd(c)); qx += 17; }
+            bx -= 3 * 17 + 4; }
         // settings chevron
-        if (!m.s.isEmpty()) { float cx = bx - 16; D.g.text(exp ? "▴" : "▾", cx + 3, y + 11, hov ? 0xFFFFFFFF : 0xFF8FA6B2, false);
+        if (!m.s.isEmpty()) { float cx = bx - 16; D.icon(exp ? "chevU" : "chevD", cx + 2, y + 11, 10, hov ? 0xFFFFFFFF : 0xFF8FA6B2);
             hit(cx, y + 6, bx - 2, y + 26, "exp", () -> { expanded = exp ? null : m.id; colorOpen = null; }); }
         if (h > 34) {
+            boolean opening = Math.abs(h - 32 - bodyH) > 0.5f; // while the card animates, rows are clipped to it instead of spilling over the next card
+            float cy0 = Math.max(y + 32, 46), cy1 = Math.min(y + h, H - 6);
+            if (opening) g.scissor(ox + (SIDE + 1) * sw, oy + cy0 * sw, (W - SIDE - 2) * sw, Math.max(0, cy1 - cy0) * sw);
             g.push(0, 0, 1);
             float sy = y + 34;
             for (V.S s : m.s) { if (sy > y + h) break; sy += setting(g, game, m, s, x0 + 10, sy, x1 - 10, mx, my); }
             g.pop();
+            if (opening) g.scissor(ox + (SIDE + 1) * sw, oy + 46 * sw, (W - SIDE - 2) * sw, (H - 46 - 6) * sw); // back to the list's clip
         }
         return h;
     }
+    static String catIcon(String id) { switch (id) { case "hud": return "grid"; case "world": return "cube"; case "combat": return "swords"; case "camera": return "eye"; case "theme": return "palette"; case "configs": return "folder"; default: return "dot"; } }
     private static void toggleSwitch(float x, float y, float p) {
         D.round(x, y, x + 22, y + 12, 6, D.mix(0x40FFFFFF, V.a1(), p), D.mix(0x40FFFFFF, V.a2(), p));
         D.circle(x + 6 + 10 * p, y + 6, 4.3f, 0xFFFFFFFF);
@@ -163,6 +177,17 @@ public final class Gui {
                 hit(tx0 - 3, ty - 5, tx1 + 3, ty + 8, "num", () -> { dragging = s; dragX0 = tx0; dragW = tx1 - tx0; drag(lastMx); });
                 break; }
             case "mode": {
+                if (s.options.length > 4) { // long lists: a compact "‹ value ›" switcher
+                    String o = s.options[s.mode]; float w = Math.max(70, D.w(o) * 0.8f + 34), px = x1 - w;
+                    boolean hov = in(mx, my, px, y + 1, x1, y + 15);
+                    D.round(px, y + 1, x1, y + 15, 4, hov ? D.a(V.a1(), 0.55f) : D.a(V.a1(), 0.35f), hov ? D.a(V.a2(), 0.55f) : D.a(V.a2(), 0.35f));
+                    D.icon("chevL", px + 3, y + 4, 8, 0xFFFFFFFF); D.icon("chevR", x1 - 11, y + 4, 8, 0xFFFFFFFF);
+                    D.textS(o, px + (w - D.w(o) * 0.8f) / 2, y + 5, 0.8f, 0xFFFFFFFF);
+                    int n = s.options.length;
+                    hit(px, y + 1, px + w / 2, y + 15, "mode", () -> { s.mode = (s.mode + n - 1) % n; V.changed(); });
+                    hit(px + w / 2, y + 1, x1, y + 15, "mode", () -> { s.mode = (s.mode + 1) % n; V.changed(); });
+                    break;
+                }
                 float px = x1; for (int i = s.options.length - 1; i >= 0; i--) {
                     String o = s.options[i]; float w = D.w(o) * 0.8f + 10; px -= w;
                     boolean on = s.mode == i; final int idx = i;
@@ -200,15 +225,53 @@ public final class Gui {
             if (on) D.round(px - 2, y - 2, px + 32, y + 22, 7, 0xFFFFFFFF);
             D.round(px, y, px + 30, y + 20, 6, pr[0], pr[1]); hit(px, y, px + 30, y + 20, "pre", () -> { V.accent = pr[0]; V.accent2 = pr[1]; V.chroma = false; V.changed(); }); px += 36; }
         y += 32;
-        y = themeRow("Стиль «Линии Asteria» (вместо кристалла)", V.hudStyle == 1, x0, y, x1, () -> { V.hudStyle = V.hudStyle == 1 ? 0 : 1; V.changed(); });
+        y = styleRow(x0, y, x1);
         y = themeRow("Переливающиеся цвета (RGB)", V.chroma, x0, y, x1, () -> { V.chroma = !V.chroma; V.changed(); });
         y = themeRow("Тени", V.shadow, x0, y, x1, () -> { V.shadow = !V.shadow; V.changed(); });
+        y = fontRow(x0, y, x1, mx);
+        y = themeRow("Блик по панелям", V.glare, x0, y, x1, () -> { V.glare = !V.glare; V.changed(); });
         y += 4;
         y = themeSlider("Прозрачность панелей", V.bg, 0.15f, 0.95f, Math.round(V.bg * 100) + "%", x0, y, x1, mx, 0);
         y = themeSlider("Размер HUD", V.scale, 0.5f, 2f, Math.round(V.scale * 100) + "%", x0, y, x1, mx, 1);
         y += 6;
         D.panel(x0, y, x1, y + 36, 6); D.g.push(x0 + 14, y + 18, 1); D.star(0, 0, 7, V.a1(), V.a2()); D.g.pop();
         D.gradText("Так выглядят панели HUD", x0 + 28, y + 9, true); D.textS("Настройки тем сохраняются сразу и видны в лаунчере", x0 + 28, y + 21, 0.75f, 0xFF9FB3C0);
+    }
+    // ------------------------------------------------------------------ configs (made in the launcher)
+    private static void configs(Gfx g, float mx, float my) {
+        float x0 = SIDE + 14, x1 = W - 14, y = 16;
+        D.g.push(x0, y, 1.35f); D.g.text("Конфиги", 0, 0, 0xFFFFFFFF, true); D.g.pop(); y += 30;
+        if (V.PRESETS.isEmpty()) { D.textS("Конфиги создаются в лаунчере: Визуалы → Конфиги.", x0, y, 0.85f, 0xFF9FB3C0); return; }
+        for (V.Preset p : V.PRESETS) {
+            if (y > H - 30) break;
+            boolean act = p.id.equals(V.activePreset), hov = in(mx, my, x0, y, x1, y + 24);
+            D.round(x0, y, x1, y + 24, 6, act ? D.a(V.a1(), 0.28f) : hov ? 0x26FFFFFF : 0x14FFFFFF, act ? D.a(V.a2(), 0.28f) : hov ? 0x26FFFFFF : 0x14FFFFFF);
+            D.g.text(p.name, x0 + 10, y + 8, 0xFFFFFFFF, false);
+            String r = act ? "активный" : "включить"; D.textS(r, x1 - 10 - D.w(r) * 0.75f, y + 9, 0.75f, act ? 0xFFFFFFFF : 0xFF9FB3C0);
+            if (!act) hit(x0, y, x1, y + 24, "preset", () -> V.usePreset(p));
+            y += 28;
+        }
+        D.textS("Новые конфиги, импорт и коды для друзей — в лаунчере.", x0, H - 18, 0.72f, 0xFF6F8B99);
+    }
+    /** font picker: "‹ name ›", the name drawn in that font */
+    private static float fontRow(float x0, float y, float x1, float mx) {
+        D.g.text("Шрифт", x0, y + 3, 0xFFB9CBD4, false);
+        String n = V.FONTS[V.font]; float w = Math.max(96, D.w(n) + 30), px = x1 - w;
+        D.round(px, y, x1, y + 15, 5, D.a(V.a1(), 0.35f), D.a(V.a2(), 0.35f));
+        D.icon("chevL", px + 4, y + 3.5f, 8, 0xFFFFFFFF); D.icon("chevR", x1 - 12, y + 3.5f, 8, 0xFFFFFFFF);
+        D.g.text(n, px + (w - D.w(n)) / 2, y + 4, 0xFFFFFFFF, false);
+        int k = V.FONTS.length;
+        hit(px, y, px + w / 2, y + 15, "font", () -> { V.font = (V.font + k - 1) % k; V.changed(); });
+        hit(px + w / 2, y, x1, y + 15, "font", () -> { V.font = (V.font + 1) % k; V.changed(); });
+        return y + 20;
+    }
+    private static final String[] STYLES = {"Кристалл", "Созвездие", "Минимал"};
+    private static float styleRow(float x0, float y, float x1) {
+        D.g.text("Стиль панелей", x0, y + 3, 0xFFB9CBD4, false);
+        float px = x1; for (int i = STYLES.length - 1; i >= 0; i--) { String o = STYLES[i]; float w = D.w(o) * 0.8f + 12; px -= w; boolean on = V.hudStyle == i; final int idx = i;
+            D.round(px, y + 1, px + w - 2, y + 15, 4, on ? V.a1() : 0x18FFFFFF, on ? V.a2() : 0x18FFFFFF); D.textS(o, px + 5, y + 5, 0.8f, on ? 0xFFFFFFFF : 0xFFB9CBD4);
+            hit(px, y + 1, px + w - 2, y + 15, "style", () -> { V.hudStyle = idx; V.changed(); }); }
+        return y + 20;
     }
     private static float themeRow(String label, boolean on, float x0, float y, float x1, Runnable click) {
         D.g.text(label, x0, y + 3, 0xFFB9CBD4, false); toggleSwitch(x1 - 22, y + 1, D.anim("th." + label, on ? 1 : 0, 12)); hit(x0, y, x1, y + 16, "th", click); return y + 20;

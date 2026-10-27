@@ -45,6 +45,34 @@ public interface Game {
     boolean thirdPerson();
     float bodyYaw(float partial);
 
+    /** plays one of our sounds (asteria_visuals:<id>, see sounds.json) */
+    default void sound(String id, float volume, float pitch) {}
+    /** 36 slots: 0-8 hotbar, 9-35 inventory; empty slots are null */
+    default Object[] inventory() { return new Object[0]; }
+    default Object offhand() { return null; }
+    default int selectedSlot() { return 0; }
+    default int count(Object stack) { return 0; }
+    /** registry id, e.g. minecraft:totem_of_undying */
+    default String itemId(Object stack) { return ""; }
+    /** item cooldown left 0..1 (ender pearl, chorus, shield...) */
+    default float itemCooldown(Object stack) { return 0; }
+
+    /** outline box (minX,minY,minZ,maxX,maxY,maxZ) of the block under the crosshair, or null */
+    default double[] targetBlock() { return null; }
+    default boolean sprinting() { return false; }
+    /** other players in the world (not you) */
+    default java.util.List<Object> players() { return java.util.Collections.emptyList(); }
+    /** the account name of a player entity (no prefixes / team colours) */
+    default String playerName(Object e) { return ""; }
+    /** where an entity looks (degrees) */
+    default float yawOf(Object e) { return 0; }
+    /** chat is open (the HUD stays visible there, unlike under menus) */
+    default boolean chatOpen() { return false; }
+    /** a totem of undying stack, for the totem counter icon */
+    default Object totemStack() { return null; }
+    /** how many boss bars are shown at the top */
+    default int bossBars() { return 0; }
+
     /** opens / closes the Asteria menu screen */
     void openMenu();
     void closeMenu();

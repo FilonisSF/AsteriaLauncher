@@ -70,6 +70,27 @@ function CapeTile({ name, url, on, pick }: { name: string; url: string; on: bool
 }
 const PageHead = ({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) => <div className="ph"><div><h1 className="grad-text">{title}</h1>{sub && <div className="sub">{sub}</div>}</div>{right}</div>
 
+/** "Now playing" from Windows (Spotify, Yandex Music, browser): cover, track and controls; the same track shows in the game */
+function MiniPlayer() {
+  const [m, setM] = useState<any>(null)
+  useEffect(() => { api.mediaGet?.().then(setM); return api.onMedia?.(setM) }, [])
+  const [, tick] = useState(0); useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 500); return () => clearInterval(id) }, []) // the bar moves between updates
+  if (!m?.title) return <div className="mt-auto" /> // after every hook: React needs the same hooks on each render
+  const cmd = (c: string) => { api.mediaCmd(c); if (c === 'toggle') setM({ ...m, playing: !m.playing, pos: pos, at: Date.now() }) }
+  const pos = Math.min(m.dur || 0, (m.pos || 0) + (m.playing ? (Date.now() - m.at) / 1000 : 0)), f = m.dur > 0 ? pos / m.dur : 0
+  const t = (x: number) => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0')
+  return <div className="miniplayer mt-auto">
+    <div className="flex gap-2.5 items-center">
+      {m.cover ? <img src={m.cover} className="mp-cover" /> : <span className="mp-cover flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--a1),var(--a2))', color: '#fff' }}><Icon n="music" s={18} /></span>}
+      <div className="lbl min-w-0 flex-1"><b className="block truncate text-[12.5px] leading-tight">{m.title}</b><span className="block truncate text-[11px] muted">{m.artist || (m.playing ? 'Играет' : 'Пауза')}</span></div></div>
+    <div className="lbl mt-2"><div className="mp-bar"><div style={{ width: f * 100 + '%' }} /></div>
+      {m.dur > 0 && <div className="flex justify-between text-[10px] muted mt-1 tabular-nums"><span>{t(pos)}</span><span>-{t(Math.max(0, m.dur - pos))}</span></div>}
+      <div className="flex items-center justify-center gap-1.5 mt-1"><button className="mp-btn" title="Назад" onClick={() => cmd('prev')}><Icon n="prev" s={13} /></button>
+        <button className="mp-btn big" title={m.playing ? 'Пауза' : 'Играть'} onClick={() => cmd('toggle')}><Icon n={m.playing ? 'pause' : 'play'} s={14} fill={!m.playing} /></button>
+        <button className="mp-btn" title="Дальше" onClick={() => cmd('next')}><Icon n="next" s={13} /></button></div></div>
+  </div>
+}
+
 export default function App() {
   const [tab, setTab] = useState('home'), [menu, setMenu] = useState(''), [addOpen, setAddOpen] = useState(false), [st, setSt] = useState({ online: false, ping: 0, players: 0, max: 500 })
   const [lang, setLang] = usePref('lang', 'ru'), [theme, setTheme] = usePref('theme', 'dark'), [accent, setAccent] = usePref('accent', 'aqua'), [fx, setFx] = usePref('fx', 'stars'), [custom, setCustom] = usePref('customAccent', '#22d3ee')
@@ -91,7 +112,14 @@ export default function App() {
   useEffect(() => { const a = accent === 'custom' ? [custom, custom] : ACCENTS[accent] ?? ACCENTS.aqua; const r = document.documentElement; r.style.setProperty('--a1', a[0]); r.style.setProperty('--a2', a[1]); r.dataset.theme = theme }, [accent, theme, custom])
   const refresh = () => api.accounts().then(setAcc)
   const instKeyNow = profiles.active?.version === ver ? profiles.active.id : ver
-  const loadMods = () => (kind === 'mod' ? (fabricOk ? api.modsInstalled(ver) : Promise.resolve([])) : api.pkList(ver, kind)).then(setMods)
+  const [mine, setMine] = useState<any[]>([]), [dropOn, setDropOn] = useState(false)
+  const loadMods = () => { if (kind === 'mod') api.modsMine?.(instKeyNow).then(setMine); return (kind === 'mod' ? (fabricOk ? api.modsInstalled(ver) : Promise.resolve([])) : api.pkList(ver, kind)).then(setMods) }
+  /** own .jar mods: kept in "My mods" and installed into the chosen builds at once */
+  const upload = async (paths: string[] | null) => { const keys = tsel.length ? tsel : [instKeyNow]; const r = await api.modsUpload(paths, keys)
+    if (r.added.length) say(`Добавлено: ${r.added.length === 1 ? r.added[0] : r.added.length + ' мод.'}${keys.length > 1 ? ' · сборок: ' + keys.length : ''}`)
+    if (r.bad.length) say('Это не мод (.jar): ' + r.bad.join(', '), 'err'); loadMods() }
+  const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDropOn(false); if (kind !== 'mod') return
+    const paths = [...e.dataTransfer.files].map((f) => api.filePath(f)).filter(Boolean); if (paths.length) upload(paths) }
   const reqId = useRef(0), search = async () => { const id = ++reqId.current; setBusy('s'); const r = kind === 'mod' ? await api.modsSearch({ q, ver, sort, cat }) : await api.pkSearch({ q, ver, sort, kind }); if (id !== reqId.current) return; setHits(r); setBusy('') }
   useEffect(() => { (async () => { const st1 = (pct: number, k: string) => setBoot({ pct, msg: tr(localStorage.getItem('lang') ?? 'ru', k) })
     st1(10, 'boot1'); api.onStatus((d: any) => { setSt(d); setHist((h) => [...h.slice(-29), d.players]) }); api.onProgress(setProg); api.onGame(setRunning); api.onUpdate(setUpd); api.onApi?.(setApiSt)
@@ -99,11 +127,14 @@ export default function App() {
     st1(40, 'accounts'); await refresh(); st1(65, 'boot2'); setSys(await api.sysInfo()); setStats(await api.stats())
     st1(85, 'boot3'); await new Promise((r) => setTimeout(r, 600)); st1(100, 'boot4') })() }, [])
   useEffect(() => { api.stats().then(setStats) }, [running])
+  // a Minecraft from this launcher may still be open (launcher restarted / updated): show it as running, and notice when it closes
+  useEffect(() => { const f = () => api.gameState().then((s: any) => setRunning(!!s?.running)).catch(() => {}); f(); const id = setInterval(f, 20000); return () => clearInterval(id) }, [])
   useEffect(() => { loadMods() }, [ver, tab, kind, profiles.active?.id]); useEffect(() => { if (tab !== 'mods' || !(fabricOk || kind !== 'mod')) return; const id = setTimeout(search, 180); return () => clearTimeout(id) }, [tab, ver, sort, cat, kind, q])
   useEffect(() => { if (tab === 'mods') api.modsTargets().then(setTargets) }, [tab, profiles])
   useEffect(() => { setTsel([instKeyNow]) }, [instKeyNow])
   useEffect(() => { const f = () => api.zoom(Math.max(0.72, Math.min(1, outerWidth / 1440, outerHeight / 880)) * (+uiscale / 100)); f(); addEventListener('resize', f); return () => removeEventListener('resize', f) }, [uiscale])
   useEffect(() => { if (!cfg) return; if (!cfgReady.current) { cfgReady.current = true; return } const id = setTimeout(() => { api.saveSettings(cfg) }, 500); return () => clearTimeout(id) }, [cfg])
+  useEffect(() => api.onFiles?.((d: any) => { if (d.kind === 'shots') api.shots().then(setShots) }), []) // F2 in the game: the picture shows up at once
   useEffect(() => { if (tab === 'screenshots') api.shots().then(setShots); if (tab === 'settings') { api.storage().then(setStorage); api.apiInfo?.(true).then(setApiSt) } }, [tab])
   useEffect(() => { if (tab !== 'servers') return; for (const s of servers) api.srvStatus(s.ip, s.port).then((r: any) => setSrvSt((o) => ({ ...o, [s.ip]: r }))) }, [tab, servers])
   useEffect(() => { if (cfg && !cfg.ramSet && sys.totalMb) { const c = { ...cfg, ramMb: ramOpt }; setCfg(c); api.saveSettings(c) } }, [!!cfg, cfg?.ramSet, sys.totalMb])
@@ -176,7 +207,8 @@ export default function App() {
           <div className="brand"><Wordmark tag big /></div>
           <div className="flex flex-col gap-1">{NAV.map(([k, i]) => <button key={k} onClick={() => setTab(k)} title={t(k)} className={'sitem ' + (tab === k ? 'on' : '')}>
             <Icon n={i} s={19} /><span className="lbl">{SHORT[k]}</span></button>)}</div>
-          <button className="usercard mt-auto" onClick={() => me ? setTab('profile') : setAddOpen(true)}>
+          <MiniPlayer />
+          <button className="usercard" onClick={() => me ? setTab('profile') : setAddOpen(true)}>
             {me ? <Avatar name={sm ? 'Steve' : me.name} s={36} /> : <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--chip)' }}><Icon n="user" s={18} /></span>}
             <span className="lbl min-w-0 flex-1 text-left"><b className="block truncate text-sm">{me ? nick(me.name) : t('noAcc')}</b>
               <span className="block text-[11px] leading-snug muted">{me ? (me.type === 'microsoft' ? 'Microsoft' : 'Offline') : 'Нажмите, чтобы добавить'}</span></span></button>
@@ -224,7 +256,8 @@ export default function App() {
           {tab === 'versions' && <Versions ver={ver} setVer={setVer} cfg={cfg} setCfg={setCfg} running={running} play={mainBtn} VImg={VImg} profiles={profilesBar} recommended={rec} />}
 
           {/* =============================== MODS */}
-          {tab === 'mods' && <div>
+          {tab === 'mods' && <div onDragOver={(e) => { if (kind === 'mod' && fabricOk && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropOn(true) } }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDropOn(false) }} onDrop={onDrop} className="relative">
+            {dropOn && <div className="dropzone-full"><Icon n="upload" s={34} /><b className="text-lg mt-2">Отпустите, чтобы добавить моды</b><span className="text-sm opacity-80">Они попадут в «Мои моды» и в выбранные сборки</span></div>}
             <PageHead title={t(kind === 'mod' ? 'mods' : kind === 'shader' ? 'shaders' : 'packs')} sub={`Для Minecraft ${ver}${profiles.active?.version === ver ? ' · профиль «' + profiles.active.name + '»' : ''}`}
               right={<div className="flex gap-2 items-center"><Dropdown value={ver} set={setVer} options={verOpts} w={260} /><div className="seg">{[['mod', t('mods')], ['resourcepack', t('packs')], ['shader', t('shaders')]].map(([k, n]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => { setKind(k); setHits([]); setMods([]) }}>{n}</button>)}</div></div>} />
             {kind === 'shader' && <p className="muted text-sm mb-3">{t('shadersHint')}</p>}
@@ -247,8 +280,17 @@ export default function App() {
               <div><div className="flex items-center justify-between mb-2"><h3 className="text-lg font-bold">{t(kind === 'mod' ? 'installed' : kind === 'shader' ? 'installedShaders' : 'installedPacks')} <span className="muted text-sm">{mods.length}</span></h3>{kind === 'mod' && <button className="pill" title={t('verifyHint')} onClick={async () => { const r = await api.modsVerify(ver, true); say(`${t('verifyDone')}: ${r.total} · ${t('updated2')} ${r.updated} · ${t('fixed')} ${r.fixed}`); loadMods() }}><Icon n="shield" s={14} />{t('verify')}</button>}</div>
                 {fps && <div className="pill mb-3" style={{ background: 'rgba(16,185,129,.18)' }}><Icon n="check" s={14} />{t('fps')}</div>}
                 {ASTERIA[ver] && kind === 'mod' && <div className="mcard mb-2" style={{ borderColor: 'color-mix(in srgb,var(--a2) 45%,transparent)' }}><span className="cmd-ic !w-10 !h-10"><LoaderIcon k="asteria" s={20} /></span><div className="min-w-0 flex-1"><div className="font-semibold text-sm">Asteria</div><div className="muted text-[11px]">Звезда в табе, скины и плащи{ASTERIA[ver] === 'full' ? ' и визуалы' : ''} · ставится сам, бесплатно</div></div></div>}
+                {kind === 'mod' && <div className="card rounded-2xl p-3 mb-3">
+                  <div className="flex items-center justify-between mb-2"><b className="text-sm">Мои моды <span className="muted">{mine.length}</span></b><button className="pill !py-1" title="Открыть папку «Мои моды»" onClick={() => api.modsOpenMine()}><Icon n="folder" s={13} /></button></div>
+                  <button className="dropzone w-full" onClick={() => upload(null)}><Icon n="upload" s={18} /><span><b className="block text-sm">Загрузить свой мод</b><span className="muted text-[11px]">Нажмите или перетащите .jar в окно</span></span></button>
+                  {mine.length > 0 && <div className="flex flex-col gap-1.5 mt-2">{mine.map((m) => <div key={m.file} className="flex items-center gap-2 rounded-xl p-1.5" style={{ background: 'var(--chip)' }}>
+                    {m.icon ? <img src={m.icon} className="w-8 h-8 rounded-lg object-cover" style={{ imageRendering: 'pixelated' }} /> : <span className="cmd-ic !w-8 !h-8"><Icon n="cube" s={15} /></span>}
+                    <div className="min-w-0 flex-1"><div className="text-[13px] font-semibold truncate">{m.title}</div><div className="muted text-[10px] truncate">{[m.loader, m.version, m.mc && 'MC ' + m.mc].filter(Boolean).join(' · ')}</div></div>
+                    {m.installed ? <span className="muted text-[11px] flex items-center gap-1 pr-1"><Icon n="check" s={12} />стоит</span> : <button className="pill !py-1 on" onClick={async () => { await api.modsMineInstall(m.file, tsel.length ? tsel : [instKeyNow]); say('Установлено: ' + m.title); loadMods() }}><Icon n="download" s={12} />Поставить</button>}
+                    <button className="iconbtn !w-7 !h-7" title="Убрать из «Моих модов»" onClick={async () => { await api.modsMineRemove(m.file); loadMods() }}><Icon n="trash" s={13} /></button></div>)}</div>}
+                </div>}
                 <div className="flex flex-col gap-2">{mods.filter((m) => !q || (m.title + ' ' + m.file).toLowerCase().includes(q.toLowerCase())).map((m) => <div key={m.file} className="mcard !p-2.5"><Pic src={m.icon} cls="w-10 h-10 rounded-lg object-cover" />
-                  <div className="min-w-0 flex-1"><div className="font-semibold text-sm truncate">{m.title}</div><div className="muted text-[11px] line-clamp-1">{m.desc}</div></div>
+                  <div className="min-w-0 flex-1"><div className="font-semibold text-sm truncate">{m.title}{m.own && <span className="badge ml-1.5 !text-[9px] !py-0.5" style={{ background: "var(--chip)", color: "var(--a2)" }}>свой</span>}</div><div className="muted text-[11px] line-clamp-1">{m.desc}</div></div>
                   {kind === 'mod' && <Switch on={m.enabled} set={async () => { await api.modsToggle(m.file, ver); loadMods() }} />}
                   <button className="iconbtn" onClick={async () => { await (kind === 'mod' ? api.modsRemove(m.file, ver) : api.pkRemove(m.file, ver, kind)); loadMods() }}><Icon n="trash" s={15} /></button></div>)}</div></div></div>}
           </div>}

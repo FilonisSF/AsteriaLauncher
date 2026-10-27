@@ -40,6 +40,11 @@ public final class V {
     public static float bg = 0.6f, scale = 1f;
     /** HUD look: 0 = crystal panels, 1 = Asteria lines (thin lines, minimal backing) */
     public static int hudStyle = 0;
+    /** a light sheen running over the HUD panels now and then */
+    public static boolean glare = false;
+    /** font of all Asteria text: 0 = Minecraft pixel font, 1.. = smooth TTF fonts (assets/asteria_visuals/font/f<N>.json) */
+    public static int font = 2;
+    public static final String[] FONTS = {"Minecraft", "Inter", "Montserrat Alt", "Unbounded", "Comfortaa", "Glitch (дед инсайд)", "Ruslan", "Russo One"};
 
     public static Mod mod(String id) { return BY.get(id); }
     public static boolean on(String id) { Mod m = BY.get(id); return m != null && m.on && licensed(); }
@@ -56,7 +61,12 @@ public final class V {
     public static boolean licensed() { return true; }
 
     // ------------------------------------------------------------------ load / save
-    private static File file;
+    private static File file, presetsFile;
+    /** named configs made in the launcher (config/asteria-visuals-presets.json); the in-game menu can switch them */
+    public static final class Preset { public String id, name; JsonObject cfg; }
+    public static final List<Preset> PRESETS = new ArrayList<>();
+    public static String activePreset = "";
+    private static long presetsMtime = -2;
     private static long mtime = -2, ownWrite = -1, dirtyAt = 0;
     public static Runnable onChange = () -> {};
 
@@ -80,7 +90,8 @@ public final class V {
         } catch (Exception ex) { throw new RuntimeException("Asteria: schema.json", ex); }
         String dir = System.getProperty("asteria.gamedir", new File(".").getAbsolutePath());
         file = new File(new File(dir, "config"), "asteria-visuals.json");
-        reload(true);
+        presetsFile = new File(file.getParentFile(), "asteria-visuals-presets.json");
+        reload(true); reloadPresets();
     }
     static void reset(S s) {
         JsonElement d = (JsonElement) s.def;
@@ -94,7 +105,7 @@ public final class V {
         if (dirtyAt > 0 && now - dirtyAt > 400) { dirtyAt = 0; write(); }
         if (now - lastCheck < 700) return;
         lastCheck = now;
-        reload(false);
+        reload(false); reloadPresets();
     }
     public static void changed() { dirtyAt = System.currentTimeMillis(); onChange.run(); }
 
@@ -103,28 +114,51 @@ public final class V {
         if (!force && (m == mtime || m == ownWrite)) { mtime = m; return; }
         mtime = m;
         if (m < 0) return;
+        try { apply(new JsonParser().parse(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8)).getAsJsonObject(), true); } catch (Exception ignored) {}
+    }
+    private static void reloadPresets() {
+        long m = presetsFile.exists() ? presetsFile.lastModified() : -1;
+        if (m == presetsMtime) return;
+        presetsMtime = m; PRESETS.clear(); activePreset = "";
+        if (m < 0) return;
         try {
-            JsonObject o = new JsonParser().parse(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8)).getAsJsonObject();
+            JsonObject o = new JsonParser().parse(new String(Files.readAllBytes(presetsFile.toPath()), StandardCharsets.UTF_8)).getAsJsonObject();
+            activePreset = str(o, "active");
+            for (JsonElement e : o.getAsJsonArray("list")) { JsonObject j = e.getAsJsonObject(); Preset p = new Preset(); p.id = str(j, "id"); p.name = str(j, "name"); p.cfg = j.getAsJsonObject("cfg"); PRESETS.add(p); }
+        } catch (Exception ignored) {}
+    }
+    /** switches to a launcher preset: applies it now and remembers it as active (the launcher sees both files change) */
+    public static void usePreset(Preset p) {
+        try {
+            apply(p.cfg, true); write();
+            JsonObject o = new JsonParser().parse(new String(Files.readAllBytes(presetsFile.toPath()), StandardCharsets.UTF_8)).getAsJsonObject();
+            o.addProperty("active", p.id); activePreset = p.id;
+            for (JsonElement e : o.getAsJsonArray("list")) if (p.id.equals(str(e.getAsJsonObject(), "id"))) p.cfg = e.getAsJsonObject().getAsJsonObject("cfg");
+            Files.write(presetsFile.toPath(), new Gson().toJson(o).getBytes(StandardCharsets.UTF_8)); presetsMtime = presetsFile.lastModified();
+        } catch (Exception ignored) {}
+    }
+    private static void apply(JsonObject o, boolean binds) {
+        {
             if (o.has("theme")) { JsonObject t = o.getAsJsonObject("theme");
                 accent = parse(str(t, "accent"), accent); accent2 = parse(str(t, "accent2"), accent2);
-                chroma = b(t, "chroma", chroma); shadow = b(t, "shadow", shadow); blur = b(t, "blur", blur); bg = (float) d(t, "bg", bg); scale = (float) d(t, "scale", scale); hudStyle = (int) d(t, "hud", hudStyle); }
+                chroma = b(t, "chroma", chroma); shadow = b(t, "shadow", shadow); blur = b(t, "blur", blur); bg = (float) d(t, "bg", bg); scale = (float) d(t, "scale", scale); hudStyle = (int) d(t, "hud", hudStyle); glare = b(t, "glare", glare); if (t.has("font")) { try { font = t.get("font").isJsonPrimitive() && t.get("font").getAsJsonPrimitive().isBoolean() ? (t.get("font").getAsBoolean() ? 2 : 0) : Math.max(0, Math.min(FONTS.length - 1, t.get("font").getAsInt())); } catch (Exception ignored) {} } }
             JsonObject mods = o.has("modules") ? o.getAsJsonObject("modules") : new JsonObject();
             for (Mod md : MODS) {
                 if (!mods.has(md.id)) continue;
                 JsonObject j = mods.getAsJsonObject(md.id);
-                md.on = b(j, "on", md.on); md.bind = j.has("bind") ? j.get("bind").getAsInt() : md.bind;
+                md.on = b(j, "on", md.on); if (binds && j.has("bind")) md.bind = j.get("bind").getAsInt();
                 if (j.has("hud") && md.hud != null) { JsonArray h = j.getAsJsonArray("hud"); md.hud[0] = h.get(0).getAsFloat(); md.hud[1] = h.get(1).getAsFloat(); }
                 JsonObject sv = j.has("s") ? j.getAsJsonObject("s") : new JsonObject();
                 for (S s : md.s) if (sv.has(s.id)) { JsonElement e = sv.get(s.id);
                     try { switch (s.type) { case "bool": s.bool = e.getAsBoolean(); break; case "num": s.num = Math.max(s.min, Math.min(s.max, e.getAsDouble())); break; case "mode": s.mode = Math.max(0, Math.min(s.options.length - 1, e.getAsInt())); break; case "color": s.color = parse(e.getAsString(), s.color); break; default: s.key = e.getAsInt(); } } catch (Exception ignored) {} }
             }
             onChange.run();
-        } catch (Exception ignored) {}
+        }
     }
     private static void write() {
         try {
             JsonObject o = new JsonObject(), t = new JsonObject(), mods = new JsonObject();
-            t.addProperty("accent", hex(accent)); t.addProperty("accent2", hex(accent2)); t.addProperty("chroma", chroma); t.addProperty("shadow", shadow); t.addProperty("blur", blur); t.addProperty("bg", bg); t.addProperty("scale", scale); t.addProperty("hud", hudStyle);
+            t.addProperty("accent", hex(accent)); t.addProperty("accent2", hex(accent2)); t.addProperty("chroma", chroma); t.addProperty("shadow", shadow); t.addProperty("blur", blur); t.addProperty("bg", bg); t.addProperty("scale", scale); t.addProperty("hud", hudStyle); t.addProperty("glare", glare); t.addProperty("font", font);
             o.add("theme", t);
             for (Mod m : MODS) {
                 JsonObject j = new JsonObject(), sv = new JsonObject(); j.addProperty("on", m.on); j.addProperty("bind", m.bind);
@@ -140,6 +174,8 @@ public final class V {
     }
 
     // ------------------------------------------------------------------ helpers
+    /** the game's config folder */
+    public static File dir() { return file.getParentFile(); }
     static String str(JsonObject o, String k) { return o.has(k) && !o.get(k).isJsonNull() ? o.get(k).getAsString() : ""; }
     static boolean b(JsonObject o, String k, boolean d) { try { return o.has(k) ? o.get(k).getAsBoolean() : d; } catch (Exception e) { return d; } }
     static double d(JsonObject o, String k, double d) { try { return o.has(k) ? o.get(k).getAsDouble() : d; } catch (Exception e) { return d; } }

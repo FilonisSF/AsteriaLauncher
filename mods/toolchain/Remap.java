@@ -65,6 +65,10 @@ public class Remap {
             return;
         }
         int ci = Arrays.asList(head).indexOf("intermediary") - 3, cn = Arrays.asList(head).indexOf("named") - 3;
+        // Loom's tiny files start with the "official" (obfuscated) column and their descriptors use it too:
+        // collect official -> intermediary class names so method descriptors can be keyed by intermediary
+        OFF.clear();
+        if (ci > 0) for (String l : lines.subList(1, lines.size())) if (l.startsWith("c\t")) { String[] t = l.split("\t", -1); OFF.put(t[1], t[1 + ci]); }
         String cls = null;
         for (String l : lines.subList(1, lines.size())) {
             String[] t = l.split("\t", -1);
@@ -73,7 +77,16 @@ public class Remap {
             else if (l.startsWith("\tf\t")) FLD.put(cls + "/" + t[3 + ci], t[3 + cn]);
         }
     }
-    static String mapDescFromOfficial(String d, String[] head, int ci) { return d; } // tiny descs are in the first namespace; we only use files whose first column is intermediary
+    static final Map<String, String> OFF = new HashMap<>(); // official class -> intermediary class (only for official-first tiny files)
+    /** tiny descs are in the first namespace: turn official class names into intermediary ones */
+    static String mapDescFromOfficial(String d, String[] head, int ci) {
+        if (ci == 0 || OFF.isEmpty()) return d;
+        StringBuilder sb = new StringBuilder(); int i = 0;
+        while (i < d.length()) { char c = d.charAt(i);
+            if (c == 'L') { int e = d.indexOf(';', i); String n = d.substring(i + 1, e); sb.append('L').append(OFF.getOrDefault(n, n)).append(';'); i = e + 1; }
+            else { sb.append(c); i++; } }
+        return sb.toString();
+    }
 
     /** Yarn leaves most enum constants unmapped: their real name is the string passed to the enum constructor in <clinit>. */
     static void enumNames(Path jar) throws IOException {

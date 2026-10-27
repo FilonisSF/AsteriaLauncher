@@ -12,6 +12,9 @@ import ru.safimine.asteria.visuals.V;
 /** custom crosshair: the vanilla one is hidden (ours is drawn by the HUD) */
 @Mixin(InGameHud.class)
 public class InGameHudMixin {
+    /** "Hotbar" draws its own bar, the vanilla one is skipped */
+    @Inject(method = "renderHotbar", at = @At("HEAD"), cancellable = true, require = 0)
+    private void asteria$hotbar(CallbackInfo ci) { if (V.on("hotbar")) ci.cancel(); }
     @Inject(method = "renderCrosshair", at = @At("HEAD"), cancellable = true)
     private void asteria$crosshair(DrawContext ctx, net.minecraft.client.render.RenderTickCounter tc, CallbackInfo ci) { if (V.on("crosshair")) ci.cancel(); }
     @Inject(method = "render", at = @At("TAIL"))

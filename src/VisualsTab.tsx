@@ -1,23 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import schema from '../mods/common-visuals/resources/asteria/schema.json'
 import { Icon } from './Icons'
-import { ColorPick, Switch, Tilt } from './ui'
+import { Check, ColorPick, Dropdown, Switch, Tilt } from './ui'
 declare global { interface Window { api: any } }
 
 // The same schema.json the mod reads: the launcher and the in-game menu edit one file (config/asteria-visuals.json in every build).
 type S = { id: string; name: string; type: 'bool' | 'num' | 'mode' | 'color'; def: any; min?: number; max?: number; step?: number; options?: string[] }
 type M = { id: string; cat: string; name: string; desc: string; on: boolean; hud?: [number, number]; s: S[] }
 type ModCfg = { on: boolean; bind: number; hud?: [number, number]; s: Record<string, any> }
-type Theme = { accent: string; accent2: string; chroma: boolean; shadow: boolean; blur: boolean; bg: number; scale: number; hud?: number }
+type Theme = { accent: string; accent2: string; chroma: boolean; shadow: boolean; blur: boolean; bg: number; scale: number; hud?: number; glare?: boolean; font?: number | boolean }
 export type VisCfg = { theme: Theme; modules: Record<string, ModCfg> }
 const MODS = (schema as any).modules as M[], CATS = (schema as any).categories as { id: string; name: string }[]
 const CAT_ICON: Record<string, string> = { hud: 'grid', world: 'cube', combat: 'sparkles', camera: 'eye' }
+// card pictures: src/assets/art/vis-<id>.jpg (or .png / .webp), prompts in src/assets/art/PROMPTS_RU.md
+const PIC: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob('./assets/art/vis-*.{jpg,png,webp}', { eager: true, query: '?url', import: 'default' }) as Record<string, string>).map(([k, v]) => [k.split('/').pop()!.replace(/^vis-|\.(jpg|png|webp)$/g, ''), v]))
 const THEME0: Theme = { accent: '#22d3ee', accent2: '#3b82f6', chroma: false, shadow: true, blur: true, bg: 0.55, scale: 1, hud: 0 }
 export function visDefaults(): VisCfg {
   const modules: Record<string, ModCfg> = {}
   for (const m of MODS) modules[m.id] = { on: m.on, bind: 0, ...(m.hud ? { hud: [...m.hud] as [number, number] } : {}), s: Object.fromEntries(m.s.map((x) => [x.id, x.def])) }
   return { theme: { ...THEME0 }, modules }
 }
+type Preset = { id: string; name: string; cfg: VisCfg }
+type Presets = { active: string; list: Preset[] }
+const uid = () => Math.random().toString(36).slice(2, 10)
+/** ready-made starting points for a new config */
+const TEMPLATES: { name: string; desc: string; make: () => VisCfg }[] = [
+  { name: 'Стандарт', desc: 'Как после установки', make: visDefaults },
+  { name: 'Минимал', desc: 'Только логотип, инфо и прицел, тонкие линии', make: () => only(['watermark', 'info', 'crosshair'], { hud: 1 }) },
+  { name: 'PvP', desc: 'Всё для боя: цель, броня, клавиши, зум', make: () => only(['arraylist', 'keystrokes', 'info', 'armor', 'effects', 'targethud', 'notifications', 'crosshair', 'targetesp', 'hitparticles', 'hitcolor', 'killeffect', 'fullbright', 'zoom', 'island', 'hotbar', 'inventory', 'totems', 'cooldowns', 'damagenumbers', 'sounds', 'blockhighlight']) },
+  { name: 'Красота', desc: 'Шлейфы, частицы, шляпа и радужная тема', make: () => only(['watermark', 'arraylist', 'notifications', 'frame', 'trails', 'jumpcircles', 'ambient', 'chinahat', 'targetesp', 'hitparticles', 'killeffect', 'swing', 'zoom', 'island', 'music', 'halo', 'pet', 'jumpparticles', 'particletrail', 'sonar', 'dash'], { chroma: true }) },
+]
+const FONTS = ['Minecraft (пиксельный)', 'Inter', 'Montserrat Alternates', 'Unbounded', 'Comfortaa', 'Glitch — «дед инсайд»', 'Ruslan Display', 'Russo One']
+const fontIdx = (f: any) => typeof f === 'number' ? f : f === false ? 0 : 2 // old configs stored a boolean
+function only(ids: string[], theme: Partial<Theme> = {}): VisCfg { const d = visDefaults(); for (const m of MODS) d.modules[m.id].on = ids.includes(m.id); d.theme = { ...d.theme, ...theme }; return d }
 function merge(saved: any): VisCfg {
   const d = visDefaults(); if (!saved || !saved.modules) return d
   for (const m of MODS) { const o = saved.modules[m.id]; if (!o) continue; const t = d.modules[m.id]
@@ -33,18 +48,25 @@ const NAMES: Record<number, string> = Object.fromEntries(Object.entries(GLFW).ma
 export const keyName = (k: number) => !k ? '—' : k >= 65 && k <= 90 ? String.fromCharCode(k) : k >= 48 && k <= 57 ? String(k - 48) : k >= 290 && k <= 314 ? 'F' + (k - 289) : k >= 320 && k <= 329 ? 'Num ' + (k - 320) : NAMES[k] ?? '#' + k
 
 // how big each element is in the 640x360 GUI preview (like the mod draws it)
-const BOX: Record<string, [number, number]> = { watermark: [92, 16], arraylist: [78, 74], keystrokes: [70, 84], info: [96, 70], armor: [86, 22], effects: [104, 46], targethud: [124, 38], notifications: [132, 28] }
+const BOX: Record<string, [number, number]> = { watermark: [92, 16], arraylist: [78, 74], keystrokes: [70, 84], info: [96, 70], armor: [86, 22], effects: [104, 46], targethud: [124, 38], notifications: [132, 28], island: [170, 18], hotbar: [204, 26], inventory: [178, 76], totems: [48, 22], cooldowns: [104, 44], music: [156, 36] }
 const GW = 640, GH = 360
 
 export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string; bg: string; onBuy: () => void; say: (m: string) => void; ver: string }) {
   const premium = plan === 'PREMIUM'
-  const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout'>('mods'), [q, setQ] = useState('')
+  const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout' | 'configs'>('mods'), [q, setQ] = useState('')
+  const [pr, setPr] = useState<Presets | null>(null), prRef = useRef<Presets | null>(null)
   const [keys, setKeys] = useState<Record<string, string>>({}), [listenKey, setListenKey] = useState(''), last = useRef(0), tm = useRef<any>()
-  useEffect(() => { window.api.visGet().then((v: any) => setC(merge(v))) }, [])
-  useEffect(() => window.api.onFiles?.((d: any) => { if (Date.now() - last.current < 1500) return; if (d.kind === 'vis') window.api.visGet().then((v: any) => v && setC(merge(v))); if (d.kind === 'opts' && d.ver === ver) window.api.optsGet(ver).then((o: any) => setKeys({ menu: o['key_key.asteria.menu'] || 'key.keyboard.right.shift', zoom: o['key_key.asteria.zoom'] || 'key.keyboard.c' })) }), [ver])
+  const loadPresets = async (cur: VisCfg) => { let p: Presets | null = await window.api.visPresets?.()
+    if (!p || !p.list?.length) { const id = uid(); p = { active: id, list: [{ id, name: 'Мой конфиг', cfg: cur }] }; window.api.visPresetsSet?.(p) }
+    p = { ...p, list: p.list.map((x) => x.id === p!.active ? { ...x, cfg: cur } : { ...x, cfg: merge(x.cfg) }) }; prRef.current = p; setPr(p) }
+  useEffect(() => { window.api.visGet().then((v: any) => { const m = merge(v); setC(m); loadPresets(m) }) }, [])
+  useEffect(() => window.api.onFiles?.((d: any) => { if (Date.now() - last.current < 1500) return; if (d.kind === 'vis') window.api.visGet().then((v: any) => { if (v) { const m = merge(v); setC(m); loadPresets(m) } }); if (d.kind === 'opts' && d.ver === ver) window.api.optsGet(ver).then((o: any) => setKeys({ menu: o['key_key.asteria.menu'] || 'key.keyboard.right.shift', zoom: o['key_key.asteria.zoom'] || 'key.keyboard.c' })) }), [ver])
   useEffect(() => { const id = setInterval(async () => { if (Date.now() - last.current < 4000) return; const s = await window.api.gameState(); if (s.running) { const v = await window.api.visGet(); if (v) setC(merge(v)) } }, 3000); return () => clearInterval(id) }, []) // edits made in the game menu come back here
   useEffect(() => { window.api.optsGet(ver).then((o: any) => setKeys({ menu: o['key_key.asteria.menu'] || 'key.keyboard.right.shift', zoom: o['key_key.asteria.zoom'] || 'key.keyboard.c' })) }, [ver])
-  const save = (n: VisCfg) => { setC(n); last.current = Date.now(); clearTimeout(tm.current); tm.current = setTimeout(async () => { const r = await window.api.visSet(n); if (r?.live) say('Применено в игре') }, 300) }
+  // every edit also lands in the active preset
+  const save = (n: VisCfg) => { setC(n); last.current = Date.now(); const p = prRef.current; if (p) { const q = { ...p, list: p.list.map((x) => x.id === p.active ? { ...x, cfg: n } : x) }; prRef.current = q; setPr(q) }
+    clearTimeout(tm.current); tm.current = setTimeout(async () => { const r = await window.api.visSet(n); if (prRef.current) window.api.visPresetsSet?.(prRef.current); if (r?.live) say('Применено в игре') }, 300) }
+  const setPresets = (p: Presets, apply?: VisCfg) => { prRef.current = p; setPr(p); window.api.visPresetsSet?.(p); if (apply) save(apply) }
   const mod = (id: string, p: Partial<ModCfg>) => c && save({ ...c, modules: { ...c.modules, [id]: { ...c.modules[id], ...p } } })
   const setS = (id: string, k: string, v: any) => c && mod(id, { s: { ...c.modules[id].s, [k]: v } })
   const theme = (p: Partial<Theme>) => c && save({ ...c, theme: { ...c.theme, ...p } })
@@ -70,7 +92,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     {!premium && <div className="card rounded-2xl p-4 mb-4 flex items-center gap-3"><span className="cmd-ic"><Icon n="lock" s={16} /></span><div className="text-sm flex-1"><b>Можно всё настроить заранее.</b> <span className="muted">В игре визуалы включатся, как только на аккаунте появится PREMIUM — лаунчер проверяет подписку при каждом запуске.</span></div></div>}
 
     <div className="flex items-center gap-3 mb-4 flex-wrap">
-      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['layout', 'Расположение HUD', 'move']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
+      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['layout', 'Расположение HUD', 'move'], ['configs', 'Конфиги', 'folder']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
       <div className="flex-1" />
       <div className="flex items-center gap-2 text-sm"><span className="muted">Клавиши в игре:</span>
         {(['menu', 'zoom'] as const).map((k) => <button key={k} className={'btn !py-1.5 ' + (listenKey === k ? 'btn-on' : '')} onClick={() => setListenKey(k)}>{k === 'menu' ? 'Меню' : 'Зум'} <kbd className="ml-1">{listenKey === k ? '…' : pretty(keys[k])}</kbd></button>)}</div>
@@ -85,7 +107,13 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
       </div>
       <div className="grid gap-3 content-start stagger" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
         {mods.map((m) => { const mc = c.modules[m.id], ex = open === m.id
-          return <div key={m.id} className={'card rounded-2xl p-4 transition ' + (mc.on ? '' : 'opacity-[.86]')} style={mc.on ? { borderColor: 'color-mix(in srgb,var(--a2) 45%,transparent)' } : {}}>
+          return <div key={m.id} className={'card rounded-2xl overflow-hidden transition ' + (mc.on ? '' : 'opacity-[.86]')} style={mc.on ? { borderColor: 'color-mix(in srgb,var(--a2) 45%,transparent)' } : {}}>
+            <div className="relative h-[120px] overflow-hidden" style={{ background: 'linear-gradient(135deg,color-mix(in srgb,var(--a1) 38%,#06121c),color-mix(in srgb,var(--a2) 30%,#050b16))' }}>
+              {PIC[m.id] ? <img src={PIC[m.id]} loading="lazy" decoding="async" draggable={false} className={'absolute inset-0 w-full h-full object-cover transition duration-300 ' + (mc.on ? '' : 'grayscale-[.55]')} />
+                : <span className="absolute inset-0 flex items-center justify-center text-white/35"><Icon n={CAT_ICON[m.cat] || 'sparkles'} s={46} /></span>}
+              <div className="absolute inset-x-0 bottom-0 h-12" style={{ background: 'linear-gradient(transparent,color-mix(in srgb,var(--card) 85%,transparent))' }} />
+            </div>
+            <div className="p-4 pt-3">
             <div className="flex items-start gap-3">
               <span className="cmd-ic !w-10 !h-10" style={mc.on ? { background: 'linear-gradient(135deg,var(--a1),var(--a2))', color: '#fff' } : {}}><Icon n={CAT_ICON[m.cat] || 'sparkles'} s={18} /></span>
               <div className="flex-1 min-w-0"><div className="font-bold">{m.name}</div><div className="muted text-xs">{m.desc}</div></div>
@@ -94,13 +122,13 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
               <button className={'pill !py-1 ' + (bindFor === m.id ? 'on' : '')} title="Клавиша включения в игре" onClick={() => setBindFor(bindFor === m.id ? '' : m.id)}><Icon n="keyboard" s={13} />{bindFor === m.id ? 'Нажмите клавишу…' : keyName(mc.bind)}</button>
               {m.s.length > 0 && <button className="pill !py-1 ml-auto" onClick={() => setOpen(ex ? '' : m.id)}><Icon n="sliders" s={13} />Настройки<span className={'transition ' + (ex ? 'rotate-180' : '')}><Icon n="chevron" s={12} /></span></button>}</div>
             {ex && <div className="mt-3 pt-3 flex flex-col gap-3 fade" style={{ borderTop: '1px solid var(--line)' }}>{m.s.map((s) => <Setting key={s.id} s={s} v={mc.s[s.id]} set={(v) => setS(m.id, s.id, v)} />)}</div>}
-          </div> })}
+          </div></div> })}
       </div></div>}
 
     {view === 'theme' && <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.2fr)' }}>
       <div className="card rounded-2xl p-5 flex flex-col gap-4">
         <div className="font-bold">Стиль HUD</div>
-        <div className="grid grid-cols-2 gap-2">{[[0, 'Кристалл', 'Стеклянные панели со светящейся рамкой'], [1, 'Линии Asteria', 'Тонкие линии и минимальная подложка']].map(([k, n, d]) =>
+        <div className="grid grid-cols-3 gap-2">{[[0, 'Кристалл', 'Стеклянные панели со светящейся рамкой'], [1, 'Созвездие', 'Тёмные карточки, линия-созвездие и бегущая комета'], [2, 'Минимал', 'Спокойные тёмные карточки, как в современных клиентах']].map(([k, n, d]) =>
           <button key={k as number} onClick={() => theme({ hud: k as number })} className={'text-left rounded-2xl p-3 transition ' + ((c.theme.hud ?? 0) === k ? 'ring-2 ring-[var(--a2)]' : '')} style={{ background: 'var(--chip)' }}><b className="block text-sm">{n}</b><span className="muted text-xs">{d}</span></button>)}</div>
         <div className="font-bold">Цвета интерфейса</div>
         <div className="flex gap-6 flex-wrap"><ColorPick value={c.theme.accent} set={(v) => theme({ accent: v, chroma: false })} label="Основной" /><ColorPick value={c.theme.accent2} set={(v) => theme({ accent2: v, chroma: false })} label="Второй" /></div>
@@ -109,13 +137,72 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
         <Switch on={c.theme.chroma} set={(v) => theme({ chroma: v })} label="Радужный перелив" hint="Цвета HUD плавно меняются по кругу" />
         <Switch on={c.theme.shadow} set={(v) => theme({ shadow: v })} label="Тени" />
         <Switch on={c.theme.blur} set={(v) => theme({ blur: v })} label="Мягкое свечение панелей" />
+        <div className="flex items-center justify-between gap-3"><div><div className="text-sm">Шрифт в игре</div><div className="muted text-xs">Весь текст HUD и меню Asteria</div></div>
+          <Dropdown value={String(fontIdx(c.theme.font))} w={210} set={(v) => theme({ font: +v })} options={FONTS.map((n, i) => ({ value: String(i), label: n }))} /></div>
+        <Switch on={!!c.theme.glare} set={(v) => theme({ glare: v })} label="Блик по панелям" hint="Иногда по панелям HUD пробегает светлый блик" />
         <Range label="Прозрачность подложки" min={0} max={1} step={0.05} v={c.theme.bg} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ bg: v })} />
         <Range label="Размер HUD" min={0.6} max={1.6} step={0.05} v={c.theme.scale} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ scale: v })} />
       </div>
       <Tilt className="rounded-2xl overflow-hidden relative h-fit" max={4}><img src={bg} className="w-full aspect-video object-cover" /><div className="absolute inset-0"><Preview c={c} /></div></Tilt>
     </div>}
 
+    {view === 'configs' && pr && <Configs c={c} pr={pr} set={setPresets} say={say} />}
+
     {view === 'layout' && <Layout c={c} bg={bg} move={(id, x, y) => mod(id, { hud: [x, y] })} />}
+  </div>
+}
+
+/** named configs: switch, create from templates, rename, duplicate, delete, share by code / short code / file */
+function Configs({ c, pr, set, say }: { c: VisCfg; pr: Presets; set: (p: Presets, apply?: VisCfg) => void; say: (m: string) => void }) {
+  const [code, setCode] = useState(''), [binds, setBinds] = useState(false), [ren, setRen] = useState(''), [busy, setBusy] = useState(''), [shared, setShared] = useState<{ name: string; id: string | null; code: string } | null>(null)
+  const uniq = (n: string) => { let k = n, i = 2; while (pr.list.some((x) => x.name === k)) k = `${n} ${i++}`; return k }
+  const add = (name: string, cfg: VisCfg) => { const id = uid(), n = { id, name: uniq(name), cfg }; set({ active: id, list: [...pr.list, n] }, cfg); say('Конфиг «' + n.name + '» создан') }
+  const keepBinds = (cfg: VisCfg): VisCfg => binds ? cfg : { ...cfg, modules: Object.fromEntries(Object.entries(cfg.modules).map(([id, m]) => [id, { ...m, bind: c.modules[id]?.bind ?? 0 }])) }
+  const imp = (o: any, from: string) => { if (!o || o.error) return say('Не получилось прочитать ' + from); add(String(o.name || 'Импорт').slice(0, 40), keepBinds(merge(o))); setCode('') }
+  const payload = (p: Preset) => ({ name: p.name, theme: p.cfg.theme, modules: p.cfg.modules })
+  const share = async (p: Preset) => { setBusy(p.id); try { const r = await window.api.visShare(payload(p)); setShared({ name: p.name, id: r.id, code: r.code }); say('Код скопирован') } finally { setBusy('') } }
+  const count = (cfg: VisCfg) => MODS.filter((m) => cfg.modules[m.id]?.on).length
+  return <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)' }}>
+    <div className="flex flex-col gap-2.5">
+      {pr.list.map((p) => { const act = p.id === pr.active
+        return <div key={p.id} className="card rounded-2xl p-3.5 flex items-center gap-2" style={act ? { borderColor: 'color-mix(in srgb,var(--a2) 55%,transparent)' } : {}}>
+          <span className="w-10 h-10 rounded-xl shrink-0 mr-1" style={{ background: `linear-gradient(135deg,${p.cfg.theme.accent},${p.cfg.theme.accent2})` }} />
+          <div className="flex-1 min-w-0">
+            {ren === p.id ? <input autoFocus className="w-full !py-1" defaultValue={p.name} onBlur={(e) => { const v = e.target.value.trim().slice(0, 40); setRen(''); if (v && v !== p.name) set({ ...pr, list: pr.list.map((x) => x.id === p.id ? { ...x, name: v } : x) }) }} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setRen('') }} />
+              : <div className="font-bold truncate">{p.name}{act && <span className="badge soft ml-2 !text-[10px]">Активный</span>}</div>}
+            <div className="muted text-xs">Включено функций: {count(p.cfg)}/{MODS.length}</div></div>
+          {!act && <button className="btn !py-1.5" onClick={() => set({ ...pr, active: p.id }, p.cfg)}>Включить</button>}
+          <button className="pill !py-1" title="Переименовать" onClick={() => setRen(p.id)}><Icon n="pencil" s={13} /></button>
+          <button className="pill !py-1" title="Дублировать" onClick={() => add(p.name + ' (копия)', JSON.parse(JSON.stringify(p.cfg)))}><Icon n="copy" s={13} /></button>
+          <button className="pill !py-1" title="Поделиться: скопировать код" disabled={busy === p.id} onClick={() => share(p)}><Icon n="share" s={13} />{busy === p.id ? '…' : 'Поделиться'}</button>
+          <button className="pill !py-1" title="Сохранить в файл .asteria" onClick={async () => { if (await window.api.visExport(payload(p), p.name)) say('Файл сохранён') }}><Icon n="download" s={13} /></button>
+          {pr.list.length > 1 && <button className="pill !py-1" title="Удалить" onClick={() => { if (!confirm('Удалить конфиг «' + p.name + '»?')) return; const list = pr.list.filter((x) => x.id !== p.id); if (act) set({ active: list[0].id, list }, list[0].cfg); else set({ ...pr, list }) }}><Icon n="trash" s={13} /></button>}
+        </div> })}
+      <p className="muted text-xs mt-1">Все изменения сохраняются в активный конфиг. В игре конфиги переключаются в меню Asteria → «Конфиги».</p>
+    </div>
+    <div className="flex flex-col gap-4">
+      {shared && <div className="card rounded-2xl p-5 flex flex-col gap-3 sharecard">
+        <div className="flex items-center gap-2"><span className="cmd-ic !w-9 !h-9"><Icon n="share" s={16} /></span><div className="flex-1 min-w-0"><b className="block text-sm">Код конфига «{shared.name}»</b><span className="muted text-xs">Уже в буфере обмена — отправьте другу</span></div>
+          <button className="iconbtn" title="Закрыть" onClick={() => setShared(null)}><Icon n="close" s={14} /></button></div>
+        {shared.id ? <div className="sharecode">{shared.id.split('').map((ch, i) => <span key={i}>{ch}</span>)}</div>
+          : <div className="muted text-xs break-all font-mono p-2 rounded-xl" style={{ background: 'var(--chip)', maxHeight: 72, overflow: 'hidden' }}>{shared.code}</div>}
+        <div className="flex gap-2"><button className="btn btn-primary flex-1 flex items-center justify-center gap-2" onClick={() => { navigator.clipboard?.writeText(shared.id || shared.code); say('Скопировано') }}><Icon n="copy" s={15} />Скопировать ещё раз</button></div>
+        {!shared.id && <p className="muted text-[11px]">Короткий код не получился (сервер Asteria недоступен) — скопирован полный код, он тоже работает.</p>}
+      </div>}
+      <div className="card rounded-2xl p-5 flex flex-col gap-3">
+        <div className="font-bold">Импорт</div>
+        <div className="flex gap-2"><input className="flex-1 min-w-0" placeholder="Код друга (K7Q2XD или AST1:…)" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={async (e) => { if (e.key === 'Enter' && code.trim()) imp(await window.api.visDecode(code), 'код') }} />
+          <button className="btn" disabled={!code.trim()} onClick={async () => imp(await window.api.visDecode(code), 'код')}>Добавить</button></div>
+        <div className="flex gap-2 flex-wrap"><button className="btn !py-1.5 flex items-center gap-1.5" onClick={async () => imp(await window.api.visDecode(null), 'буфер обмена')}><Icon n="copy" s={14} />Из буфера обмена</button>
+          <button className="btn !py-1.5 flex items-center gap-1.5" onClick={async () => { const o = await window.api.visImport(); if (o) imp(o, 'файл') }}><Icon n="folder" s={14} />Из файла</button></div>
+        <Check on={binds} set={setBinds} label="Взять и клавиши функций из чужого конфига" />
+      </div>
+      <div className="card rounded-2xl p-5 flex flex-col gap-2">
+        <div className="font-bold mb-1">Новый конфиг</div>
+        {TEMPLATES.map((t) => <button key={t.name} className="text-left rounded-xl p-3 flex items-center gap-3 transition hover:brightness-110" style={{ background: 'var(--chip)' }} onClick={() => add(t.name, t.make())}>
+          <Icon n="plus" s={16} /><span className="flex-1"><b className="block text-sm">{t.name}</b><span className="muted text-xs">{t.desc}</span></span></button>)}
+      </div>
+    </div>
   </div>
 }
 
@@ -126,13 +213,15 @@ function Setting({ s, v, set }: { s: S; v: any; set: (v: any) => void }) {
   if (s.type === 'bool') return <Switch on={!!v} set={set} label={s.name} />
   if (s.type === 'num') return <Range label={s.name} min={s.min!} max={s.max!} step={s.step!} v={+v} set={set} show={(x) => (s.step! < 1 ? x.toFixed(2).replace(/0$/, '') : String(x))} />
   if (s.type === 'color') return <div className="flex items-center justify-between"><span className="text-sm">{s.name}</span><ColorPick value={String(v)} set={set} size="sm" /></div>
+  if (s.options!.length > 5) return <div className="flex items-center justify-between gap-3"><span className="text-sm">{s.name}</span><Dropdown value={String(v)} w={170} set={(x) => set(+x)} options={s.options!.map((o, i) => ({ value: String(i), label: o }))} /></div>
   return <div><div className="text-sm mb-1">{s.name}</div><div className="seg flex w-full">{s.options!.map((o, i) => <button key={o} className={'flex-1 ' + (+v === i ? 'on' : '')} onClick={() => set(i)}>{o}</button>)}</div></div>
 }
 
 /** small look-alike of the HUD over a game picture */
 function Preview({ c }: { c: VisCfg }) {
-  const t = c.theme, grad = `linear-gradient(90deg,${t.accent},${t.accent2})`, lines = t.hud === 1
-  const panel: React.CSSProperties = lines ? { background: `rgba(4,27,34,${t.bg * 0.6})`, borderRadius: 3, borderTop: `1.5px solid ${t.accent2}`, color: '#fff', fontSize: 10 * t.scale, padding: '4px 7px', fontWeight: 600 }
+  const t = c.theme, grad = `linear-gradient(90deg,${t.accent},${t.accent2})`, lines = t.hud === 1, minimal = t.hud === 2
+  const panel: React.CSSProperties = minimal ? { background: `rgba(15,13,18,${Math.max(0.4, t.bg) * 0.96})`, borderRadius: 7, border: '1px solid rgba(255,255,255,.08)', boxShadow: `inset 3px 0 0 -1.5px ${t.accent}`, color: '#fff', fontSize: 10 * t.scale, padding: '4px 8px', fontWeight: 600 }
+    : lines ? { background: `rgba(7,6,12,${Math.max(0.35, t.bg) * 0.92})`, borderRadius: 5, borderTop: `1px solid ${t.accent2}`, boxShadow: `inset 2px 0 0 0 ${t.accent}`, color: '#fff', fontSize: 10 * t.scale, padding: '4px 7px', fontWeight: 600 }
     : { background: `rgba(5,11,22,${Math.max(0.35, t.bg)})`, borderRadius: 6, border: `1px solid ${t.accent}cc`, boxShadow: t.shadow ? `0 0 10px ${t.accent}55` : 'none', color: '#fff', fontSize: 10 * t.scale, padding: '4px 7px', fontWeight: 600 }
   const on = (id: string) => c.modules[id]?.on
   return <div className="absolute inset-0 p-3 font-mono" style={{ fontFamily: 'ui-monospace,Consolas,monospace' }}>

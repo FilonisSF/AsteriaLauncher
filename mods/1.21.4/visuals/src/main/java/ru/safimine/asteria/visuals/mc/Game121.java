@@ -11,10 +11,22 @@ import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
+import net.minecraft.sound.SoundEvent;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import org.lwjgl.glfw.GLFW;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.client.gui.screen.ChatScreen;
+import net.minecraft.item.Items;
 import ru.safimine.asteria.visuals.Game;
+import ru.safimine.asteria.visuals.mc.mixin.BossBarAccessor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -72,6 +84,26 @@ final class Game121 implements Game {
     @Override public double motionY() { return c.player == null ? 0 : c.player.getVelocity().y; }
     @Override public boolean thirdPerson() { return !c.options.getPerspective().isFirstPerson(); }
     @Override public float bodyYaw(float pt) { return c.player == null ? 0 : MathHelper.lerp(pt, c.player.prevBodyYaw, c.player.bodyYaw); }
+    @Override public void sound(String id, float vol, float pitch) { c.getSoundManager().play(PositionedSoundInstance.master(SoundEvent.of(Identifier.of("asteria_visuals", id)), pitch, vol)); }
+    @Override public Object[] inventory() { Object[] o = new Object[36]; if (c.player == null) return o; for (int i = 0; i < 36; i++) { ItemStack s = c.player.getInventory().main.get(i); o[i] = s.isEmpty() ? null : s; } return o; }
+    @Override public Object offhand() { if (c.player == null) return null; ItemStack s = c.player.getOffHandStack(); return s.isEmpty() ? null : s; }
+    @Override public int selectedSlot() { return c.player == null ? 0 : c.player.getInventory().selectedSlot; }
+    @Override public int count(Object s) { return s == null ? 0 : ((ItemStack) s).getCount(); }
+    @Override public String itemId(Object s) { return s == null ? "" : Registries.ITEM.getId(((ItemStack) s).getItem()).toString(); }
+    @Override public float itemCooldown(Object s) { return s == null || c.player == null ? 0 : c.player.getItemCooldownManager().getCooldownProgress((ItemStack) s, 0); } // 1.21.2+: cooldown groups per stack
+    @Override public boolean chatOpen() { return c.currentScreen instanceof ChatScreen; }
+    @Override public Object totemStack() { return new ItemStack(Registries.ITEM.get(Identifier.of("minecraft", "totem_of_undying"))); }
+    @Override public int bossBars() { try { return ((BossBarAccessor) c.inGameHud.getBossBarHud()).asteria$bars().size(); } catch (Throwable t) { return 0; } }
+    @Override public java.util.List<Object> players() { java.util.List<Object> o = new ArrayList<>(); if (c.world == null) return o; for (Object p : c.world.getPlayers()) if (p != c.player) o.add(p); return o; }
+    @Override public String playerName(Object e) { return e instanceof net.minecraft.entity.player.PlayerEntity ? ((net.minecraft.entity.player.PlayerEntity) e).getGameProfile().getName() : ""; }
+    @Override public float yawOf(Object e) { return e instanceof Entity ? ((Entity) e).getYaw() : 0; }
+    @Override public boolean sprinting() { return c.player != null && c.player.isSprinting(); }
+    @Override public double[] targetBlock() {
+        if (c.world == null || !(c.crosshairTarget instanceof BlockHitResult) || c.crosshairTarget.getType() != HitResult.Type.BLOCK) return null;
+        BlockPos p = ((BlockHitResult) c.crosshairTarget).getBlockPos(); VoxelShape sh = c.world.getBlockState(p).getOutlineShape(c.world, p);
+        if (sh.isEmpty()) return null; Box b = sh.getBoundingBox();
+        return new double[]{p.getX() + b.minX, p.getY() + b.minY, p.getZ() + b.minZ, p.getX() + b.maxX, p.getY() + b.maxY, p.getZ() + b.maxZ};
+    }
     @Override public void openMenu() { c.setScreen(new AsteriaScreen()); }
     @Override public void closeMenu() { c.setScreen(null); }
 }

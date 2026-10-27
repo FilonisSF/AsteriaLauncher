@@ -16,7 +16,10 @@ import net.minecraft.entity.effect.StatusEffect;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import org.joml.Matrix4f;
+import net.minecraft.text.Style;
+import net.minecraft.text.Text;
 import ru.safimine.asteria.visuals.Gfx;
+import ru.safimine.asteria.visuals.V;
 
 /** 2D drawing for 1.20.x: DrawContext for text/items/textures, Tessellator (POSITION_COLOR triangle fans) for shapes. */
 final class Gfx120 implements Gfx {
@@ -37,13 +40,45 @@ final class Gfx120 implements Gfx {
         Tessellator.getInstance().draw();
         RenderSystem.enableCull();
     }
+    @Override public void strip(float[] xy, int[] col) {
+        ctx.draw();
+        Matrix4f mat = m.peek().getPositionMatrix();
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.enableBlend(); RenderSystem.defaultBlendFunc(); RenderSystem.disableCull();
+        BufferBuilder b = Tessellator.getInstance().getBuffer();
+        b.begin(VertexFormat.DrawMode.TRIANGLE_STRIP, VertexFormats.POSITION_COLOR);
+        for (int i = 0; i < col.length; i++) { int c = col[i]; b.vertex(mat, xy[i * 2], xy[i * 2 + 1], 0).color((c >> 16) & 255, (c >> 8) & 255, c & 255, (c >>> 24) & 255).next(); }
+        Tessellator.getInstance().draw();
+        RenderSystem.enableCull();
+    }
     @Override public void text(String s, float x, float y, int argb, boolean shadow) {
         if (((argb >>> 24) & 255) < 5) return;
         m.push(); m.translate(x, y, 0);
-        ctx.drawText(tr, s, 0, 0, argb, shadow);
+        ctx.drawText(tr, t(s), 0, 0, argb, shadow);
         m.pop();
     }
-    @Override public int width(String s) { return tr.getWidth(s); }
+    private static Identifier imgId; private static String imgKey;
+    /** loads (or reuses) the png as a texture under a fixed id */
+    private Identifier tex(String key, java.io.File png) {
+        if (key.equals(imgKey) && imgId != null) return imgId;
+        try (java.io.InputStream in = new java.io.FileInputStream(png)) {
+            net.minecraft.client.texture.NativeImage img = net.minecraft.client.texture.NativeImage.read(in);
+            Identifier id = new Identifier("asteria_visuals", "dyn/cover");
+            if (imgId != null) c.getTextureManager().destroyTexture(imgId);
+            c.getTextureManager().registerTexture(id, new net.minecraft.client.texture.NativeImageBackedTexture(img));
+            imgId = id; imgKey = key; return id;
+        } catch (Exception e) { imgKey = key; imgId = null; return null; }
+    }
+    @Override public boolean image(String key, java.io.File png, float x, float y, float w, float h) {
+        Identifier id = tex(key, png); if (id == null) return false;
+        m.push(); m.translate(x, y, 0); m.scale(w / 64f, h / 64f, 1); ctx.drawTexture(id, 0, 0, 0f, 0f, 64, 64, 64, 64); m.pop();
+        return true;
+    }
+    @Override public void textTop(String s, float x, float y, int argb) { m.push(); m.translate(0, 0, 300); text(s, x, y, argb, true); m.pop(); }
+    @Override public int width(String s) { return tr.getWidth(t(s)); }
+    /** our smooth TTF font (assets/asteria_visuals/font/ui.json) unless the theme switches it off */
+    private static final Identifier[] UI = new Identifier[8];
+    private static Text t(String s) { if (V.font <= 0) return Text.literal(s); int i = Math.min(7, V.font); if (UI[i] == null) UI[i] = new Identifier("asteria_visuals", "f" + i); return Text.literal(s).setStyle(Style.EMPTY.withFont(UI[i])); }
     @Override public void item(Object stack, int x, int y) { ctx.drawItem((ItemStack) stack, x, y); }
     @Override public boolean effectIcon(Object type, int x, int y, int size) {
         Sprite sp = c.getStatusEffectSpriteManager().getSprite((StatusEffect) type);

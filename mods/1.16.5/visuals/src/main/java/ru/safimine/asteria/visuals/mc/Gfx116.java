@@ -14,9 +14,17 @@ import net.minecraft.entity.effect.StatusEffect;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Matrix4f;
+import net.minecraft.text.LiteralText;
+import net.minecraft.text.Style;
+import net.minecraft.text.Text;
 import ru.safimine.asteria.visuals.Gfx;
+import ru.safimine.asteria.visuals.V;
 
-/** 2D drawing for 1.16.5: MatrixStack + Tessellator (POSITION_COLOR triangle fans); items follow the RenderSystem matrix. */
+/**
+ * 2D drawing for 1.16.5: MatrixStack + Tessellator (POSITION_COLOR triangle fans). Transforms live only in the MatrixStack:
+ * the fixed-function GL matrix would apply them a second time to everything. Items are the one exception (they ignore the
+ * MatrixStack), so the stack's matrix is copied onto the GL matrix just for them.
+ */
 final class Gfx116 implements Gfx {
     private final MatrixStack m;
     private final MinecraftClient c = MinecraftClient.getInstance();
@@ -26,19 +34,55 @@ final class Gfx116 implements Gfx {
     @Override public void poly(float[] xy, int[] col) {
         Matrix4f mat = m.peek().getModel();
         RenderSystem.disableTexture(); RenderSystem.enableBlend(); RenderSystem.defaultBlendFunc(); RenderSystem.shadeModel(7425); RenderSystem.disableCull();
+        RenderSystem.disableAlphaTest(); // the GUI alpha test (> 0.1) would drop faint fills, hovers and soft shadows
         BufferBuilder b = Tessellator.getInstance().getBuffer();
         b.begin(6, VertexFormats.POSITION_COLOR); // GL_TRIANGLE_FAN
         for (int i = 0; i < col.length; i++) { int c = col[i]; b.vertex(mat, xy[i * 2], xy[i * 2 + 1], 0).color((c >> 16) & 255, (c >> 8) & 255, c & 255, (c >>> 24) & 255).next(); }
         Tessellator.getInstance().draw();
-        RenderSystem.shadeModel(7424); RenderSystem.enableTexture(); RenderSystem.enableCull();
+        RenderSystem.shadeModel(7424); RenderSystem.enableTexture(); RenderSystem.enableCull(); RenderSystem.enableAlphaTest();
+    }
+    @Override public void strip(float[] xy, int[] col) {
+        Matrix4f mat = m.peek().getModel();
+        RenderSystem.disableTexture(); RenderSystem.enableBlend(); RenderSystem.defaultBlendFunc(); RenderSystem.shadeModel(7425); RenderSystem.disableCull(); RenderSystem.disableAlphaTest();
+        BufferBuilder b = Tessellator.getInstance().getBuffer();
+        b.begin(5, VertexFormats.POSITION_COLOR); // GL_TRIANGLE_STRIP
+        for (int i = 0; i < col.length; i++) { int c = col[i]; b.vertex(mat, xy[i * 2], xy[i * 2 + 1], 0).color((c >> 16) & 255, (c >> 8) & 255, c & 255, (c >>> 24) & 255).next(); }
+        Tessellator.getInstance().draw();
+        RenderSystem.shadeModel(7424); RenderSystem.enableTexture(); RenderSystem.enableCull(); RenderSystem.enableAlphaTest();
     }
     @Override public void text(String s, float x, float y, int argb, boolean shadow) {
         if (((argb >>> 24) & 255) < 5) return;
         RenderSystem.enableBlend();
-        if (shadow) tr.drawWithShadow(m, s, x, y, argb); else tr.draw(m, s, x, y, argb);
+        if (shadow) tr.drawWithShadow(m, t(s), x, y, argb); else tr.draw(m, t(s), x, y, argb);
     }
-    @Override public int width(String s) { return tr.getWidth(s); }
-    @Override public void item(Object stack, int x, int y) { c.getItemRenderer().renderInGuiWithOverrides((ItemStack) stack, x, y); }
+    private static Identifier imgId; private static String imgKey;
+    /** loads (or reuses) the png as a texture under a fixed id */
+    private Identifier tex(String key, java.io.File png) {
+        if (key.equals(imgKey) && imgId != null) return imgId;
+        try (java.io.InputStream in = new java.io.FileInputStream(png)) {
+            net.minecraft.client.texture.NativeImage img = net.minecraft.client.texture.NativeImage.read(in);
+            Identifier id = new Identifier("asteria_visuals", "dyn/cover");
+            if (imgId != null) c.getTextureManager().destroyTexture(imgId);
+            c.getTextureManager().registerTexture(id, new net.minecraft.client.texture.NativeImageBackedTexture(img));
+            imgId = id; imgKey = key; return id;
+        } catch (Exception e) { imgKey = key; imgId = null; return null; }
+    }
+    @Override public boolean image(String key, java.io.File png, float x, float y, float w, float h) {
+        Identifier id = tex(key, png); if (id == null) return false;
+        c.getTextureManager().bindTexture(id); RenderSystem.enableBlend(); RenderSystem.color4f(1, 1, 1, 1);
+        m.push(); m.translate(x, y, 0); m.scale(w / 64f, h / 64f, 1); DrawableHelper.drawTexture(m, 0, 0, 0f, 0f, 64, 64, 64, 64); m.pop();
+        return true;
+    }
+    @Override public void textTop(String s, float x, float y, int argb) { m.push(); m.translate(0, 0, 300); text(s, x, y, argb, true); m.pop(); }
+    @Override public int width(String s) { return tr.getWidth(t(s)); }
+    /** our smooth TTF font (assets/asteria_visuals/font/ui.json) unless the theme switches it off */
+    private static final Identifier[] UI = new Identifier[8];
+    private static Text t(String s) { if (V.font <= 0) return new LiteralText(s); int i = Math.min(7, V.font); if (UI[i] == null) UI[i] = new Identifier("asteria_visuals", "f" + i); return new LiteralText(s).setStyle(Style.EMPTY.withFont(UI[i])); }
+    @Override public void item(Object stack, int x, int y) {
+        RenderSystem.pushMatrix(); RenderSystem.multMatrix(m.peek().getModel());
+        c.getItemRenderer().renderInGuiWithOverrides((ItemStack) stack, x, y);
+        RenderSystem.popMatrix();
+    }
     @Override public boolean effectIcon(Object type, int x, int y, int size) {
         Sprite sp = c.getStatusEffectSpriteManager().getSprite((StatusEffect) type);
         c.getTextureManager().bindTexture(sp.getAtlas().getId());
@@ -56,9 +100,8 @@ final class Gfx116 implements Gfx {
     }
     @Override public void push(float x, float y, float s) {
         m.push(); m.translate(x, y, 0); m.scale(s, s, 1f);
-        RenderSystem.pushMatrix(); RenderSystem.translatef(x, y, 0); RenderSystem.scalef(s, s, 1f);
     }
-    @Override public void pop() { m.pop(); RenderSystem.popMatrix(); }
+    @Override public void pop() { m.pop(); }
     @Override public void scissor(float x, float y, float w, float h) {
         Window win = c.getWindow(); double k = win.getScaleFactor();
         RenderSystem.enableScissor((int) (x * k), (int) (win.getFramebufferHeight() - (y + h) * k), Math.max(0, (int) (w * k)), Math.max(0, (int) (h * k)));

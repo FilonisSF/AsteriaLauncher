@@ -11,4 +11,11 @@ news-spawners.jpg   — «Авто-спавнеры»
 news-apiary.jpg     — «Авто-пасеки»
 news-about.jpg      — «О сервере»
 
+vis-<id>.jpg        — картинки функций во вкладке «Визуалы»: vis-watermark, vis-arraylist, vis-keystrokes, vis-info, vis-armor,
+                      vis-effects, vis-targethud, vis-notifications, vis-frame, vis-crosshair, vis-trails, vis-jumpcircles, vis-ambient,
+                      vis-chinahat, vis-worldtime, vis-fog, vis-fullbright, vis-targetesp, vis-hitparticles, vis-hitcolor, vis-killeffect,
+                      vis-swing, vis-zoom, vis-viewmodel, vis-jumpparticles, vis-particletrail, vis-sonar, vis-halo, vis-dash,
+                      vis-pet, vis-damagenumbers, vis-sounds, vis-blockhighlight, vis-island, vis-hotbar, vis-inventory, vis-totems,
+                      vis-cooldowns, vis-music, vis-skycolor, vis-totem, vis-camera, vis-aspect, vis-nameprotect (можно .png / .webp). Промпты — в PROMPTS_RU.md.
+
 Без своих картинок лаунчер показывает официальные HD-арты Minecraft (скачиваются автоматически).

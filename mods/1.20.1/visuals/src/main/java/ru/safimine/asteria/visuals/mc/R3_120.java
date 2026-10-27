@@ -2,6 +2,7 @@ package ru.safimine.asteria.visuals.mc;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.util.Identifier;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.Tessellator;
@@ -29,8 +30,19 @@ final class R3_120 implements Fx.R3 {
     @Override public void v(double x, double y, double z, int c) {
         b.vertex(mat, (float) (x - cam.x), (float) (y - cam.y), (float) (z - cam.z)).color((c >> 16) & 255, (c >> 8) & 255, c & 255, (c >>> 24) & 255).next();
     }
+    @Override public void beginTex(String texture, boolean depth) {
+        RenderSystem.setShader(GameRenderer::getPositionTexColorProgram);
+        RenderSystem.setShaderTexture(0, new Identifier("asteria_visuals", "textures/fx/" + texture + ".png"));
+        RenderSystem.enableBlend(); RenderSystem.blendFunc(com.mojang.blaze3d.platform.GlStateManager.SrcFactor.SRC_ALPHA, com.mojang.blaze3d.platform.GlStateManager.DstFactor.ONE);
+        RenderSystem.disableCull(); RenderSystem.depthMask(false);
+        if (depth) RenderSystem.enableDepthTest(); else RenderSystem.disableDepthTest();
+        b.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE_COLOR);
+    }
+    @Override public void vt(double x, double y, double z, float u, float v, int c) {
+        b.vertex(mat, (float) (x - cam.x), (float) (y - cam.y), (float) (z - cam.z)).texture(u, v).color((c >> 16) & 255, (c >> 8) & 255, c & 255, (c >>> 24) & 255).next();
+    }
     @Override public void end() {
-        Tessellator.getInstance().draw();
+        Tessellator.getInstance().draw(); RenderSystem.defaultBlendFunc();
         RenderSystem.depthMask(true); RenderSystem.enableDepthTest(); RenderSystem.enableCull(); RenderSystem.lineWidth(1f);
     }
     @Override public double[] cam() { return new double[]{cam.x, cam.y, cam.z}; }

@@ -1,0 +1,3 @@
+Particle / circle / hotbar / trinket textures and sounds in this folder come from Soup Visuals by Padej_
+(https://modrinth.com/mod/soup-api), used with the author's permission. See LICENSE_SoupVisuals.txt.
+Everything else in Asteria Visuals is (c) SafiMine.
