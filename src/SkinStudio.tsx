@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { ReactNode, useEffect, useRef, useState } from 'react'
 import Skin3D, { Hit } from './Skin3D'
 import ColorWheel from './ColorWheel'
 import { Check, ColorPick } from './ui'
@@ -28,7 +28,7 @@ const DESIGN: Design = { bg: 'gradient', c1: '#0b1f3a', c2: '#0e7490', img: '', 
 
 /** Skin / cape editor: paint right on the 3D model or on the 2D unwrap; cape designer (background, image, border, HD). */
 /** pick the part of a picture that goes on the cape: a frame in the cape's proportions (10:16) you move and resize */
-function CropBox({ src, aspect, onDone, onCancel }: { src: string; aspect: number; onDone: (png: string) => void; onCancel: () => void }) {
+function CropBox({ src, aspect, onDone, onCancel, title = 'Выберите область для плаща', extra, okText = 'Использовать область' }: { src: string; aspect: number; onDone: (png: string) => void; onCancel: () => void; title?: string; extra?: ReactNode; okText?: string }) {
   const [im, setIm] = useState<HTMLImageElement | null>(null), [sel, setSel] = useState({ x: 0, y: 0, w: 0 }), drag = useRef<{ mode: 'move' | 'size'; px: number; py: number; s: typeof sel } | null>(null)
   useEffect(() => { const i = new Image(); i.onload = () => { setIm(i); const w = Math.min(i.width, i.height * aspect) * 0.8; setSel({ x: (i.width - w) / 2, y: (i.height - w / aspect) / 2, w }) }; i.src = src }, [src])
   const BOX = 520, k = im ? Math.min(BOX / im.width, BOX / im.height) : 1, h = sel.w / aspect
@@ -42,14 +42,34 @@ function CropBox({ src, aspect, onDone, onCancel }: { src: string; aspect: numbe
     const x = c.getContext('2d')!; x.imageSmoothingQuality = 'high'; x.drawImage(im, sel.x, sel.y, sel.w, h, 0, 0, W, H); onDone(c.toDataURL('image/png')) }
   return <div className="fixed inset-0 z-[90] flex items-center justify-center fade" style={{ background: 'rgba(2,8,14,.8)', backdropFilter: 'blur(6px)' }}>
     <div className="glass rounded-3xl p-5 flex flex-col gap-3" style={{ width: BOX + 40 }}>
-      <div><div className="text-lg font-extrabold">Выберите область для плаща</div><div className="muted text-sm">Двигайте рамку мышью, тяните за угол или крутите колесо, чтобы изменить размер</div></div>
+      <div><div className="text-lg font-extrabold">{title}</div><div className="muted text-sm">Двигайте рамку мышью, тяните за угол или крутите колесо, чтобы изменить размер</div></div>
       <div className="relative mx-auto checker rounded-xl overflow-hidden select-none" style={{ width: im ? im.width * k : BOX, height: im ? im.height * k : BOX, touchAction: 'none' }} onPointerMove={move} onPointerUp={() => (drag.current = null)} onWheel={wheel}>
         {im && <><img src={src} draggable={false} style={{ width: im.width * k, height: im.height * k, display: 'block' }} />
           <div className="absolute cursor-move" onPointerDown={down('move')} style={{ left: sel.x * k, top: sel.y * k, width: sel.w * k, height: h * k, boxShadow: '0 0 0 9999px rgba(0,0,0,.55)', outline: '2px solid var(--a2)', borderRadius: 4 }}>
             <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.25) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.25) 1px,transparent 1px)', backgroundSize: '33.33% 33.33%' }} />
             <div className="absolute -right-2 -bottom-2 w-4 h-4 rounded-full cursor-nwse-resize" onPointerDown={down('size')} style={{ background: 'var(--a2)', boxShadow: '0 0 0 2px #fff' }} /></div></>}</div>
-      <div className="flex gap-2 justify-end"><button className="btn" onClick={onCancel}>Отмена</button><button className="btn btn-primary" disabled={!im} onClick={done}>Использовать область</button></div>
+      <div className="flex gap-2 justify-end flex-wrap">{extra}<button className="btn" onClick={onCancel}>Отмена</button><button className="btn btn-primary" disabled={!im} onClick={done}>{okText}</button></div>
     </div></div>
+}
+const loadIm = (s: string) => new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = s })
+/** a 512x256 cape from two pictures: the outside and the inside ('mirror' = the outside mirrored and darker, 'dark' = one dark colour) */
+export async function buildCape(front: string, back: string): Promise<string> {
+  const K = 8, c = document.createElement('canvas'); c.width = 64 * K; c.height = 32 * K; const x = c.getContext('2d')!; x.imageSmoothingQuality = 'high'
+  const f = await loadIm(front), W = 10 * K, H = 16 * K
+  x.drawImage(f, K, K, W, H)
+  if (back === 'mirror' || back === 'dark') { x.save(); x.translate(12 * K + W, K); x.scale(-1, 1); x.drawImage(f, 0, 0, W, H); x.restore(); x.fillStyle = back === 'dark' ? 'rgba(4,10,16,.82)' : 'rgba(0,0,0,.3)'; x.fillRect(12 * K, K, W, H) }
+  else x.drawImage(await loadIm(back), 12 * K, K, W, H)
+  // edges: the outer pixels of the outside picture stretched over the cape's thickness
+  x.drawImage(c, K, K, 1, H, 0, K, K, H); x.drawImage(c, K + W - 1, K, 1, H, 11 * K, K, K, H)
+  x.drawImage(c, K, K, W, 1, K, 0, W, K); x.drawImage(c, K, K + H - 1, W, 1, 11 * K, 0, W, K)
+  return c.toDataURL('image/png')
+}
+/** any picture -> cape: pick the part for the outside, then the part for the inside */
+export function CapeMaker({ src, onDone, onCancel }: { src: string; onDone: (png: string) => void; onCancel: () => void }) {
+  const [front, setFront] = useState('')
+  if (!front) return <CropBox src={src} aspect={10 / 16} title="Шаг 1 из 2 — внешняя сторона плаща" okText="Дальше" onCancel={onCancel} onDone={setFront} />
+  return <CropBox src={src} aspect={10 / 16} title="Шаг 2 из 2 — внутренняя сторона" okText="Готово" onCancel={onCancel} onDone={async (b) => onDone(await buildCape(front, b))}
+    extra={<><button className="btn" onClick={async () => onDone(await buildCape(front, 'mirror'))}>Как снаружи</button><button className="btn" onClick={async () => onDone(await buildCape(front, 'dark'))}>Однотонная</button></>} />
 }
 export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClose, pickImage }: {
   mode: 'skin' | 'cape'; src: string; skin: string; cape?: string; slim: boolean; onSave: (png: string) => void; onClose: () => void; pickImage: () => Promise<string | null> }) {
@@ -166,7 +186,7 @@ export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClos
   const setRes = (kk: number) => { snap(); const c = cv.current!, old = document.createElement('canvas'); old.width = c.width; old.height = c.height; old.getContext('2d')!.drawImage(c, 0, 0)
     c.width = 64 * kk; c.height = 32 * kk; const x = ctx(); x.imageSmoothingEnabled = false; x.drawImage(old, 0, 0, c.width, c.height); setK(kk); flush() }
   const upd = (p: Partial<Design>) => setD((o) => ({ ...o, ...p }))
-  const [cropSrc, setCropSrc] = useState('')
+  const [cropSrc, setCropSrc] = useState(''), [makeSrc, setMakeSrc] = useState('')
 
   const view = { showOver: !isCape, dimOver: layer === 'base', showCape: isCape, animate: false }
   const guideList = isCape ? CAPE_GUIDES : SKIN_GUIDES, mapW = isCape ? 296 : 256, mapH = mapW * TH / TW
@@ -226,10 +246,11 @@ export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClos
             <p className="muted text-xs">Картинка лучше всего смотрится в HD: при наложении на классический плащ разрешение само переключится на 512×256. После применения можно дорисовать детали кистью.</p></div>}
         </div>
       </div>
+      {makeSrc && <CapeMaker src={makeSrc} onCancel={() => setMakeSrc('')} onDone={(png) => { setMakeSrc(''); const im = new Image(); im.onload = () => { snap(); const c = cv.current!; c.width = 512; c.height = 256; const x = ctx(); x.clearRect(0, 0, 512, 256); x.drawImage(im, 0, 0); setK(8); flush() }; im.src = png }} />}
       {cropSrc && <CropBox src={cropSrc} aspect={10 / 16} onCancel={() => setCropSrc('')} onDone={(png) => { setCropSrc(''); const nd = { ...d, img: png, fit: 'cover' as const, scale: 100, ox: 0, oy: 0, rot: 0 }; setD(nd); compose(nd, Math.max(k, 8)) }} />}
       <div className="flex gap-2 justify-end items-center"><span className="muted text-sm mr-auto">{isCape ? 'Плащ увидят все игроки AsteriaLauncher.' : 'Скин увидят все игроки AsteriaLauncher; для лицензии — ещё и на всех серверах (кнопка «Применить»).'}</span>
         <button className="btn flex items-center gap-2" title={isCape ? 'Готовая развёртка плаща (64×32 или HD) или любая картинка — выберете область' : 'Готовый скин 64×64 или HD'} onClick={async () => { const p = await pickImage(); if (!p) return
-          const im = new Image(); im.onload = () => { if (Math.abs(im.width / im.height - TW / TH) < 0.02) { snap(); const kk = Math.max(1, Math.round(im.width / 64)), c = cv.current!; c.width = TW * kk; c.height = TH * kk; const x = ctx(); x.imageSmoothingEnabled = false; x.clearRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height); setK(kk); flush() } else if (isCape) setCropSrc(p) }; im.src = p }}><Icon n="upload" s={16} />Загрузить PNG</button>
+          const im = new Image(); im.onload = () => { if (Math.abs(im.width / im.height - TW / TH) < 0.02) { snap(); const kk = Math.max(1, Math.round(im.width / 64)), c = cv.current!; c.width = TW * kk; c.height = TH * kk; const x = ctx(); x.imageSmoothingEnabled = false; x.clearRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height); setK(kk); flush() } else if (isCape) setMakeSrc(p) }; im.src = p }}><Icon n="upload" s={16} />Загрузить PNG</button>
         <a className="btn flex items-center gap-2" href={url} download={mode + '.png'} title="Сохранить файл на компьютер"><Icon n="download" s={16} />Скачать</a>
         <button className="btn" onClick={onClose}>Отмена</button><button className="btn btn-primary" onClick={() => onSave(cv.current!.toDataURL('image/png'))}>Сохранить</button></div>
     </div>

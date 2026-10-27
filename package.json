@@ -1,6 +1,6 @@
 {
   "name": "asteria-launcher",
-  "version": "1.5.6",
+  "version": "1.5.7",
   "main": "electron/main.cjs",
   "private": true,
   "type": "module",

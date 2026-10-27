@@ -7,9 +7,9 @@ import defConf from './config.default.json'
 import avatar from './assets/avatar.png'
 import Fx from './Fx'
 import Skin3D from './Skin3D'
-import SkinStudio from './SkinStudio'
+import SkinStudio, { CapeMaker } from './SkinStudio'
 import GameSettings from './GameSettings'
-import VisualsTab from './VisualsTab'
+import VisualsTab, { visDefaults, PET_PIC, PET_FILES } from './VisualsTab'
 import { EventsBlock } from './Clans'
 import Versions, { ALL_VERSIONS, ASTERIA, fabricFor } from './Versions'
 import { VINFO } from './versionInfo'
@@ -44,7 +44,10 @@ function useImg(urls: string[]) { // remote images go through the main process (
     return () => { off = true; clearTimeout(tm) } }, [key, n])
   return src
 }
-const Avatar = ({ name, s = 32 }: { name: string; s?: number }) => { const src = useImg([`https://mc-heads.net/avatar/${name}/64`, `https://minotar.net/avatar/${name}/64`])
+/** a player's head: from the skin set in the launcher when there is one (any resolution), otherwise by nick */
+const Avatar = ({ name, s = 32, skin }: { name: string; s?: number; skin?: string }) => { const src = useImg(skin ? [] : [`https://mc-heads.net/avatar/${name}/64`, `https://minotar.net/avatar/${name}/64`])
+  if (skin) { const bg = (x: number) => ({ position: 'absolute' as const, inset: 0, backgroundImage: `url(${skin})`, backgroundSize: '800% 800%', backgroundPosition: `${x / 56 * 100}% ${8 / 56 * 100}%`, imageRendering: 'pixelated' as const })
+    return <span style={{ position: 'relative', display: 'inline-block', flex: 'none', width: s, height: s, borderRadius: s / 4, overflow: 'hidden' }}><span style={bg(8)} /><span style={bg(40)} /></span> }
   return src ? <img src={src} style={{ width: s, height: s, borderRadius: s / 4 }} /> : <div style={{ width: s, height: s, borderRadius: s / 4, background: 'linear-gradient(135deg,var(--a1),var(--a2))' }} className="flex items-center justify-center text-white font-bold">{name[0]?.toUpperCase()}</div> }
 const Pic = ({ src, cls, alt = '' }: { src?: string; cls: string; alt?: string }) => { const d = useImg(src ? [src] : []); return d ? <img src={d} className={cls} alt={alt} /> : <div className={cls + ' flex items-center justify-center card'}><Gem s={22} /></div> }
 const Spark = ({ data }: { data: number[] }) => { if (data.length < 2) return null; const mx = Math.max(...data, 1), mn = Math.min(...data), pts = data.map((v, i) => `${(i / (data.length - 1)) * 100},${28 - ((v - mn) / Math.max(1, mx - mn)) * 24}`).join(' ')
@@ -61,6 +64,23 @@ const VImg = ({ v, cls }: { v: string; cls: string }) => { if (OVR['v-' + v]) re
 function NumInput({ v, on }: { v: number; on: (n: number) => void }) { // free typing, no spinner arrows
   const [txt, setTxt] = useState(String(v)); useEffect(() => { if (+txt !== v) setTxt(String(v)) }, [v])
   return <input inputMode="numeric" className="w-24 text-center" value={txt} onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setTxt(d); if (d) on(+d) }} onBlur={() => { if (!txt || +txt < 320) setTxt(String(v)) }} />
+}
+/** the pet right on the Skins page: who, size, on / off (same settings as Visuals -> Pet) */
+function PetCard({ face }: { face: string }) {
+  const [v, setV] = useState<any>(null)
+  useEffect(() => { window.api.visGet().then((x: any) => { const d = visDefaults() as any; const m = x || d; m.modules = m.modules || {}; m.modules.pet = { ...d.modules.pet, ...(m.modules.pet || {}), s: { ...d.modules.pet.s, ...(m.modules.pet?.s || {}) } }; setV(m) }) }, [])
+  if (!v) return null
+  const p = v.modules.pet, put = (patch: any) => { const n = { ...v, modules: { ...v.modules, pet: { ...p, ...patch, s: { ...p.s, ...(patch.s || {}) } } } }; setV(n); window.api.visSet(n) }
+  const names = ['Котик', 'Призрак', 'Огонёк', 'Кристалл', 'Атом', 'Цветок', 'Пончик', 'Мячик', 'Банан', 'Мини-я']
+  return <div className="card rounded-3xl p-5 flex flex-col gap-3">
+    <div className="flex items-center justify-between"><div><b className="text-lg">Питомец</b><div className="muted text-xs">Бегает рядом с вами в игре. Его видят все игроки Asteria</div></div><Switch on={!!p.on} set={(on) => put({ on })} /></div>
+    <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', opacity: p.on ? 1 : 0.5 }}>{names.map((n, i) => { const pic = PET_PIC[PET_FILES[i]], sel = +p.s.kind === i
+      return <button key={n} onClick={() => put({ on: true, s: { kind: i } })} className="rounded-xl flex flex-col items-center gap-1 p-1.5 transition hover:-translate-y-0.5" style={{ background: sel ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: sel ? '#fff' : undefined }}>
+        {pic ? <img src={pic} className="w-10 h-10 object-contain" draggable={false} /> : <span className="w-10 h-10 rounded-lg" style={{ backgroundImage: `url(${face})`, backgroundSize: '800% 800%', backgroundPosition: `${8 / 56 * 100}% ${8 / 56 * 100}%`, imageRendering: 'pixelated' }} />}
+        <span className="text-[10.5px] font-semibold truncate w-full text-center">{n}</span></button> })}</div>
+    <label className="text-sm"><div className="flex justify-between"><span>Размер</span><b>{(+p.s.size).toFixed(1)}</b></div><input type="range" className="w-full" min={0.5} max={2} step={0.1} value={+p.s.size} onChange={(e) => put({ s: { size: +e.target.value } })} /></label>
+    <Switch on={p.s.others !== false} set={(x) => put({ s: { others: x } })} label="Показывать питомцев других игроков Asteria" />
+  </div>
 }
 /** a picture as a data: URL (bigger assets come as file URLs; the launcher saves data: URLs) */
 const toData = async (u: string): Promise<string> => u.startsWith('data:') ? u : await fetch(u).then((r) => r.blob()).then((b) => new Promise<string>((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsDataURL(b) }))
@@ -146,15 +166,15 @@ export default function App() {
     const paths = [...e.dataTransfer.files].map((f) => api.filePath(f)).filter(Boolean); if (paths.length) upload(paths) }
   const reqId = useRef(0), search = async () => { const id = ++reqId.current; setBusy('s'); const r = kind === 'mod' ? await api.modsSearch({ q, ver, sort, cat }) : await api.pkSearch({ q, ver, sort, kind }); if (id !== reqId.current) return; setHits(r); setBusy('') }
   useEffect(() => { (async () => { const st1 = (pct: number, k: string) => setBoot({ pct, msg: tr(localStorage.getItem('lang') ?? 'ru', k) })
-    st1(10, 'boot1'); api.onStatus((d: any) => { setSt(d); setHist((h) => [...h.slice(-29), d.players]) }); api.onProgress(setProg); api.onGame(setRunning); api.onUpdate(setUpd); api.onApi?.(setApiSt)
+    st1(10, 'boot1'); api.onStatus((d: any) => { setSt(d); setHist((h) => [...h.slice(-29), d.players]) }); api.onProgress(setProg); api.onGame(setRunning); api.onUpdate(setUpd); addEventListener('focus', () => api.checkUpdate?.()); api.onApi?.(setApiSt)
     setCfg(await api.getSettings()); api.config().then((c: any) => c && setConf({ ...defConf, ...c })); api.tgFeed('safimine_grief').then(setFeed); api.versionArt().then((a: any) => { ART = a || {}; setArtTick((x) => x + 1) }).catch(() => {}); api.profList().then(setProfiles); api.apiInfo?.().then(setApiSt)
     st1(40, 'accounts'); await refresh(); st1(65, 'boot2'); setSys(await api.sysInfo()); setStats(await api.stats())
     st1(85, 'boot3'); await new Promise((r) => setTimeout(r, 600)); st1(100, 'boot4') })() }, [])
   useEffect(() => { api.stats().then(setStats) }, [running])
   // "Download" installs the version completely (Java, libraries, mods, visuals), then "Play"; "Update" when newer mods came with the launcher
   const [vst, setVst] = useState<any>({ installed: true }), [dling, setDling] = useState(false)
-  const [miniSkin, setMiniSkin] = useState<string | null>(null)
-  useEffect(() => { api.miniGet?.().then(setMiniSkin).catch(() => {}) }, [])
+  const [miniSkin, setMiniSkin] = useState<string | null>(null), [capeSrc, setCapeSrc] = useState('')
+  useEffect(() => { api.miniGet?.().then(setMiniSkin).catch(() => {}); api.skinCurrent?.().then((d: string | null) => d && setSkin((s) => s || d)).catch(() => {}) }, [])
   const refreshVst = () => api.verStatus?.(ver).then(setVst).catch(() => {})
   useEffect(() => { refreshVst() }, [ver, running])
   // newer mods / visuals for an installed version are fetched quietly — nothing to press
@@ -203,11 +223,11 @@ export default function App() {
   const pickCape = async (n: string, u: string) => { setCape(n); api.saveTexture({ data: await toData(u), kind: 'cape' }) }
   // your own capes and skins: kept in a list, any of them can be put on again or removed
   const [myCapes, setMyCapesS] = useState<Saved[]>(() => { const l = readList('myCapes'); try { const old = localStorage.getItem('ccape'); if (old && !l.length) { l.push({ id: 'custom', data: old }); writeList('myCapes', l) } } catch {} return l })
-  const [mySkins, setMySkinsS] = useState<Saved[]>(() => readList('mySkins'))
+  const [mySkins, setMySkinsS] = useState<Saved[]>(() => readList('mySkins')), [presetSkin, setPresetSkin] = usePref('presetSkin', '')
   const myCapesUrl = (id: string) => myCapes.find((c) => c.id === id)?.data
   const setMyCapes = (l: Saved[]) => { setMyCapesS(l); writeList('myCapes', l) }, setMySkins = (l: Saved[]) => { setMySkinsS(l); writeList('mySkins', l) }
   const addCape = async (data: string) => { const it = { id: 'my' + Date.now().toString(36), data }; setMyCapes([it, ...myCapes]); setCape(it.id); const r = await api.saveTexture({ data, kind: 'cape' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
-  const addSkin = (data: string) => { if (!mySkins.some((x) => x.data === data)) setMySkins([{ id: 'my' + Date.now().toString(36), data }, ...mySkins]) }
+  const addSkin = (data: string) => { setPresetSkin(''); if (!mySkins.some((x) => x.data === data)) setMySkins([{ id: 'my' + Date.now().toString(36), data }, ...mySkins]) }
   const useSkin = async (data: string) => { setSkin(data); const r = await api.saveTexture({ data, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
   const play = async (v: string, join = false, server?: any) => { if (!me) { setAddOpen(true); return say('Сначала добавьте аккаунт', 'info') } let r: any; try { r = await api.launch({ version: v, join, lang, server }) } catch (e: any) { r = { error: 'Не удалось запустить: ' + (e?.message || e) } } if (r?.warn) say(r.warn, 'info'); if (r?.error) say(r.error, 'err') }
   const install = async (slug: string) => { setBusy(slug)
@@ -254,9 +274,9 @@ export default function App() {
               <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--line)' }}><span className="text-sm">Свой цвет</span><ColorPick value={custom} set={(v) => { setCustom(v); setAccent('custom') }} size="sm" /></div></div>}</div>
           <button className={'topchip ' + (sm ? '!bg-[var(--a1)] !text-white' : '')} title={t('streamer')} onClick={() => { setStreamer(sm ? '0' : '1'); say(sm ? 'Режим стримера выключен' : 'Режим стримера: ник и IP скрыты') }}><Icon n="eye" s={16} /></button>
           <button className="topchip" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}><Icon n={theme === 'dark' ? 'sun' : 'moon'} s={16} /></button>
-          <div className="relative"><button className="topchip !pl-1" onClick={() => setMenu(menu === 'acct' ? '' : 'acct')}>{me ? <Avatar name={sm ? 'Steve' : me.name} s={26} /> : <Icon n="user" s={18} />}{me ? nick(me.name) : t('noAcc')}<Icon n="chevron" s={14} /></button>
+          <div className="relative"><button className="topchip !pl-1" onClick={() => setMenu(menu === 'acct' ? '' : 'acct')}>{me ? <Avatar name={sm ? 'Steve' : me.name} s={26} skin={sm ? undefined : skin || undefined} /> : <Icon n="user" s={18} />}{me ? nick(me.name) : t('noAcc')}<Icon n="chevron" s={14} /></button>
             {menu === 'acct' && <div className="pop z-50" style={{ width: 280 }}>{acc.list.map((a) => <div key={a.id} className={'row ' + (a.id === acc.active ? 'sel' : '')}><button className="flex items-center gap-2 flex-1 text-left" onClick={async () => { await api.selectAccount(a.id); refresh(); setMenu('') }}>
-              <Avatar name={sm ? 'Steve' : a.name} s={30} /><span className="flex-1">{nick(a.name)}<span className="muted text-xs block">{a.type === 'microsoft' ? 'Microsoft' : 'Offline'}</span></span>{a.id === acc.active && <Icon n="check" s={16} />}</button>
+              <Avatar name={sm ? 'Steve' : a.name} s={30} skin={!sm && a.id === acc.active ? skin || undefined : undefined} /><span className="flex-1">{nick(a.name)}<span className="muted text-xs block">{a.type === 'microsoft' ? 'Microsoft' : 'Offline'}</span></span>{a.id === acc.active && <Icon n="check" s={16} />}</button>
               <button title={t('logout')} className="iconbtn" onClick={async () => { await api.removeAccount(a.id); refresh() }}><Icon n="trash" s={15} /></button></div>)}
               <button className="row" onClick={() => { setAddOpen(true); setMenu('') }}><Icon n="plus" s={18} />{t('addAccount')}</button>
               <button className="row" onClick={() => { setTab('skins'); setMenu('') }}><Icon n="skins" s={18} />{t('changeSkin')}</button></div>}</div>
@@ -272,7 +292,7 @@ export default function App() {
             <Icon n={i} s={19} /><span className="lbl">{SHORT[k]}</span></button>)}</div>
           <MiniPlayer />
           <button className="usercard" onClick={() => me ? setTab('profile') : setAddOpen(true)}>
-            {me ? <Avatar name={sm ? 'Steve' : me.name} s={36} /> : <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--chip)' }}><Icon n="user" s={18} /></span>}
+            {me ? <Avatar name={sm ? 'Steve' : me.name} s={36} skin={sm ? undefined : skin || undefined} /> : <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--chip)' }}><Icon n="user" s={18} /></span>}
             <span className="lbl min-w-0 flex-1 text-left"><b className="block truncate text-sm">{me ? nick(me.name) : t('noAcc')}</b>
               <span className="block text-[11px] leading-snug muted">{me ? (me.type === 'microsoft' ? 'Microsoft' : 'Offline') : 'Нажмите, чтобы добавить'}</span></span></button>
         </nav>
@@ -382,8 +402,9 @@ export default function App() {
               <p className="muted text-xs mt-2">{t('drag')}</p>
               <div className="mt-4"><div className="flex items-center justify-between mb-2"><b className="text-sm">Скины</b><span className="muted text-xs">Наведите на свой скин — появится кнопка удаления</span></div>
                 <div className="grid grid-cols-6 gap-2">{mySkins.map((x) => <SkinTile key={x.id} url={x.data} on={skin === x.data} title="Мой скин" pick={() => useSkin(x.data)} del={() => { setMySkins(mySkins.filter((y) => y.id !== x.id)); say('Скин удалён из списка') }} />)}
-                  {SKINS.map(([n, u]) => <SkinTile key={n} url={u} on={false} title={'HD-скин ' + n} pick={async () => { const d = await toData(u); addSkin(d); useSkin(d) }} />)}</div></div></div>
+                  {SKINS.map(([n, u]) => <SkinTile key={n} url={u} on={presetSkin === n && !mySkins.some((x) => x.data === skin)} title={'HD-скин ' + n} pick={async () => { setPresetSkin(n); useSkin(await toData(u)) }} />)}</div></div></div>
             <div className="flex flex-col gap-4">
+              <PetCard face={miniSkin || skinUrl} />
               <div className="card rounded-3xl p-5 flex gap-4 items-center"><div className="w-16 h-16 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center" style={{ background: 'var(--chip)' }}>{miniSkin ? <div className="w-full h-full" style={{ backgroundImage: `url(${miniSkin})`, backgroundSize: '512px 512px', backgroundPosition: '-64px -64px', imageRendering: 'pixelated' }} /> : <Icon n="user" s={26} />}</div>
                 <div className="flex-1 min-w-0"><b>Питомец «Мини-я»</b><div className="muted text-sm">Маленькая копия вас бегает следом. Включите в Визуалы → Питомец → «Мини-я»; скин — ваш или отдельный отсюда. Его видят все игроки Asteria</div>
                   <div className="flex gap-2 mt-2 flex-wrap"><button className="btn !py-1.5 text-sm flex items-center gap-2" onClick={async () => { const d = await api.pickSkin(); if (d) { setMiniSkin(d); const r = await api.saveTexture({ data: d, kind: 'mini' }); say(r?.uploaded ? 'Скин «Мини-я» сохранён' : 'Скин сохранён на этом компьютере', r?.uploaded ? 'ok' : 'info') } }}><Icon n="upload" s={15} />Свой скин для «Мини-я»</button>
@@ -393,7 +414,7 @@ export default function App() {
                 <div className="grid grid-cols-5 gap-2.5"><button className={'rounded-xl flex flex-col items-center justify-center gap-1 muted text-xs ' + (!capeId ? 'ring-2 ring-[var(--a1)]' : '')} style={{ height: 112, background: 'var(--chip)' }} onClick={() => { setCape(''); api.saveTexture({ data: null, kind: 'cape' }) }}><Icon n="close" s={18} />Без плаща</button>
                   {myCapes.map((c) => <CapeTile key={c.id} name="Мой плащ" url={c.data} on={capeId === c.id} pick={() => pickCape(c.id, c.data)} del={() => { setMyCapes(myCapes.filter((x) => x.id !== c.id)); if (capeId === c.id) { setCape(''); api.saveTexture({ data: null, kind: 'cape' }) } say('Плащ удалён') }} />)}
                   {CAPES.map(([n, u]) => <CapeTile key={n} name={n} url={u} on={capeId === n} pick={() => pickCape(n, u)} />)}</div>
-                <div className="flex gap-2 mt-3 flex-wrap"><button className="btn flex items-center gap-2 text-sm" onClick={async () => { const d = await api.pickPng(); if (d) addCape(d) }}><Icon n="upload" s={15} />Загрузить PNG плаща</button>
+                <div className="flex gap-2 mt-3 flex-wrap"><button className="btn flex items-center gap-2 text-sm" onClick={async () => { const d = await api.pickImage(); if (!d) return; const im = new Image(); im.onload = () => Math.abs(im.width / im.height - 2) < 0.02 ? addCape(d) : setCapeSrc(d); im.src = d }}><Icon n="upload" s={15} />Загрузить картинку для плаща</button>
                   <button className="btn flex items-center gap-2 text-sm" onClick={() => setEdit('cape')}><Icon n="image" s={15} />Плащ из своей картинки</button></div></div>
               <div className="card rounded-3xl p-5 flex gap-4 items-center"><div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#0b2a3c,#0e7490)' }}><Gem s={30} /></div>
                 <div><b>Значок Asteria</b><div className="muted text-sm">Знак AL перед ником в табе и над головой. Его видите вы и все игроки с AsteriaLauncher.</div></div></div>
@@ -404,14 +425,14 @@ export default function App() {
             <div className="grid gap-5" style={{ gridTemplateColumns: '330px minmax(0,1fr)' }}>
             <Tilt className="card rounded-3xl p-6 flex flex-col items-center gap-3 text-center overflow-hidden h-fit" max={4}>
               <div className="absolute inset-x-0 top-0 h-28" style={{ background: 'linear-gradient(135deg,var(--a1),var(--a2))', opacity: .85 }} />
-              <div className="relative mt-10 rounded-3xl p-1" style={{ background: 'var(--card)' }}>{me ? <Avatar name={sm ? 'Steve' : me.name} s={96} /> : <Gem s={96} />}</div>
+              <div className="relative mt-10 rounded-3xl p-1" style={{ background: 'var(--card)' }}>{me ? <Avatar name={sm ? 'Steve' : me.name} s={96} skin={sm ? undefined : skin || undefined} /> : <Gem s={96} />}</div>
               <div className="relative text-2xl font-black">{me ? nick(me.name) : t('noAcc')}</div>
               {me && <span className="badge soft">{me.type === 'microsoft' ? 'Лицензия Microsoft' : 'Offline-аккаунт'}</span>}
               <div className="flex gap-2 flex-wrap justify-center"><button className="btn btn-primary !py-2 flex items-center gap-2" onClick={() => setAddOpen(true)}><Icon n="plus" s={15} />{t('addAccount')}</button>
                 <button className="btn !py-2 flex items-center gap-2" onClick={() => setTab('skins')}><Icon n="skins" s={15} />{t('changeSkin')}</button></div></Tilt>
             <div className="flex flex-col gap-4">
               <div className="card rounded-3xl p-5"><div className="font-bold mb-3">Аккаунты</div><div className="flex flex-col gap-2">{acc.list.map((a) => <div key={a.id} className={'mcard !p-2.5 ' + (a.id === acc.active ? 'ring-2 ring-[var(--a2)]' : '')}>
-                <Avatar name={sm ? 'Steve' : a.name} s={36} /><div className="flex-1 min-w-0"><b className="block truncate">{nick(a.name)}</b><span className="muted text-xs">{a.type === 'microsoft' ? 'Microsoft' : 'Offline'}</span></div>
+                <Avatar name={sm ? 'Steve' : a.name} s={36} skin={!sm && a.id === acc.active ? skin || undefined : undefined} /><div className="flex-1 min-w-0"><b className="block truncate">{nick(a.name)}</b><span className="muted text-xs">{a.type === 'microsoft' ? 'Microsoft' : 'Offline'}</span></div>
                 {a.id !== acc.active && <button className="btn !py-1.5 text-sm" onClick={async () => { await api.selectAccount(a.id); refresh() }}>Выбрать</button>}
                 <button className="iconbtn" title={t('logout')} onClick={async () => { await api.removeAccount(a.id); refresh() }}><Icon n="trash" s={15} /></button></div>)}
                 {!acc.list.length && <p className="muted text-sm">Аккаунтов пока нет — добавьте offline-ник или войдите через Microsoft.</p>}</div></div>
@@ -497,7 +518,8 @@ export default function App() {
           : friend.got.kind === 'crosshair' ? <b>Прицел</b> : <div className="flex items-center gap-3"><img src={friend.got.data} className="h-12 rounded" style={{ imageRendering: 'pixelated' }} /><b>{friend.got.kind === 'skin' ? 'Скин' : 'Плащ'}</b></div>}</div>}
         <div className="flex gap-2 justify-end mt-4">{!friend.got ? <button className="btn btn-primary" disabled={friend.code.length !== 6 || friend.busy} onClick={async () => { setFriend({ ...friend, busy: true }); const r = await api.shareGet(friend.code); r?.error ? (say(r.error, 'err'), setFriend({ ...friend, busy: false })) : setFriend({ ...friend, busy: false, got: r }) }}>{friend.busy ? '…' : 'Найти'}</button>
           : <button className="btn btn-primary" onClick={() => applyFriend(friend.got)}>Установить</button>}</div></Modal>}
-      <LaunchOverlay prog={prog} img={hero} t={t} /><LogModal open={logOpen} onClose={() => setLogOpen(false)} t={t} /><UpdateModal upd={upd} t={t} /><Splash pct={boot.pct} msg={boot.msg} />
+      {capeSrc && <CapeMaker src={capeSrc} onCancel={() => setCapeSrc('')} onDone={(png) => { setCapeSrc(''); addCape(png) }} />}
+      <LaunchOverlay prog={prog} img={hero} t={t} /><LogModal open={logOpen} onClose={() => setLogOpen(false)} t={t} /><UpdateModal upd={upd} t={t} compact={running} /><Splash pct={boot.pct} msg={boot.msg} />
       {toast && <div className="toastx pop-in"><span className={'ic ' + toastKind}>{toastKind === 'err' ? <Icon n="close" s={18} /> : toastKind === 'info' ? <Icon n="eye" s={18} /> : <Gem s={20} glow={false} />}</span><div className="min-w-0"><b className="block text-sm">{toastKind === 'err' ? 'Ошибка' : toastKind === 'info' ? 'Внимание' : 'Готово'}</b><span className="muted text-xs block">{toast}</span></div><button className="iconbtn !w-7 !h-7" onClick={() => setToast('')}><Icon n="close" s={12} /></button></div>}
     </div>
   )

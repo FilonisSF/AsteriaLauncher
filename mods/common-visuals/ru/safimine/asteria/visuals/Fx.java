@@ -162,6 +162,12 @@ public final class Fx {
             else if (!TRAIL.isEmpty()) TRAIL.remove(0); // standing still: the trail shrinks
             while (TRAIL.size() > max) TRAIL.remove(0);
         } else TRAIL.clear();
+        if (!FX_OF.isEmpty()) { java.util.Set<String> seen = new java.util.HashSet<>();
+            for (Object e : g.players()) { String n = g.playerName(e).toLowerCase(), fx = FX_OF.get(n); if (fx == null || !fx.contains("trail")) continue; seen.add(n);
+                List<double[]> l = OTRAIL.computeIfAbsent(n, k -> new ArrayList<>()); double[] q = g.pos(e, 1);
+                if (l.isEmpty() || dist(l.get(l.size() - 1), q) > 0.02) l.add(q); else l.remove(0); while (l.size() > 30) l.remove(0); }
+            OTRAIL.keySet().retainAll(seen);
+        } else OTRAIL.clear();
         boolean ground = g.onGround();
         if (V.on("jumpcircles") && ground != wasGround) CIRCLES.add(new double[]{p[0], p[1], p[2], System.currentTimeMillis()});
         if (ground != wasGround) {
@@ -275,6 +281,7 @@ public final class Fx {
         { double[] cp = r.cam(); CAM = new double[]{cp[0], cp[1], cp[2], r.camYaw(), r.camPitch(), lastFov, pt}; }
         Object self = g.self(); if (self == null) return;
         if (V.on("trails") && TRAIL.size() > 1) trail(r, g, self, pt);
+        for (List<double[]> l : OTRAIL.values()) if (l.size() > 1) trail(r, l);
         if (V.on("jumpcircles")) circles(r, now);
         Object t = target(g);
         if (V.on("targetesp") && t != null && t != self) targetEsp(r, g, t, pt, now);
@@ -462,8 +469,9 @@ public final class Fx {
         r.v(x + rt[0] * x1 + up[0] * y0, y + rt[1] * x1 + up[1] * y0, z + rt[2] * x1 + up[2] * y0, c);
     }
 
-    private static void trail(R3 r, Game g, Object self, float pt) {
-        List<double[]> pts = new ArrayList<>(TRAIL); pts.add(g.pos(self, pt));
+    private static void trail(R3 r, Game g, Object self, float pt) { List<double[]> pts = new ArrayList<>(TRAIL); pts.add(g.pos(self, pt)); trail(r, pts); }
+    private static final java.util.Map<String, List<double[]>> OTRAIL = new java.util.HashMap<>();
+    private static void trail(R3 r, List<double[]> pts) {
         int n = pts.size(); boolean ribbon = V.mode("trails", "mode") == 0; double h = V.num("trails", "height");
         if (V.mode("trails", "mode") == 2) { // spiral: two twisting ribbons around the path
             double t0 = System.currentTimeMillis() / 300.0;
@@ -701,7 +709,7 @@ public final class Fx {
     /** name protect: your nick in any text becomes the alias */
     public static String protect(String s) {
         if (s == null || !V.on("nameprotect") || V.user.isEmpty() || s.indexOf(V.user) < 0) return s;
-        String[] al = {"Asteria", "Игрок", "★"}; return s.replace(V.user, al[Math.min(2, V.mode("nameprotect", "alias"))]);
+        String[] al = {"Asteria", "Игрок", "AL"}; return s.replace(V.user, al[Math.min(2, V.mode("nameprotect", "alias"))]);
     }
 
     // ------------------------------------------------------------------ zoom

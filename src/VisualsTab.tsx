@@ -23,6 +23,25 @@ export function visDefaults(): VisCfg {
 type Preset = { id: string; name: string; cfg: VisCfg }
 type Presets = { active: string; list: Preset[] }
 const uid = () => Math.random().toString(36).slice(2, 10)
+/** ready themes: colours + HUD style + font + transparency in one click (fonts: 0 Minecraft ... 8 Russo One, see FONTS) */
+const THEMES: { name: string; t: Partial<Theme> }[] = [
+  { name: 'Asteria', t: { accent: '#22d3ee', accent2: '#3b82f6', hud: 0, font: 8, bg: 0.55, chroma: false, glare: true } },
+  { name: 'Неон', t: { accent: '#f0abfc', accent2: '#22d3ee', hud: 1, font: 8, bg: 0.7, chroma: false, glare: true } },
+  { name: 'Сакура', t: { accent: '#fda4af', accent2: '#f0abfc', hud: 0, font: 4, bg: 0.45, chroma: false, glare: true } },
+  { name: 'Океан', t: { accent: '#38bdf8', accent2: '#14b8a6', hud: 2, font: 8, bg: 0.5, chroma: false, glare: false } },
+  { name: 'Закат', t: { accent: '#fb923c', accent2: '#f43f5e', hud: 1, font: 8, bg: 0.6, chroma: false, glare: true } },
+  { name: 'Лес', t: { accent: '#4ade80', accent2: '#a3e635', hud: 2, font: 5, bg: 0.55, chroma: false, glare: false } },
+  { name: 'Лёд', t: { accent: '#e0f2fe', accent2: '#7dd3fc', hud: 0, font: 8, bg: 0.4, chroma: false, glare: true } },
+  { name: 'Золото', t: { accent: '#facc15', accent2: '#f59e0b', hud: 1, font: 9, bg: 0.65, chroma: false, glare: true } },
+  { name: 'Вампир', t: { accent: '#ef4444', accent2: '#7f1d1d', hud: 2, font: 8, bg: 0.75, chroma: false, glare: false } },
+  { name: 'Космос', t: { accent: '#a78bfa', accent2: '#6366f1', hud: 1, font: 10, bg: 0.6, chroma: false, glare: true } },
+  { name: 'Мята', t: { accent: '#6ee7b7', accent2: '#5eead4', hud: 0, font: 3, bg: 0.45, chroma: false, glare: false } },
+  { name: 'Монохром', t: { accent: '#f1f5f9', accent2: '#64748b', hud: 2, font: 8, bg: 0.7, chroma: false, glare: false } },
+  { name: 'Конфета', t: { accent: '#f472b6', accent2: '#facc15', hud: 0, font: 4, bg: 0.5, chroma: false, glare: true } },
+  { name: 'Радуга', t: { accent: '#22d3ee', accent2: '#a855f7', hud: 1, font: 8, bg: 0.6, chroma: true, glare: true } },
+  { name: 'Ретро', t: { accent: '#fde047', accent2: '#22c55e', hud: 2, font: 0, bg: 0.6, chroma: false, glare: false } },
+  { name: 'Лава', t: { accent: '#fb7185', accent2: '#f97316', hud: 0, font: 8, bg: 0.6, chroma: false, glare: true } },
+]
 /** ready-made starting points for a new config */
 const TEMPLATES: { name: string; desc: string; make: () => VisCfg }[] = [
   { name: 'Стандарт', desc: 'Как после установки', make: visDefaults },
@@ -134,13 +153,18 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
 
     {view === 'theme' && <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.2fr)' }}>
       <div className="card rounded-2xl p-5 flex flex-col gap-4">
+        <div className="font-bold">Готовые темы</div>
+        <div className="grid grid-cols-4 gap-2">{THEMES.map(({ name, t }) => { const on = c.theme.accent === t.accent && c.theme.accent2 === t.accent2 && !!c.theme.chroma === !!t.chroma
+          return <button key={name} onClick={() => theme(t)} className={'rounded-2xl p-2.5 text-left transition hover:-translate-y-0.5 ' + (on ? 'ring-2 ring-[var(--a2)]' : '')} style={{ background: `linear-gradient(135deg,${t.accent}33,${t.accent2}33)`, border: '1px solid var(--line)' }}>
+            <span className="block h-6 rounded-lg mb-1.5" style={{ background: t.chroma ? 'linear-gradient(90deg,#f43f5e,#facc15,#22c55e,#22d3ee,#a855f7)' : `linear-gradient(135deg,${t.accent},${t.accent2})` }} />
+            <b className="block text-[13px] leading-tight" style={{ fontFamily: PREVIEW_FONT[fontIdx(t.font)] }}>{name}</b><span className="muted text-[10.5px]">{FONTS[fontIdx(t.font)]}</span></button> })}</div>
         <div className="font-bold">Стиль HUD</div>
         <div className="grid grid-cols-3 gap-2">{[[0, 'Кристалл', 'Стеклянные панели со светящейся рамкой'], [1, 'Созвездие', 'Тёмные карточки, линия-созвездие и бегущая комета'], [2, 'Минимал', 'Спокойные тёмные карточки, как в современных клиентах']].map(([k, n, d]) =>
           <button key={k as number} onClick={() => theme({ hud: k as number })} className={'text-left rounded-2xl p-3 transition ' + ((c.theme.hud ?? 0) === k ? 'ring-2 ring-[var(--a2)]' : '')} style={{ background: 'var(--chip)' }}><b className="block text-sm">{n}</b><span className="muted text-xs">{d}</span></button>)}</div>
         <div className="font-bold">Цвета интерфейса</div>
         <div className="flex gap-6 flex-wrap"><ColorPick value={c.theme.accent} set={(v) => theme({ accent: v, chroma: false })} label="Основной" /><ColorPick value={c.theme.accent2} set={(v) => theme({ accent2: v, chroma: false })} label="Второй" /></div>
         <div className="flex gap-2 flex-wrap">{[['#22d3ee', '#3b82f6'], ['#22d3ee', '#a855f7'], ['#f43f5e', '#f59e0b'], ['#22c55e', '#06b6d4'], ['#e879f9', '#6366f1'], ['#facc15', '#fb7185'], ['#e2e8f0', '#64748b']].map(([a, b]) =>
-          <button key={a} className="w-12 h-8 rounded-xl" style={{ background: `linear-gradient(135deg,${a},${b})`, boxShadow: c.theme.accent === a && c.theme.accent2 === b ? '0 0 0 2px var(--card),0 0 0 4px var(--a2)' : 'none' }} onClick={() => theme({ accent: a, accent2: b, chroma: false })} />)}</div>
+          <button key={a + b} className="w-12 h-8 rounded-xl" style={{ background: `linear-gradient(135deg,${a},${b})`, boxShadow: c.theme.accent === a && c.theme.accent2 === b ? '0 0 0 2px var(--card),0 0 0 4px var(--a2)' : 'none' }} onClick={() => theme({ accent: a, accent2: b, chroma: false })} />)}</div>
         <Switch on={c.theme.chroma} set={(v) => theme({ chroma: v })} label="Радужный перелив" hint="Цвета HUD плавно меняются по кругу" />
         <Switch on={c.theme.shadow} set={(v) => theme({ shadow: v })} label="Тени" />
         <Switch on={c.theme.blur} set={(v) => theme({ blur: v })} label="Мягкое свечение панелей" />
@@ -238,7 +262,8 @@ function CrosshairTab({ m, on, set, say }: { m: ModCfg; on: (v: boolean) => void
       <div className="flex items-center justify-between"><b className="text-lg">Прицел</b><Switch on={m.on} set={on} label="Свой прицел" /></div>
       <div className="rounded-2xl flex items-center justify-center" style={{ height: 300, background: BGS[bg] }}><CrossPreview s={s} px={9} /></div>
       <div className="flex gap-1.5 items-center"><span className="muted text-xs mr-1">Фон:</span>{['Трава', 'Небо', 'Ночь'].map((l, i) => <button key={l} className={'pill !py-0.5 ' + (bg === i ? 'on' : '')} onClick={() => setBg(i)}>{l}</button>)}
-        <div className="flex-1" /><button className="pill" onClick={async () => { const r = await window.api.shareMake('crosshair', s); r?.id ? say('Код ' + r.id + ' скопирован — отправьте его другу') : say(r?.error || 'Не удалось', 'err') }}><Icon n="share" s={13} />Поделиться прицелом</button></div>
+        <div className="flex-1" /><button className="pill" title="Тонкий белый крест, как обычный прицел Minecraft, но с нашими настройками" onClick={() => { for (const [k, v] of [['style', 0], ['size', 4.5], ['gap', 0], ['thick', 1], ['outline', false], ['color', '#ffffff'], ['alpha', 0.95]] as [string, any][]) set(k, v) }}>Как в Minecraft</button>
+        <button className="pill" onClick={async () => { const r = await window.api.shareMake('crosshair', s); r?.id ? say('Код ' + r.id + ' скопирован — отправьте его другу') : say(r?.error || 'Не удалось', 'err') }}><Icon n="share" s={13} />Поделиться прицелом</button></div>
       <div><div className="text-sm mb-1.5">Форма</div><div className="grid grid-cols-4 gap-2">{sch.s[0].options!.map((o, i) => <button key={o} onClick={() => set('style', i)} className="rounded-xl flex flex-col items-center gap-1 py-2 transition" style={{ background: +s.style === i ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: +s.style === i ? '#fff' : undefined }}>
         <span className="rounded-lg flex items-center justify-center" style={{ background: 'rgba(0,0,0,.35)', width: 56, height: 56 }}><CrossPreview s={{ ...s, style: i, alpha: 1 }} px={1.8} /></span><span className="text-[11px] font-semibold">{o}</span></button>)}</div></div>
     </div>
@@ -269,8 +294,8 @@ function PatternEditor({ v, set }: { v: string; set: (v: string) => void }) {
   </div>
 }
 /** pet pictures: the same textures the game draws (mods/common-visuals/resources/assets/asteria_visuals/textures/fx/trinket) */
-const PET_PIC: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob('../mods/common-visuals/resources/assets/asteria_visuals/textures/fx/trinket/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>).map(([k, v]) => [k.split('/').pop()!.replace('.png', ''), v]))
-const PET_FILES = ['cat', 'ghost', 'flame', 'gem', 'atom', 'flower', 'donut', 'ball', 'banana']
+export const PET_PIC: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob('../mods/common-visuals/resources/assets/asteria_visuals/textures/fx/trinket/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>).map(([k, v]) => [k.split('/').pop()!.replace('.png', ''), v]))
+export const PET_FILES = ['cat', 'ghost', 'flame', 'gem', 'atom', 'flower', 'donut', 'ball', 'banana']
 function Setting({ s, v, set, mod }: { s: S; v: any; set: (v: any) => void; mod?: string }) {
   if (mod === 'pet' && s.id === 'kind') return <div><div className="text-sm mb-1.5">{s.name}</div><div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
     {s.options!.map((o, i) => { const pic = PET_PIC[PET_FILES[i]]; return <button key={o} title={o} onClick={() => set(i)} className="rounded-xl flex flex-col items-center gap-1 p-1.5 transition" style={{ background: +v === i ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: +v === i ? '#fff' : undefined }}>
@@ -292,7 +317,7 @@ function Preview({ c }: { c: VisCfg }) {
     : { background: `rgba(5,11,22,${Math.max(0.35, t.bg)})`, borderRadius: 6, border: `1px solid ${t.accent}cc`, boxShadow: t.shadow ? `0 0 10px ${t.accent}55` : 'none', color: '#fff', fontSize: 10 * t.scale, padding: '4px 7px', fontWeight: 600 }
   const on = (id: string) => c.modules[id]?.on
   return <div className="absolute inset-0 p-3" style={{ fontFamily: PREVIEW_FONT[fontIdx(t.font)] }}>
-    {on('watermark') && <div style={{ ...panel, position: 'absolute', left: 10, top: 10, display: 'flex', gap: 6, alignItems: 'center' }}><span style={{ background: grad, WebkitBackgroundClip: 'text', color: 'transparent', fontWeight: 900 }}>✦ Asteria</span><span style={{ opacity: .7 }}>| 144 fps</span></div>}
+    {on('watermark') && <div style={{ ...panel, position: 'absolute', left: 10, top: 10, display: 'flex', gap: 6, alignItems: 'center' }}><span style={{ background: grad, WebkitBackgroundClip: 'text', color: 'transparent', fontWeight: 900 }}>Asteria</span><span style={{ opacity: .7 }}>| 144 fps</span></div>}
     {on('info') && <div style={{ ...panel, position: 'absolute', left: 10, top: 44, lineHeight: 1.5 }}><div>FPS <b style={{ color: t.accent }}>144</b></div><div>Ping <b style={{ color: t.accent }}>23</b></div><div>XYZ <b style={{ color: t.accent }}>12 64 -380</b></div></div>}
     {on('arraylist') && <div style={{ position: 'absolute', right: 10, top: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>{MODS.filter((m) => c.modules[m.id].on && m.cat !== 'hud').slice(0, 6).map((m, i) =>
       <div key={m.id} style={{ ...panel, borderRadius: 4, padding: '2px 7px', borderRight: `2px solid ${i % 2 ? t.accent2 : t.accent}` }}>{m.name}</div>)}</div>}

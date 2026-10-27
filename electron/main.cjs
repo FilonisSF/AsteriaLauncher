@@ -532,7 +532,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
     const petOf = () => { const p = visNow()?.modules?.pet; if (!p?.on) return '' // other Asteria players see your pet (":m" = mini-me with a skin from the launcher)
       const mini = +p.s?.kind === 9 && +p.s?.miniskin === 1 && fs.existsSync(path.join(s.dir, 'skins', 'mini.png'))
       return `${+p.s?.kind || 0}:${(+p.s?.size || 1).toFixed(2)}${mini ? ':m' : ''}` }
-    const fxOf = () => { const m = visNow()?.modules || {}; return [m.halo?.on && 'halo', m.chinahat?.on && 'hat'].filter(Boolean).join(',') }
+    const fxOf = () => { const m = visNow()?.modules || {}; return [m.halo?.on && 'halo', m.chinahat?.on && 'hat', m.trails?.on && 'trail'].filter(Boolean).join(',') }
     const beat = () => fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf() }) }).catch(() => {}); beat(); hb = setInterval(beat, 45000) // registers right away, so other launcher players see the icon at once
     await addServer(dir).catch(() => {}); for (const x of (store.get('remoteConf') || {}).servers || []) if (x.ip && x.ip !== HOST) await addServerEntry(dir, x.name || x.ip, x.port && +x.port !== 25565 ? x.ip + ':' + x.port : x.ip).catch(() => {})
     game = await l.launch(opts); gameVer = version
@@ -551,7 +551,11 @@ function setupUpdates() { // forced updates via electron-updater (generic provid
   autoUpdater.on('download-progress', (p) => emit({ state: 'downloading', pct: Math.round(p.percent) }))
   autoUpdater.on('update-downloaded', (i) => emit({ state: 'ready', version: i.version }))
   autoUpdater.on('error', () => {})
-  const check = () => autoUpdater.checkForUpdates().catch(() => {}); check(); setInterval(check, 30 * 60 * 1000)
+  let lastCheck = 0, ready = false
+  const check = () => { if (ready || Date.now() - lastCheck < 60000) return; lastCheck = Date.now(); autoUpdater.checkForUpdates().catch(() => {}) }
+  autoUpdater.on('update-downloaded', () => { ready = true })
+  check(); setInterval(check, 3 * 60 * 1000) // an open launcher notices a new release within minutes
+  ipcMain.handle('update:check', () => check()) // also every time the window comes back to the front
 }
 ipcMain.handle('update:install', () => autoUpdater?.quitAndInstall(true, true)) // silent: no installer window, launcher restarts by itself
 process.on('uncaughtException', (e) => { try { logBuf.push('[launcher] ' + (e?.stack || e)) } catch {} })
@@ -621,6 +625,7 @@ ipcMain.handle('storage:clear', () => { fs.rmSync(path.join(app.getPath('userDat
 ipcMain.handle('img:pick', async () => { const r = await dialog.showOpenDialog(win, { filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }] }); const f = r.filePaths[0]; if (!f) return null
   const ext = path.extname(f).slice(1).toLowerCase(), mime = ext === 'jpg' ? 'jpeg' : ext; return `data:image/${mime};base64,` + fs.readFileSync(f).toString('base64') })
 ipcMain.handle('png:pick', async () => { const r = await dialog.showOpenDialog(win, { filters: [{ name: 'PNG', extensions: ['png'] }] }); return r.filePaths[0] ? 'data:image/png;base64,' + fs.readFileSync(r.filePaths[0]).toString('base64') : null })
+ipcMain.handle('skin:current', () => { const f = path.join(settings().dir, 'skins', 'current.png'); return fs.existsSync(f) ? 'data:image/png;base64,' + fs.readFileSync(f).toString('base64') : null }) // the skin set in the launcher survives a restart
 ipcMain.handle('mini:get', () => { const f = path.join(settings().dir, 'skins', 'mini.png'); return fs.existsSync(f) ? 'data:image/png;base64,' + fs.readFileSync(f).toString('base64') : null })
 ipcMain.handle('tex:save', async (_, { data, kind, slim }) => {
   const acc = store.get('accounts', []).find((a) => a.id === store.get('active')); const png = data ? Buffer.from(data.split(',')[1], 'base64') : null

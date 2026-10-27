@@ -425,16 +425,16 @@ public final class Hud {
     }
     private static float[] notesSize() { return new float[]{140, editing && NOTES.isEmpty() ? 30 : Math.max(1, NOTES.size()) * 34}; }
     private static void notes() {
-        long now = System.currentTimeMillis(); NOTES.removeIf(n -> now - n.at > 3200);
+        long now = System.currentTimeMillis(); NOTES.removeIf(n -> now - n.at > 4600);
         float y = 0;
         for (Note n : NOTES) {
-            float age = (now - n.at) / 1000f, in = D.ease(Math.min(1, age * 4)), out = age > 2.8f ? D.ease((age - 2.8f) * 2.5f) : 0;
+            float age = (now - n.at) / 1000f, in = D.ease(Math.min(1, age * 4)), out = age > 4.2f ? D.ease((age - 4.2f) * 2.5f) : 0;
             float x = (1 - in + out) * 150;
             D.g.push(x, y, 1);
             D.panel(0, 0, 140, 30, 6, false);
             D.round(6, 7, 22, 23, 8, n.on ? 0xFF22C55E : 0xFFEF4444); D.textC(n.on ? "✔" : "✖", 14, 11, 0xFFFFFFFF);
             D.text(n.title, 28, 6, 0xFFFFFFFF); D.text(n.text, 28, 17, 0xFF9FB3C0);
-            D.round(4, 27, 4 + 132 * Math.max(0, 1 - age / 3f), 28.5f, 0.7f, V.a1(), V.a2());
+            D.round(4, 27, 4 + 132 * Math.max(0, 1 - age / 4.4f), 28.5f, 0.7f, V.a1(), V.a2());
             D.g.pop();
             y += 34 * (1 - out);
         }

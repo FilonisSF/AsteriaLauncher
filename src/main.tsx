@@ -1,5 +1,6 @@
 import { Component, ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
+import './devMock'
 import App from './App'
 import '@fontsource-variable/manrope'
 import '@fontsource-variable/unbounded'

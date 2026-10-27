@@ -29,8 +29,8 @@ export const OldGem = ({ s = 24, glow = true }: { s?: number; glow?: boolean }) 
     <defs><radialGradient id={id} cx=".5" cy=".5" r=".5"><stop offset="0" stopColor="#fff" /><stop offset=".25" stopColor="color-mix(in srgb, var(--a2) 35%, white)" /><stop offset=".7" stopColor="var(--a2)" /><stop offset="1" stopColor="var(--a1)" /></radialGradient></defs>
     <path d="M32 3C34.5 21 43 29.5 61 32C43 34.5 34.5 43 32 61C29.5 43 21 34.5 3 32C21 29.5 29.5 21 32 3Z" fill={`url(#${id})`} />
     <path d="M32 3C33.2 17 36 25 41 28L32 32Z" fill="#fff" opacity=".35" /></svg> }
-export const Wordmark = ({ tag = false, big = false }: { tag?: boolean; big?: boolean }) => <span className="flex items-center gap-2.5"><img src={logo} className={(big ? 'w-11 h-11' : 'w-6 h-6') + ' rounded-lg'} style={{ filter: 'drop-shadow(0 0 10px color-mix(in srgb,var(--a2) 55%,transparent))' }} />
-  <span className="flex flex-col leading-none"><span style={{ fontWeight: 800, letterSpacing: '.01em', fontSize: big ? 17 : 15 }}><span style={{ color: 'var(--text)' }}>Asteria</span><span style={{ color: 'var(--a2)' }}>Launcher</span></span>
+export const Wordmark = ({ tag = false, big = false, onDark = false }: { tag?: boolean; big?: boolean; onDark?: boolean }) => <span className="flex items-center gap-2.5"><img src={logo} className={(big ? 'w-11 h-11' : 'w-6 h-6') + ' rounded-lg'} style={{ filter: 'drop-shadow(0 0 10px color-mix(in srgb,var(--a2) 55%,transparent))' }} />
+  <span className="flex flex-col leading-none"><span style={{ fontWeight: 800, letterSpacing: '.01em', fontSize: big ? 17 : 15 }}><span style={{ color: onDark ? '#e6fbff' : 'var(--text)' }}>Asteria</span><span style={{ color: 'var(--a2)' }}>Launcher</span></span>
     {tag && <span className="muted" style={{ fontSize: 11, marginTop: 5, letterSpacing: '.04em' }}>Play. Explore. Create.</span>}</span></span>
 const f = (b: string) => 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20">${b}</svg>`)
 const h = (c: string[]) => c.map((x, i) => `<rect y="${i * 20 / c.length}" width="30" height="${20 / c.length + .1}" fill="${x}"/>`).join('')
