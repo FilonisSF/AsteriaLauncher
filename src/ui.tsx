@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import ColorWheel from './ColorWheel'
-import { Icon } from './Icons'
+import { Icon , Gem } from './Icons'
 
 /** On/off switch. Optimistic: flips instantly, the caller saves in the background (no flicker while lists reload). */
 export function Switch({ on, set, label, hint, disabled }: { on: boolean; set: (v: boolean) => void; label?: ReactNode; hint?: ReactNode; disabled?: boolean }) {
@@ -106,6 +106,6 @@ export function Palette({ cmds, open, setOpen }: { cmds: Cmd[]; open: boolean; s
 export const LoaderIcon = ({ k, s = 18 }: { k: 'fabric' | 'vanilla' | 'asteria' | 'legacy'; s?: number }) => {
   if (k === 'fabric') return <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M13.5 2.5l8 8-4 4-1-1-2 2 1 1-4 4-8-8z" fill="#dbd0b4" /><path d="M13.5 2.5l8 8-4 4-8-8z" fill="#c6bba5" /><path d="M9 12l3 3M11 10l3 3M7 14l3 3" stroke="#38342a" strokeWidth="1.4" strokeLinecap="round" /></svg>
   if (k === 'legacy') return <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M13.5 2.5l8 8-4 4-1-1-2 2 1 1-4 4-8-8z" fill="#c7a46b" /><path d="M9 12l3 3M11 10l3 3M7 14l3 3" stroke="#3b2a12" strokeWidth="1.4" strokeLinecap="round" /></svg>
-  if (k === 'asteria') return <svg width={s} height={s} viewBox="0 0 24 24"><defs><linearGradient id="lg-a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="var(--a2)" /><stop offset="1" stopColor="var(--a1)" /></linearGradient></defs><path d="M12 1l2.6 8.4L23 12l-8.4 2.6L12 23l-2.6-8.4L1 12l8.4-2.6z" fill="url(#lg-a)" /></svg>
+  if (k === 'asteria') return <Gem s={s * 0.85} glow={false} />
   return <svg width={s} height={s} viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="#5b8c32" /><rect x="3" y="3" width="18" height="6" fill="#79c05a" /><rect x="3" y="12" width="18" height="9" fill="#8b5a2b" /><rect x="6" y="14" width="3" height="3" fill="#6d4520" /><rect x="14" y="16" width="3" height="3" fill="#6d4520" /></svg>
 }

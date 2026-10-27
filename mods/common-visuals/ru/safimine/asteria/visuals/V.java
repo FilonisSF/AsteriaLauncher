@@ -20,9 +20,9 @@ public final class V {
     // ------------------------------------------------------------------ model
     public static final class S {
         public String id, name, type; public String[] options; public double min, max, step;
-        public double num; public boolean bool; public int mode; public int color; public int key;
+        public double num; public boolean bool; public int mode; public int color; public int key; public String text = "";
         Object def;
-        String save() { switch (type) { case "bool": return String.valueOf(bool); case "num": return String.valueOf(num); case "mode": return String.valueOf(mode); case "color": return hex(color); default: return String.valueOf(key); } }
+        String save() { switch (type) { case "bool": return String.valueOf(bool); case "num": return String.valueOf(num); case "mode": return String.valueOf(mode); case "color": return hex(color); case "str": return text; default: return String.valueOf(key); } }
     }
     public static final class Mod {
         public String id, cat, name, desc; public boolean on, defOn; public int bind; public float[] hud; public float[] defHud;
@@ -43,7 +43,7 @@ public final class V {
     /** a light sheen running over the HUD panels now and then */
     public static boolean glare = false;
     /** font of all Asteria text: 0 = Minecraft pixel font, 1.. = smooth TTF fonts (assets/asteria_visuals/font/f<N>.json) */
-    public static int font = 2;
+    public static int font = 8;
     /** Asteria style for Minecraft's own menus (buttons, logo, background) */
     public static boolean menu = true;
     public static final String[] FONTS = {"Minecraft", "Ubuntu", "Montserrat Alt", "Balsamiq (мило)", "Pangolin (мило)", "Neucha (от руки)", "Marmelad", "Pacifico", "Russo One", "Philosopher", "Unbounded"};
@@ -54,6 +54,7 @@ public final class V {
     public static boolean bool(String id, String s) { S x = BY.get(id).get(s); return x != null && x.bool; }
     public static int mode(String id, String s) { S x = BY.get(id).get(s); return x == null ? 0 : x.mode; }
     public static int color(String id, String s) { S x = BY.get(id).get(s); return x == null ? -1 : x.color; }
+    public static String text(String id, String s) { S x = BY.get(id).get(s); return x == null ? "" : x.text; }
 
     // ------------------------------------------------------------------ licence
     public static long licensedUntil = -1;
@@ -97,13 +98,17 @@ public final class V {
     }
     static void reset(S s) {
         JsonElement d = (JsonElement) s.def;
-        switch (s.type) { case "bool": s.bool = d.getAsBoolean(); break; case "num": s.num = d.getAsDouble(); break; case "mode": s.mode = d.getAsInt(); break; case "color": s.color = parse(d.getAsString(), -1); break; default: s.key = d.getAsInt(); }
+        switch (s.type) { case "bool": s.bool = d.getAsBoolean(); break; case "num": s.num = d.getAsDouble(); break; case "mode": s.mode = d.getAsInt(); break; case "color": s.color = parse(d.getAsString(), -1); break; case "str": s.text = d.getAsString(); break; default: s.key = d.getAsInt(); }
     }
 
     /** called every frame: re-reads the file when the launcher changed it; writes our own changes a moment after the last edit */
     private static long lastCheck;
+    private static long aliveAt; private static String pid;
     public static void tick() {
         long now = System.currentTimeMillis();
+        if (now - aliveAt > 4000 && file != null) { aliveAt = now; try {
+            if (pid == null) pid = java.lang.management.ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
+            Files.write(new File(file.getParentFile(), "asteria-alive").toPath(), (pid + "|" + now).getBytes(StandardCharsets.UTF_8)); } catch (Throwable ignored) {} }
         if (dirtyAt > 0 && now - dirtyAt > 400) { dirtyAt = 0; write(); }
         if (now - lastCheck < 700) return;
         lastCheck = now;
@@ -152,7 +157,7 @@ public final class V {
                 if (j.has("hud") && md.hud != null) { JsonArray h = j.getAsJsonArray("hud"); md.hud[0] = h.get(0).getAsFloat(); md.hud[1] = h.get(1).getAsFloat(); }
                 JsonObject sv = j.has("s") ? j.getAsJsonObject("s") : new JsonObject();
                 for (S s : md.s) if (sv.has(s.id)) { JsonElement e = sv.get(s.id);
-                    try { switch (s.type) { case "bool": s.bool = e.getAsBoolean(); break; case "num": s.num = Math.max(s.min, Math.min(s.max, e.getAsDouble())); break; case "mode": s.mode = Math.max(0, Math.min(s.options.length - 1, e.getAsInt())); break; case "color": s.color = parse(e.getAsString(), s.color); break; default: s.key = e.getAsInt(); } } catch (Exception ignored) {} }
+                    try { switch (s.type) { case "bool": s.bool = e.getAsBoolean(); break; case "num": s.num = Math.max(s.min, Math.min(s.max, e.getAsDouble())); break; case "mode": s.mode = Math.max(0, Math.min(s.options.length - 1, e.getAsInt())); break; case "color": s.color = parse(e.getAsString(), s.color); break; case "str": s.text = e.getAsString(); break; default: s.key = e.getAsInt(); } } catch (Exception ignored) {} }
             }
             onChange.run();
         }
@@ -165,13 +170,26 @@ public final class V {
             for (Mod m : MODS) {
                 JsonObject j = new JsonObject(), sv = new JsonObject(); j.addProperty("on", m.on); j.addProperty("bind", m.bind);
                 if (m.hud != null) { JsonArray h = new JsonArray(); h.add(new JsonPrimitive(m.hud[0])); h.add(new JsonPrimitive(m.hud[1])); j.add("hud", h); }
-                for (S s : m.s) switch (s.type) { case "bool": sv.addProperty(s.id, s.bool); break; case "num": sv.addProperty(s.id, s.num); break; case "mode": sv.addProperty(s.id, s.mode); break; case "color": sv.addProperty(s.id, hex(s.color)); break; default: sv.addProperty(s.id, s.key); }
+                for (S s : m.s) switch (s.type) { case "bool": sv.addProperty(s.id, s.bool); break; case "num": sv.addProperty(s.id, s.num); break; case "mode": sv.addProperty(s.id, s.mode); break; case "color": sv.addProperty(s.id, hex(s.color)); break; case "str": sv.addProperty(s.id, s.text); break; default: sv.addProperty(s.id, s.key); }
                 j.add("s", sv); mods.add(m.id, j);
             }
             o.add("modules", mods);
             file.getParentFile().mkdirs();
             Files.write(file.toPath(), new GsonBuilder().setPrettyPrinting().create().toJson(o).getBytes(StandardCharsets.UTF_8));
             ownWrite = file.lastModified(); mtime = ownWrite;
+            saveToPreset(o);
+        } catch (Exception ignored) {}
+    }
+    /** the launcher writes the active config into asteria-visuals.json on every start: keep in-game edits in that config too */
+    private static void saveToPreset(JsonObject o) {
+        if (activePreset.isEmpty() || !presetsFile.exists()) return;
+        try {
+            JsonObject all = new JsonParser().parse(new String(Files.readAllBytes(presetsFile.toPath()), StandardCharsets.UTF_8)).getAsJsonObject();
+            for (JsonElement e : all.getAsJsonArray("list")) { JsonObject p = e.getAsJsonObject(); if (!activePreset.equals(str(p, "id"))) continue;
+                JsonObject cfg = p.has("cfg") && p.get("cfg").isJsonObject() ? p.getAsJsonObject("cfg") : new JsonObject();
+                cfg.add("theme", o.get("theme")); cfg.add("modules", o.get("modules")); p.add("cfg", cfg);
+                for (Preset pr : PRESETS) if (pr.id.equals(activePreset)) pr.cfg = cfg; }
+            Files.write(presetsFile.toPath(), new Gson().toJson(all).getBytes(StandardCharsets.UTF_8)); presetsMtime = presetsFile.lastModified();
         } catch (Exception ignored) {}
     }
 

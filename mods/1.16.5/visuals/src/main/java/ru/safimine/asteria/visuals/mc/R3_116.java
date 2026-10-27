@@ -44,6 +44,22 @@ final class R3_116 implements Fx.R3 {
         RenderSystem.depthMask(true); RenderSystem.enableDepthTest(); RenderSystem.enableCull(); RenderSystem.enableTexture(); RenderSystem.enableAlphaTest();
         RenderSystem.shadeModel(7424); RenderSystem.lineWidth(1f);
     }
+    @Override public void beginSkin(Object texture) {
+        RenderSystem.enableBlend(); RenderSystem.defaultBlendFunc(); RenderSystem.disableCull(); RenderSystem.shadeModel(7425); RenderSystem.enableAlphaTest(); RenderSystem.depthMask(true); RenderSystem.disableLighting(); RenderSystem.enableDepthTest();
+        MinecraftClient.getInstance().getTextureManager().bindTexture((Identifier) texture); RenderSystem.enableTexture();
+        b.begin(7, VertexFormats.POSITION_TEXTURE_COLOR);
+    }
+    private static final java.util.Map<String, Object[]> FT = new java.util.HashMap<>();
+    @Override public Object fileTex(String key, java.io.File png) {
+        String slot = key.contains(":") ? key.substring(0, key.indexOf(':')) : key; Object[] e = FT.get(slot);
+        if (e != null && key.equals(e[0])) return e[1];
+        MinecraftClient mc = MinecraftClient.getInstance(); Identifier id = new Identifier("asteria_visuals", "dyn/w_" + slot.toLowerCase().replaceAll("[^a-z0-9_]", "_"));
+        try (java.io.InputStream in = new java.io.FileInputStream(png)) {
+            net.minecraft.client.texture.NativeImage img = net.minecraft.client.texture.NativeImage.read(in);
+            if (e != null && e[1] != null) mc.getTextureManager().destroyTexture((Identifier) e[1]);
+            mc.getTextureManager().registerTexture(id, new net.minecraft.client.texture.NativeImageBackedTexture(img)); FT.put(slot, new Object[]{key, id}); return id;
+        } catch (Exception ex) { FT.put(slot, new Object[]{key, null}); return null; }
+    }
     @Override public double[] cam() { return new double[]{cam.x, cam.y, cam.z}; }
     @Override public float camYaw() { return camera.getYaw(); }
     @Override public float camPitch() { return camera.getPitch(); }

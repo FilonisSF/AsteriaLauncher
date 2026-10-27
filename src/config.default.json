@@ -92,12 +92,12 @@
    "id": "sub",
    "image": "apiary",
    "title": {
-    "ru": "Скоро: свои звуки и анимации в /sub",
-    "en": "Coming: own sounds and animations in /sub"
+    "ru": "Свои звуки и анимации в /sub",
+    "en": "Own sounds and animations in /sub"
    },
    "text": {
-    "ru": "В следующем обновлении — настройка звуков удара, крита и взрыва кристалла, а также кастомные анимации убийства и смерти.",
-    "en": "The next update lets you pick hit, crit and crystal sounds, plus custom kill and death animations."
+    "ru": "Уже на сервере: выбирайте звуки удара, крита и взрыва кристалла, а также свои анимации убийства и смерти в /sub.",
+    "en": "Live now: pick hit, crit and crystal sounds plus custom kill and death animations in /sub."
    }
   },
   {
@@ -176,12 +176,12 @@
    "id": "spawners",
    "image": "spawners",
    "title": {
-    "ru": "Авто-спавнеры и фермы",
-    "en": "Auto-spawners and farms"
+    "ru": "Авто-спавнеры и авто-пасеки",
+    "en": "Auto-spawners and auto-apiaries"
    },
    "text": {
-    "ru": "В один спавнер можно загрузить до 10 разных яиц мобов и забирать лут прямо из интерфейса. Плюс авто-пасеки, скоростные воронки, коптильни и плавильни.",
-    "en": "One spawner takes up to 10 mob eggs, loot is collected from its menu. Plus auto-apiaries, fast hoppers, smokers and smelters."
+    "ru": "Спавнеры и пасеки работают одинаково: прокачиваете, кладёте яйцо моба — и получаете ресурсы и опыт. Каждый уровень прокачки повышает вместимость и количество дропа. До 10 разных яиц в одном, лут — прямо из меню.",
+    "en": "Spawners and apiaries work the same way: upgrade them, put in a mob egg and get resources and XP. Every upgrade level raises the capacity and the drop amount. Up to 10 different eggs in one, loot right from the menu."
    }
   },
   {

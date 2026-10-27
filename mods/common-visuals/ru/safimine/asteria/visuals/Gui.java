@@ -15,7 +15,7 @@ public final class Gui {
     static final float W = 440, H = 276, SIDE = 116;
     private static String cat = "hud", search = ""; private static boolean searchFocus;
     private static float scroll, scrollTarget, openT; private static long openedAt;
-    private static String expanded = null; private static V.Mod listening = null;
+    private static String expanded = null; private static V.Mod listening = null; private static V.S textEdit = null;
     private static V.S dragging = null; private static float dragX0, dragW;
     private static boolean themeDragBg, themeDragScale;
     private static Hud.Box moving = null; private static float moveDX, moveDY;
@@ -28,7 +28,7 @@ public final class Gui {
     private static final class Hit { float x1, y1, x2, y2; Runnable click; String id; Hit(float a, float b, float c, float d, String id, Runnable r) { x1 = a; y1 = b; x2 = c; y2 = d; this.id = id; click = r; } }
 
     public static void opened() { openedAt = System.currentTimeMillis(); openT = 0; D.set("gui.open", 0); D.frame(); Hud.editing = false; listening = null; searchFocus = false; }
-    public static void closed() { Hud.editing = false; listening = null; dragging = null; moving = null; V.changed(); }
+    public static void closed() { Hud.editing = false; listening = null; textEdit = null; dragging = null; moving = null; V.changed(); }
 
     // ================================================================== render
     public static void render(Gfx g, Game game, float mx, float my) {
@@ -52,7 +52,7 @@ public final class Gui {
         sidebar(g, game, lmx, lmy);
         if (cat.equals("theme")) theme(g, lmx, lmy); else if (cat.equals("configs")) configs(g, lmx, lmy); else modules(g, game, lmx, lmy);
         g.pop();
-        if (listening != null) { String t = "Нажмите клавишу для «" + listening.name + "»  ·  Esc — убрать бинд"; float w = D.w(t) + 20;
+        if (listening != null) { String t = "Нажмите клавишу или кнопку мыши для «" + listening.name + "»  ·  Esc — убрать"; float w = D.w(t) + 20;
             D.panel((screenW - w) / 2, screenH - 34, (screenW + w) / 2, screenH - 14, 6); D.textC(t, screenW / 2f, screenH - 28, 0xFFFFFFFF); }
     }
 
@@ -155,11 +155,11 @@ public final class Gui {
     }
     static String catIcon(String id) { switch (id) { case "hud": return "grid"; case "world": return "cube"; case "combat": return "swords"; case "camera": return "eye"; case "theme": return "palette"; case "configs": return "folder"; default: return "dot"; } }
     private static void toggleSwitch(float x, float y, float p) {
-        D.round(x, y, x + 22, y + 12, 6, D.mix(0x40FFFFFF, V.a1(), p), D.mix(0x40FFFFFF, V.a2(), p));
+        int c = D.mix(0xFFE5484D, 0xFF2FBF71, p); D.round(x, y, x + 22, y + 12, 6, c, D.mix(c, 0xFFFFFFFF, 0.12f)); // on = green, off = red
         D.circle(x + 6 + 10 * p, y + 6, 4.3f, 0xFFFFFFFF);
     }
     private static float settingsHeight(V.Mod m) { float h = 4; for (V.S s : m.s) h += rowH(s); return h; }
-    private static float rowH(V.S s) { return s.type.equals("num") ? 24 : s.type.equals("color") && s == colorOpen ? 44 : s.type.equals("mode") ? 22 : 18; }
+    private static float rowH(V.S s) { return s.type.equals("num") ? 24 : s.type.equals("color") && s == colorOpen ? 44 : s.type.equals("mode") ? (s.options.length > 4 ? 18 + (s.options.length + 2) / 3 * 16 : 22) : 18; }
 
     private static float setting(Gfx g, Game game, V.Mod m, V.S s, float x0, float y, float x1, float mx, float my) {
         float h = rowH(s);
@@ -177,15 +177,12 @@ public final class Gui {
                 hit(tx0 - 3, ty - 5, tx1 + 3, ty + 8, "num", () -> { dragging = s; dragX0 = tx0; dragW = tx1 - tx0; drag(lastMx); });
                 break; }
             case "mode": {
-                if (s.options.length > 4) { // long lists: a compact "‹ value ›" switcher
-                    String o = s.options[s.mode]; float w = Math.max(70, D.w(o) * 0.8f + 34), px = x1 - w;
-                    boolean hov = in(mx, my, px, y + 1, x1, y + 15);
-                    D.round(px, y + 1, x1, y + 15, 4, hov ? D.a(V.a1(), 0.55f) : D.a(V.a1(), 0.35f), hov ? D.a(V.a2(), 0.55f) : D.a(V.a2(), 0.35f));
-                    D.icon("chevL", px + 3, y + 4, 8, 0xFFFFFFFF); D.icon("chevR", x1 - 11, y + 4, 8, 0xFFFFFFFF);
-                    D.textS(o, px + (w - D.w(o) * 0.8f) / 2, y + 5, 0.8f, 0xFFFFFFFF);
-                    int n = s.options.length;
-                    hit(px, y + 1, px + w / 2, y + 15, "mode", () -> { s.mode = (s.mode + n - 1) % n; V.changed(); });
-                    hit(px + w / 2, y + 1, x1, y + 15, "mode", () -> { s.mode = (s.mode + 1) % n; V.changed(); });
+                if (s.options.length > 4) { // long lists: every option at once, three per row
+                    float cw = (x1 - x0) / 3f;
+                    for (int i = 0; i < s.options.length; i++) { final int idx = i; float cx = x0 + (i % 3) * cw, cy = y + 16 + (i / 3) * 16; boolean on = s.mode == i, hov = in(mx, my, cx, cy, cx + cw - 2, cy + 14);
+                        D.round(cx, cy, cx + cw - 2, cy + 14, 4, on ? V.a1() : hov ? 0x30FFFFFF : 0x18FFFFFF, on ? V.a2() : hov ? 0x30FFFFFF : 0x18FFFFFF);
+                        String o = s.options[i]; float ts = Math.min(0.8f, (cw - 8) / Math.max(1, D.w(o))); D.textS(o, cx + (cw - 2 - D.w(o) * ts) / 2, cy + 7 - 4 * ts, ts, on ? 0xFFFFFFFF : 0xFFB9CBD4);
+                        hit(cx, cy, cx + cw - 2, cy + 14, "mode", () -> { s.mode = idx; V.changed(); }); }
                     break;
                 }
                 float px = x1; for (int i = s.options.length - 1; i >= 0; i--) {
@@ -195,6 +192,15 @@ public final class Gui {
                     D.textS(o, px + 4, y + 5, 0.8f, on ? 0xFFFFFFFF : 0xFFB9CBD4);
                     hit(px, y + 1, px + w - 2, y + 15, "mode", () -> { s.mode = idx; V.changed(); });
                 } break; }
+            case "str": {
+                if (s.id.equals("pattern")) { D.textS(s.text.indexOf('1') >= 0 ? "нарисован в лаунчере" : "нарисуйте в лаунчере", x1 - D.w("нарисуйте в лаунчере") * 0.8f, y + 5, 0.8f, 0xFF9FB3C0); break; }
+                boolean ed = textEdit == s; String v = s.text + (ed && (System.currentTimeMillis() / 500) % 2 == 0 ? "|" : "");
+                float fw = Math.min(150, x1 - x0 - D.w(s.name) - 10), fx = x1 - fw;
+                D.round(fx, y + 1, x1, y + 15, 4, ed ? D.a(V.a1(), 0.35f) : 0x22FFFFFF, ed ? D.a(V.a2(), 0.35f) : 0x22FFFFFF);
+                String shown = v; while (D.w(shown) * 0.8f > fw - 8 && shown.length() > 1) shown = shown.substring(1);
+                D.textS(shown.isEmpty() ? "введите текст" : shown, fx + 4, y + 5, 0.8f, shown.isEmpty() ? 0x80FFFFFF : 0xFFFFFFFF);
+                hit(fx, y + 1, x1, y + 15, "str", () -> { textEdit = s; searchFocus = false; });
+                break; }
             case "color": {
                 D.round(x1 - 22, y + 2, x1, y + 14, 4, 0xFFFFFFFF); D.round(x1 - 21, y + 3, x1 - 1, y + 13, 3.5f, s.color);
                 hit(x1 - 24, y, x1, y + 16, "color", () -> colorOpen = colorOpen == s ? null : s);
@@ -314,6 +320,8 @@ public final class Gui {
     // ================================================================== input
     public static void click(float mx, float my, int button) {
         lastMx = mx; lastMy = my;
+        if (listening != null && button > 0) { listening.bind = -(button + 1); listening = null; V.changed(); return; } // right / middle / side mouse buttons as binds
+        textEdit = null;
         if (Hud.editing) {
             for (Hit h : HITS) if (in(mx, my, h.x1, h.y1, h.x2, h.y2)) { h.click.run(); return; }
             for (int i = Hud.BOXES.size() - 1; i >= 0; i--) { Hud.Box b = Hud.BOXES.get(i);
@@ -340,14 +348,15 @@ public final class Gui {
         if (moving != null) {
             float x = mx - moveDX, y = my - moveDY, w = moving.w, h = moving.h;
             // snap to centre / edges
-            if (Math.abs(x + w / 2 - screenW / 2f) < 4) x = screenW / 2f - w / 2; if (x < 4) x = 1; if (x + w > screenW - 4) x = screenW - w - 1;
+            boolean snapX = Math.abs(x + w / 2 - screenW / 2f) < 4, snapY = Math.abs(y + h / 2 - screenH / 2f) < 4; // any element can sit exactly in the middle
+            if (snapX) x = screenW / 2f - w / 2; if (snapY) y = screenH / 2f - h / 2; if (x < 4) x = 1; if (x + w > screenW - 4) x = screenW - w - 1;
             if (y < 4) y = 1; if (y + h > screenH - 4) y = screenH - h - 1;
             moving.x = x; moving.y = y;
-            boolean centred = moving.mod.id.equals("armor") || moving.mod.id.equals("targethud");
-            moving.mod.hud[0] = centred ? (x + w / 2) / screenW : (x + w / 2 > screenW / 2f ? (x + w) / screenW : x / screenW);
-            if (!centred && moving.mod.hud[0] > 0.5f && x + w / 2 <= screenW / 2f) moving.mod.hud[0] = x / screenW;
-            moving.mod.hud[1] = y + h / 2 > screenH / 2f ? (y + h) / screenH : y / screenH;
-            if (moving.mod.hud[1] > 0.5f && y + h / 2 <= screenH / 2f) moving.mod.hud[1] = y / screenH;
+            boolean centred = Hud.centred(moving.mod.id);
+            moving.mod.hud[0] = snapX ? 0.5f : centred ? (x + w / 2) / screenW : (x + w / 2 > screenW / 2f ? (x + w) / screenW : x / screenW);
+            if (!snapX && !centred && moving.mod.hud[0] > 0.5f && x + w / 2 <= screenW / 2f) moving.mod.hud[0] = x / screenW;
+            moving.mod.hud[1] = snapY ? 0.5f : y + h / 2 > screenH / 2f ? (y + h) / screenH : y / screenH;
+            if (!snapY && moving.mod.hud[1] > 0.5f && y + h / 2 <= screenH / 2f) moving.mod.hud[1] = y / screenH;
             V.changed(); return;
         }
         if (dragging != null) drag(mx);
@@ -362,6 +371,11 @@ public final class Gui {
     /** @return true if the key was used (Esc with nothing to cancel returns false -> the screen closes) */
     public static boolean key(int code) {
         if (listening != null) { listening.bind = code == 256 || code == 259 ? 0 : code; listening = null; V.changed(); return true; }
+        if (textEdit != null) {
+            if (code == 259 && !textEdit.text.isEmpty()) { textEdit.text = textEdit.text.substring(0, textEdit.text.length() - 1); V.changed(); }
+            if (code == 256 || code == 257) textEdit = null;
+            return true;
+        }
         if (Hud.editing) { if (code == 256) { Hud.editing = false; return true; } return false; }
         if (searchFocus) {
             if (code == 259 && !search.isEmpty()) { search = search.substring(0, search.length() - 1); return true; }
@@ -370,7 +384,7 @@ public final class Gui {
         }
         return false;
     }
-    public static void ch(char c) { if (searchFocus && c >= ' ' && search.length() < 24) { search += c; scrollTarget = 0; } }
+    public static void ch(char c) { if (textEdit != null) { if (c >= ' ' && textEdit.text.length() < 100) { textEdit.text += c; V.changed(); } return; } if (searchFocus && c >= ' ' && search.length() < 24) { search += c; scrollTarget = 0; } }
 
     // ------------------------------------------------------------------ util
     private static void hit(float x1, float y1, float x2, float y2, String id, Runnable r) { HITS.add(new Hit(x1, y1, x2, y2, id, r)); }

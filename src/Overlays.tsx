@@ -9,14 +9,12 @@ export const Splash = ({ pct, msg }: { pct: number; msg: string }) => <div class
 export function LaunchOverlay({ prog, img, t }: { prog: any; img: string; t: (k: string) => string }) {
   if (!prog.stage) return null
   const steps = [0, 1, 2, 3, 4, 5].map((i) => t('ls' + i))
-  return <div className="fixed inset-0 z-[80] flex items-center justify-center" style={{ background: 'rgba(2,8,14,.82)', backdropFilter: 'blur(10px)', color: '#e6fbff' }}>
-    <div className="relative rounded-3xl overflow-hidden w-[620px] shadow-2xl" style={{ border: '1px solid rgba(255,255,255,.12)' }}>
-      <img src={img} className="absolute inset-0 w-full h-full object-cover opacity-30" /><div className="relative p-8"><div className="flex items-center gap-4 mb-6"><div className="pulse"><Gem s={52} /></div>
-        <div><div className="text-2xl font-extrabold">{prog.stage}</div><div className="text-xs opacity-60 truncate w-96">{prog.detail}</div></div></div>
-      <div className="flex flex-col gap-2 mb-6">{steps.map((s, i) => <div key={i} className="flex items-center gap-3 text-sm" style={{ opacity: i > prog.step ? .35 : 1 }}>
-        <span className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: i < prog.step ? 'var(--a2)' : 'rgba(255,255,255,.1)', color: '#021' }}>{i < prog.step ? <Icon n="check" s={13} /> : i === prog.step ? <span className="spin" /> : null}</span>{s}</div>)}</div>
-      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,.1)' }}><div className="h-full rounded-full transition-all" style={{ width: Math.max(4, prog.pct) + '%', background: 'linear-gradient(90deg,var(--a1),var(--a2))' }} /></div>
-      <div className="text-right text-xs opacity-60 mt-1">{prog.pct}%</div></div></div></div>
+  return <div className="fixed right-6 bottom-6 z-[80] w-[340px] rounded-2xl overflow-hidden shadow-2xl pop-in" style={{ border: '1px solid color-mix(in srgb,var(--a2) 35%,rgba(255,255,255,.1))', background: 'rgba(4,14,20,.92)', backdropFilter: 'blur(14px)', color: '#e6fbff' }}>
+    <img src={img} className="absolute inset-0 w-full h-full object-cover opacity-15" />
+    <div className="relative p-4"><div className="flex items-center gap-3"><div className="pulse"><Gem s={30} /></div>
+      <div className="flex-1 min-w-0"><div className="font-extrabold truncate">{prog.stage}</div><div className="text-[11px] opacity-60 truncate">{steps[Math.min(steps.length - 1, prog.step || 0)]}{prog.detail ? ' · ' + prog.detail : ''}</div></div>
+      <span className="text-xs opacity-70 tabular-nums">{prog.pct}%</span></div>
+      <div className="h-1.5 rounded-full overflow-hidden mt-3" style={{ background: 'rgba(255,255,255,.1)' }}><div className="h-full rounded-full transition-all" style={{ width: Math.max(4, prog.pct) + '%', background: 'linear-gradient(90deg,var(--a1),var(--a2))' }} /></div></div></div>
 }
 export const UpdateModal = ({ upd, t }: { upd: any; t: (k: string) => string }) => !upd ? null : <div className="fixed inset-0 z-[90] flex items-center justify-center" style={{ background: 'rgba(2,8,14,.88)', backdropFilter: 'blur(12px)', color: '#e6fbff' }}>
   <div className="glass rounded-3xl p-8 w-[460px] text-center"><div className="pulse inline-block"><Gem s={64} /></div><h2 className="text-2xl font-extrabold mt-3">{t('updTitle')}{upd.version ? ' ' + upd.version : ''}</h2><p className="opacity-70 text-sm mt-1 mb-5">{t('updDesc')}</p>

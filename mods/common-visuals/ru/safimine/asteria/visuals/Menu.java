@@ -52,9 +52,9 @@ public final class Menu {
     /** AsteriaLauncher logo where the Minecraft logo was: the AL mark and the name with the theme gradient */
     public static void logo(Gfx g, int screenW, float y) {
         D.g = g;
-        String name = "AsteriaLauncher"; float sc = 2.6f, tw = D.w(name) * sc, mark = 58, gap = 6, total = mark + gap + tw, x = (screenW - total) / 2f;
+        String a = "Asteria", b = "Launcher"; float sc = 2.6f, sp = 4, tw = (D.w(a) + sp + D.w(b)) * sc, mark = 58, gap = 6, total = mark + gap + tw, x = (screenW - total) / 2f;
         g.texture("textures/gui/logo.png", 512, 512, x, y - 12, mark, mark);
-        g.push(x + mark + gap, y + 17 - 4.5f * sc, sc); D.gradText(name, 0, 0, true); g.pop();
+        g.push(x + mark + gap, y + 17 - 4.5f * sc, sc); D.gradText(a, 0, 0, true); D.gradText(b, D.w(a) + sp, 0, true); g.pop(); // "Asteria Launcher": two words with a small gap
     }
 
     /** the Asteria background on menu screens (cover fit) with a soft dark veil for readable text */

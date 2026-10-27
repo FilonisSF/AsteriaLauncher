@@ -57,18 +57,21 @@ public final class Hud {
         if (inv.length > 0) {
             place("hotbar", W, H, s, () -> hotbarSize(game), () -> hotbar(game, inv));
             place("inventory", W, H, s, () -> new float[]{9 * 19 + 7, 3 * 19 + 19}, () -> inventory(game, inv));
-            place("totems", W, H, s, () -> new float[]{58, 24}, () -> totems(game, inv));
+            place("totems", W, H, s, () -> new float[]{40, 22}, () -> totems(game, inv));
             List<Object> cd = cooldowns(game, inv);
             if (!cd.isEmpty() || editing) place("cooldowns", W, H, s, () -> new float[]{104, Math.max(1, cd.size()) * 20 + 4}, () -> cooldownList(game, cd));
         }
         if (Media.present() || editing) place("music", W, H, s, () -> new float[]{156, 36}, Hud::music);
+        if (game.serverInfo() != null || editing) place("servercard", W, H, s, () -> serverSize(game), () -> serverCard(game));
+        if (V.on("nametags") && !editing) try { nametags(game, W, H); } catch (Throwable ignored) {}
+        if (V.on("markers") && !editing) try { marks(game, W, H); } catch (Throwable ignored) {}
     }
 
     // ------------------------------------------------------------------ wave 2: island, hotbar, inventory, totems, cooldowns, music
     private static String islandText(Game game) {
         Note n = NOTES.isEmpty() ? null : NOTES.get(NOTES.size() - 1);
         if (n != null && System.currentTimeMillis() - n.at < 2600) return n.title + "  —  " + n.text;
-        if (V.bool("island", "music") && Media.active() && (System.currentTimeMillis() / 5000) % 2 == 1) return Media.title + (Media.artist.isEmpty() ? "" : "  —  " + Media.artist);
+        if (Media.present() && Media.active() && (System.currentTimeMillis() / 5000) % 2 == 1) return Media.title + (Media.artist.isEmpty() ? "" : "  —  " + Media.artist);
         List<String> p = new ArrayList<>(); p.add("Asteria");
         if (V.bool("island", "time")) p.add(HM.format(new Date()));
         p.add(fps + " fps"); int ping = game.ping(); if (ping >= 0) p.add(ping + " ms");
@@ -112,12 +115,11 @@ public final class Hud {
         for (Object st : inv) if (st != null && game.itemId(st).endsWith("totem_of_undying")) { n += game.count(st); one = st; }
         Object off = game.offhand(); if (off != null && game.itemId(off).endsWith("totem_of_undying")) { n += game.count(off); one = off; }
         if (lastTotem == null) lastTotem = game.totemStack();
-        D.panel(0, 0, 58, 24, 7, false);
-        if (n <= 1) { float p = 0.4f + 0.4f * (float) Math.sin(System.currentTimeMillis() / 220.0); D.round(0, 0, 58, 24, 7, D.alpha(n == 0 ? 0xF87171 : 0xFACC15, (int) (40 * p))); }
-        D.round(3, 3, 21, 21, 5, D.a(V.a1(), 0.25f), D.a(V.a2(), 0.15f));
-        if (lastTotem != null) D.g.item(lastTotem, 4, 4);
-        String t = String.valueOf(n); int col = n == 0 ? 0xFFF87171 : n == 1 ? 0xFFFACC15 : 0xFFFFFFFF;
-        D.g.push(26, 5, 1.35f); D.g.text(t, 0, 0, col, true); D.g.pop(); D.textS(n == 1 ? "тотем" : "тотемов", 26 + D.w(t) * 1.35f + 3, 9, 0.7f, 0xFF9FB3C0);
+        D.panel(0, 0, 40, 22, 7, false);
+        if (n <= 1) { float p = 0.4f + 0.4f * (float) Math.sin(System.currentTimeMillis() / 220.0); D.round(0, 0, 40, 22, 7, D.alpha(n == 0 ? 0xF87171 : 0xFACC15, (int) (40 * p))); }
+        if (lastTotem != null) D.g.item(lastTotem, 3, 3);
+        String t = String.valueOf(n); int col = n == 0 ? 0xFFF87171 : n == 1 ? 0xFFFACC15 : 0xFFFFFFFF; float ts = n > 99 ? 0.9f : 1.2f;
+        D.g.push(21 + (17 - D.w(t) * ts) / 2, 11 - 4 * ts, ts); D.g.text(t, 0, 0, col, true); D.g.pop();
     }
     private static List<Object> cooldowns(Game game, Object[] inv) {
         List<Object> out = new ArrayList<>(); Set<String> seen = new HashSet<>();
@@ -150,13 +152,16 @@ public final class Hud {
         D.round(37, 27, 150, 29, 1, 0x30FFFFFF); D.round(37, 27, 37 + 113 * f, 29, 1, V.a1(), V.a2());
     }
 
+    /** elements that always grow from their middle */
+    public static boolean centred(String id) { return id.equals("armor") || id.equals("targethud") || id.equals("island") || id.equals("hotbar"); }
     interface Size { float[] get(); }
     /** draws an element at its saved position; x/y > 0.5 anchor to the right/bottom edge so elements grow away from the edge */
     private static void place(String id, int W, int H, float s, Size size, Runnable draw) {
         V.Mod m = V.mod(id); if (m == null || !(m.on || editing)) return;
         float[] wh = size.get(); float w = wh[0] * s, h = wh[1] * s; if (w <= 0 || h <= 0) return;
         float x = m.hud[0] > 0.5f ? m.hud[0] * W - w : m.hud[0] * W, y = m.hud[1] > 0.5f ? m.hud[1] * H - h : m.hud[1] * H;
-        if (id.equals("armor") || id.equals("targethud") || id.equals("island") || id.equals("hotbar")) x = m.hud[0] * W - w / 2; // centred elements
+        if (centred(id) || Math.abs(m.hud[0] - 0.5f) < 0.002f) x = m.hud[0] * W - w / 2; // centred elements (or put in the middle in the editor)
+        if (Math.abs(m.hud[1] - 0.5f) < 0.002f) y = H / 2f - h / 2;
         if (id.equals("hotbar") && m.hud[1] > 0.97f) y = H - h; // sits exactly where the vanilla hotbar was: XP, hearts and food stay free
         if (id.equals("island") && m.hud[1] < 0.15f) y += bossBars * 19; // never on top of boss bars
         x = Math.max(1, Math.min(W - w - 1, x)); y = Math.max(1, Math.min(H - h - 1, y));
@@ -278,32 +283,29 @@ public final class Hud {
     private static List<Game.Item> targetGear(Game game, Object t) {
         List<Game.Item> l = new ArrayList<>(); if (t == null) return l;
         if (V.bool("targethud", "armor")) l.addAll(game.armorOf(t));
-        if (V.bool("targethud", "held")) { Game.Item h = game.heldBy(t); if (h != null) l.add(h); }
+        if (V.bool("targethud", "held")) { Game.Item h = game.heldBy(t); if (h != null) l.add(h); Game.Item o = game.offBy(t); if (o != null) l.add(o); }
         return l;
-    }
-    private static String enchLine(List<Game.Item> gear) {
-        if (!V.bool("targethud", "enchants")) return "";
-        for (int i = gear.size() - 1; i >= 0; i--) if (!gear.get(i).ench.isEmpty()) return String.join(", ", gear.get(i).ench); // weapon first, then armour
-        return "";
     }
     private static float[] targetSize(Game game, Object t) {
         List<Game.Item> gear = targetGear(game, t); float h = 38;
-        if (!gear.isEmpty()) h += 24; if (!enchLine(gear).isEmpty()) h += 9;
-        return new float[]{140, h};
+        if (!gear.isEmpty()) h += 24;
+        return new float[]{Math.max(150, gear.size() * 22 + 10), h};
     }
     private static void target(Game game, Object t) {
         float[] sz = targetSize(game, t); float w = sz[0], h = sz[1];
         D.panel(0, 0, w, h, 6);
         if (t == null) { D.text("Цель", 8, 15, 0xAAFFFFFF); return; }
         boolean head = V.bool("targethud", "head"); float tx = 7;
-        if (head) { Object skin = game.skin(t); float hs = 26; D.round(5, 5, 5 + hs + 2, 5 + hs + 2, 5, D.a(V.a1(), 0.9f), D.a(V.a2(), 0.9f));
-            Object egg = skin == null ? game.entityIcon(t) : null;
-            if (skin != null) D.g.head(skin, 6, 6, hs); else { D.round(6, 6, 6 + hs, 6 + hs, 4, 0xFF10202A); if (egg != null) D.g.item(egg, 6 + 5, 6 + 5); else D.icon("dot", 6 + 7, 6 + 7, 12, 0xFF9FB3C0); }
+        if (head) { Object skin = game.skin(t); float hs = 26; D.round(5, 5, 5 + hs + 2, 5 + hs + 2, 7, D.a(V.a1(), 0.9f), D.a(V.a2(), 0.9f));
+            if (skin != null) D.g.headRound(skin, 6, 6, hs, 6);
+            else { D.round(6, 6, 6 + hs, 6 + hs, 6, 0xFF10202A); boolean drawn = false; try { drawn = D.g.entity(t, 6, 6, hs); } catch (Throwable ignored) {}
+                if (!drawn) { Object egg = game.entityIcon(t); if (egg != null) D.g.item(egg, 6 + 5, 6 + 5); else D.icon("dot", 6 + 7, 6 + 7, 12, 0xFF9FB3C0); } }
             tx = 38; }
         float hp = Math.max(0, game.hp(t)), mx = Math.max(1, game.maxHp(t)), f = Math.min(1, hp / mx);
         float shown = D.anim("thp" + System.identityHashCode(t), f, 6);
-        String name = game.name(t); while (D.w(name) > w - tx - 32 && name.length() > 3) name = name.substring(0, name.length() - 1);
-        D.text(name, tx, 6, 0xFFFFFFFF);
+        String name = game.name(t); float room = w - tx - 40, ns = Math.max(0.6f, Math.min(1f, room / Math.max(1, D.w(name)))); // long nicks get smaller, not cut
+        while (D.w(name) * ns > room && name.length() > 3) name = name.substring(0, name.length() - 1);
+        D.textS(name, tx, 6 + (1 - ns) * 4, ns, 0xFFFFFFFF);
         String hpS = String.format("%.1f", hp / 2); float hx = w - 6 - D.w(hpS) - 11; D.icon("heart", hx, 5.5f, 9, dur(f)); D.text(hpS, hx + 11, 6, dur(f));
         D.round(tx, 22, w - 7, 28, 3, 0x50000000);
         D.round(tx, 22, tx + Math.max(3, (w - 7 - tx) * shown), 28, 3, D.alpha(0xFFFFFF, 90)); // trailing damage
@@ -315,10 +317,82 @@ public final class Hud {
                 if (!it.ench.isEmpty()) D.round(gx, gy, gx + 20, gy + 20, 4, D.a(0xFFB980FF, 0.25f)); // enchanted: violet glow
                 D.g.item(it.stack, (int) gx + 2, (int) gy + 2);
                 if (V.bool("targethud", "durability") && it.max > 0) { float left = 1f - it.damage / (float) it.max; D.round(gx + 2, gy + 18, gx + 18, gy + 19.5f, 0.7f, 0x60000000); D.round(gx + 2, gy + 18, gx + 2 + 16 * left, gy + 19.5f, 0.7f, dur(left)); }
-                gx += 22; }
-            String el = enchLine(gear);
-            if (!el.isEmpty()) { while (D.w(el) * 0.7f > w - 12 && el.length() > 4) el = el.substring(0, el.length() - 2); D.textS(el, 6, gy + 23, 0.7f, 0xFFD8B4FE); } }
+                gx += 22; } }
     }
+
+    // ------------------------------------------------------------------ server card
+    private static String[] srv(Game game) { String[] i = game.serverInfo(); return i != null ? i : new String[]{"Сервер", "play.safimine.ru", "0"}; }
+    private static float[] serverSize(Game game) { String[] i = srv(game); String l2 = line2(game, i); return new float[]{Math.max(110, Math.max(D.w(i[0]), D.w(l2) * 0.8f) + 44), 36}; }
+    private static String line2(Game game, String[] i) {
+        List<String> p = new ArrayList<>(); if (V.bool("servercard", "ip")) p.add(i[1]);
+        if (V.bool("servercard", "online")) p.add(i[2] + " онлайн"); int ping = game.ping(); if (ping >= 0) p.add(ping + " ms");
+        return String.join("  ·  ", p);
+    }
+    private static void serverCard(Game game) {
+        String[] i = srv(game); float w = serverSize(game)[0];
+        D.panel(0, 0, w, 36, 7);
+        java.io.File ic = game.serverIcon();
+        if (ic == null || !D.g.image("srv:" + i[1], ic, 4, 4, 28, 28)) { D.round(4, 4, 32, 32, 6, V.a1(), V.a2()); D.icon("globe", 10, 10, 16, 0xFFFFFFFF); }
+        D.g.text(i[0], 37, 6, 0xFFFFFFFF, V.shadow);
+        D.textS(line2(game, i), 37, 19, 0.8f, 0xFF9FB3C0);
+    }
+
+    // ------------------------------------------------------------------ info above players: hearts (Neat), armour with durability, hands, enchantments
+    private static void nametags(Game game, int W, int H) {
+        double range = V.num("nametags", "range"); float pt = Fx.partial(); double[] me = game.pos(game.self(), pt);
+        List<Object> ps = new ArrayList<>(game.players());
+        for (Object e : ps) {
+            if (!game.alive(e)) continue;
+            double[] p = game.pos(e, pt); double dx = p[0] - me[0], dy = p[1] - me[1], dz = p[2] - me[2], dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist > range) continue;
+            float[] sp = Fx.project(p[0], p[1] + game.height(e) + 0.62, p[2], W, H); if (sp == null) continue;
+            float k = (float) (V.num("nametags", "scale") * Math.max(0.45, Math.min(1.1, 6 / Math.max(1, sp[2])))), y = sp[1];
+            D.g.push(sp[0], y, k); try { tag(game, e); } finally { D.g.pop(); }
+        }
+    }
+    private static void tag(Game game, Object e) {
+        float y = 0;
+        if (V.bool("nametags", "hearts")) { float hp = Math.max(0, game.hp(e)), mx = Math.max(1, game.maxHp(e)); int n = (int) Math.ceil(Math.min(40, mx) / 2), per = Math.min(10, n), rows = (n + per - 1) / per;
+            String v = String.format("%.1f", hp / 2); float w = per * 8 + 4 + D.w(v) * 0.8f + 4; y -= rows * 8 + 4;
+            D.round(-w / 2, y - 2, w / 2, y + rows * 8 + 1, 4, D.alpha(0x05090D, 150));
+            for (int i = 0; i < n; i++) { float hx = -w / 2 + 3 + (i % per) * 8, hy = y + (i / per) * 8; float f = Math.max(0, Math.min(1, hp / 2 - i));
+                D.icon("heart", hx, hy, 7.5f, 0x80303030); if (f > 0) { D.icon("heart", hx, hy, 7.5f, f >= 1 ? 0xFFF43F5E : 0xFFFB7185); } }
+            D.textS(v, -w / 2 + per * 8 + 5, y + (rows * 8 - 7) / 2f, 0.8f, dur(hp / mx));
+            y -= 2; }
+        List<Game.Item> items = new ArrayList<>();
+        if (V.bool("nametags", "hands")) { Game.Item h = game.heldBy(e); if (h != null) items.add(h); }
+        if (V.bool("nametags", "armor")) items.addAll(game.armorOf(e));
+        if (V.bool("nametags", "hands")) { Game.Item o = game.offBy(e); if (o != null) items.add(o); }
+        if (items.isEmpty()) return;
+        float w = items.size() * 18; y -= 22;
+        D.round(-w / 2 - 2, y - 1, w / 2 + 2, y + 20, 4, D.alpha(0x05090D, 150));
+        for (int i = 0; i < items.size(); i++) { Game.Item it = items.get(i); float x = -w / 2 + i * 18 + 1;
+            D.g.item(it.stack, (int) x, (int) y);
+            if (it.max > 0) { float left = 1f - it.damage / (float) it.max; D.round(x + 1, y + 17, x + 15, y + 18.5f, 0.6f, 0x80000000); D.round(x + 1, y + 17, x + 1 + 14 * left, y + 18.5f, 0.6f, dur(left)); } }
+        if (!V.bool("nametags", "enchants")) return;
+        for (int i = 0; i < items.size(); i++) { Game.Item it = items.get(i); if (it.ench.isEmpty()) continue; float x = -w / 2 + i * 18 + 9;
+            float ey = y - 2; for (String en : it.ench) { String sh = shortEnch(en); ey -= 5.5f; D.textS(sh, x - D.w(sh) * 0.25f, ey, 0.5f, 0xFFD8B4FE); } }
+    }
+    /** "Защита IV" -> "Защ4": short enough to stack above an item */
+    private static String shortEnch(String e) {
+        String[] p = e.trim().split(" "); String lvl = p.length > 1 ? p[p.length - 1] : "";
+        int n = 0; for (int i = 0; i < ROMAN.length; i++) if (ROMAN[i].equals(lvl)) n = i;
+        String name = n > 0 ? e.substring(0, e.length() - lvl.length()).trim() : e.trim(); name = name.length() > 3 ? name.substring(0, 3) : name;
+        return name + (n > 0 ? n : "");
+    }
+    private static final String[] ROMAN = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
+    private static void marks(Game game, int W, int H) {
+        Fx.marksServer(game); double[] me = game.pos(game.self(), Fx.partial());
+        for (int k = 0; k < Fx.MARKS.size(); k++) { double[] m = Fx.MARKS.get(k); float[] sp = Fx.project(m[0], m[1] + 0.6, m[2], W, H);
+            if (sp == null) continue; float x = Math.max(12, Math.min(W - 12, sp[0])), y = Math.max(12, Math.min(H - 22, sp[1]));
+            double dx = m[0] - me[0], dy = m[1] - me[1], dz = m[2] - me[2]; int dist = (int) Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz));
+            float near = dist < 6 ? 0.45f : 1; // close up it fades so it doesn't cover the block
+            D.circle(x, y, 9, D.a(0xFF05090D, 0.55f * near)); D.ring(x, y, 8, 9.2f, D.a(V.grad(k * 0.17f), near), D.a(V.grad(k * 0.17f + 0.3f), near));
+            D.mark(x - 8, y - 8, 16);
+            if (V.bool("markers", "dist")) { String t = dist + " м"; float tw = D.w(t) * 0.8f; D.round(x - tw / 2 - 3, y + 11, x + tw / 2 + 3, y + 20, 3, D.a(0xFF05090D, 0.6f * near)); D.textS(t, x - tw / 2, y + 12, 0.8f, D.a(0xFFFFFFFF, near)); } }
+    }
+    /** a module switched by its key: sound + notification */
+    public static void bindToggled(V.Mod m) { notify(m.name, m.on ? "Включено" : "Выключено", m.on); Fx.sound(m.on ? "blip" : "pop", 0.55f); }
 
     // ------------------------------------------------------------------ array list
     private static final Map<String, Float> SLIDE = new HashMap<>();
@@ -367,30 +441,23 @@ public final class Hud {
     }
 
     // ------------------------------------------------------------------ crosshair
+    private static void xrect(float x0, float y0, float x1, float y1, int c, int o, float ot) { if (ot > 0) D.rect(x0 - ot, y0 - ot, x1 + ot, y1 + ot, o); D.rect(x0, y0, x1, y1, c); }
     private static void crosshair(int W, int H, Game game) {
-        float cx = W / 2f, cy = H / 2f; int c = V.color("crosshair", "color"); int st = V.mode("crosshair", "style");
-        float size = (float) V.num("crosshair", "size"), gap = (float) V.num("crosshair", "gap"), th = (float) V.num("crosshair", "thick");
+        int st = V.mode("crosshair", "style"); if (st == 7) return; // vanilla: the game draws its own
+        if (V.bool("crosshair", "hidef5") && game.thirdPerson()) return;
+        float cx = W / 2f, cy = H / 2f, al = (float) V.num("crosshair", "alpha"); int c = D.a(V.color("crosshair", "color"), al), o = D.a(0xFF000000, al * 0.85f);
+        float size = (float) V.num("crosshair", "size"), gap = (float) V.num("crosshair", "gap"), th = (float) V.num("crosshair", "thick"), ot = V.bool("crosshair", "outline") ? (float) V.num("crosshair", "othick") : 0;
         if (V.bool("crosshair", "dynamic")) gap += (1 - game.cooldown()) * 4;
-        int o = 0x99000000;
-        switch (st) {
-            case 1: D.circle(cx, cy, th + 1.2f, o); D.circle(cx, cy, th + 0.3f, c); break;
-            case 2: D.ring(cx, cy, size + gap, size + gap + th + 0.6f, o, o); D.ring(cx, cy, size + gap + 0.3f, size + gap + th + 0.3f, c, c); D.circle(cx, cy, 0.8f, c); break;
-            case 5: { float R = size + gap + th; for (int i = 0; i < 4; i++) { double a0 = Math.PI / 2 * i, a1 = a0 + Math.PI / 2; float ri = R * 0.36f;
-                    D.line(cx + (float) Math.cos(a0) * R, cy + (float) Math.sin(a0) * R, cx + (float) Math.cos(a0 + Math.PI / 4) * ri, cy + (float) Math.sin(a0 + Math.PI / 4) * ri, th * 0.6f + 0.4f, c);
-                    D.line(cx + (float) Math.cos(a0 + Math.PI / 4) * ri, cy + (float) Math.sin(a0 + Math.PI / 4) * ri, cx + (float) Math.cos(a1) * R, cy + (float) Math.sin(a1) * R, th * 0.6f + 0.4f, c); }
-                D.circle(cx, cy, 0.9f, c); break; }
-            case 6: D.ring(cx, cy, size + gap, size + gap + th * 0.6f + 0.4f, D.a(c, 0.8f), D.a(c, 0.8f)); D.circle(cx, cy, th * 0.6f + 0.6f, c); break;
-            case 4: D.star(cx, cy, size + gap + th + 1.2f, o, o); D.g.push(cx, cy, 1); D.crystal(0, 0, size + gap + th); D.g.pop(); break;
-            case 3: for (int i = 0; i < 4; i++) { float sx = (i % 2 == 0 ? -1 : 1), sy = (i < 2 ? -1 : 1), x = cx + sx * (gap + 1), y = cy + sy * (gap + 1);
-                D.rect(Math.min(x, x + sx * size), y - th / 2, Math.max(x, x + sx * size), y + th / 2, c); D.rect(x - th / 2, Math.min(y, y + sy * size), x + th / 2, Math.max(y, y + sy * size), c); } break;
-            default:
-                for (float[] d : new float[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
-                    float x1 = cx + d[0] * gap, y1 = cy + d[1] * gap, x2 = cx + d[0] * (gap + size), y2 = cy + d[1] * (gap + size);
-                    float hx = d[0] == 0 ? th / 2 : 0, hy = d[1] == 0 ? th / 2 : 0;
-                    D.rect(Math.min(x1, x2) - hx - 0.5f, Math.min(y1, y2) - hy - 0.5f, Math.max(x1, x2) + hx + 0.5f, Math.max(y1, y2) + hy + 0.5f, o);
-                    D.rect(Math.min(x1, x2) - hx, Math.min(y1, y2) - hy, Math.max(x1, x2) + hx, Math.max(y1, y2) + hy, c);
-                }
-        }
+        if (st == 6) { String p = V.text("crosshair", "pattern"); int n = (int) Math.round(Math.sqrt(p.length())); if (n < 3 || n * n != p.length()) return;
+            float cs = th, x0 = cx - n * cs / 2, y0 = cy - n * cs / 2;
+            for (int pass = ot > 0 ? 0 : 1; pass < 2; pass++) for (int i = 0; i < n * n; i++) if (p.charAt(i) == '1') { float x = x0 + (i % n) * cs, y = y0 + (i / n) * cs;
+                if (pass == 0) D.rect(x - ot, y - ot, x + cs + ot, y + cs + ot, o); else D.rect(x, y, x + cs, y + cs, c); }
+            return; }
+        if (st == 0 || st == 1 || st == 5) for (float[] d : new float[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) { if (st == 5 && d[1] < 0) continue;
+            float x1 = cx + d[0] * gap, y1 = cy + d[1] * gap, x2 = cx + d[0] * (gap + size), y2 = cy + d[1] * (gap + size), hx = d[0] == 0 ? th / 2 : 0, hy = d[1] == 0 ? th / 2 : 0;
+            xrect(Math.min(x1, x2) - hx, Math.min(y1, y2) - hy, Math.max(x1, x2) + hx, Math.max(y1, y2) + hy, c, o, ot); }
+        if (st == 3 || st == 4) { float r = size + gap; if (ot > 0) D.ring(cx, cy, r - th / 2 - ot, r + th / 2 + ot, o, o); D.ring(cx, cy, r - th / 2, r + th / 2, c, c); }
+        if (st == 1 || st == 2 || st == 4) { float r = Math.max(0.6f, th * 0.75f) * (st == 2 ? 1.4f : 1); if (ot > 0) D.circle(cx, cy, r + ot, o); D.circle(cx, cy, r, c); }
     }
 
     /** Asteria frame: thin stepped lines in the corners and a star with lines at the top centre (asset board HUD) */

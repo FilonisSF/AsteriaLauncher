@@ -83,8 +83,10 @@ public final class Gfx116 implements Gfx {
     @Override public void textTop(String s, float x, float y, int argb) { m.push(); m.translate(0, 0, 300); text(s, x, y, argb, true); m.pop(); }
     @Override public int width(String s) { return tr.getWidth(t(s)); }
     /** our smooth TTF font (assets/asteria_visuals/font/ui.json) unless the theme switches it off */
-    private static final Identifier[] UI = new Identifier[16];
-    private static Text t(String s) { if (V.font <= 0) return new LiteralText(s); int i = Math.min(15, V.font); if (UI[i] == null) UI[i] = new Identifier("asteria_visuals", "f" + i); return new LiteralText(s).setStyle(Style.EMPTY.withFont(UI[i])); }
+    private static final Identifier[][] UI = new Identifier[16][7];
+    /** GUI scale 1..6: the font variant rendered for exactly this many pixels per GUI pixel */
+    private static int gs() { return Math.max(1, Math.min(6, (int) Math.round(net.minecraft.client.MinecraftClient.getInstance().getWindow().getScaleFactor()))); }
+    private static Text t(String s) { if (V.font <= 0) return new LiteralText(s); int i = Math.min(15, V.font), k = gs(); if (UI[i][k] == null) UI[i][k] = new Identifier("asteria_visuals", "f" + i + "s" + k); return new LiteralText(s).setStyle(Style.EMPTY.withFont(UI[i][k])); }
     @Override public void item(Object stack, int x, int y) {
         RenderSystem.pushMatrix(); RenderSystem.multMatrix(m.peek().getModel());
         c.getItemRenderer().renderInGuiWithOverrides((ItemStack) stack, x, y);
@@ -104,6 +106,17 @@ public final class Gfx116 implements Gfx {
         DrawableHelper.drawTexture(m, 0, 0, 8, 8, 8, 8, 8, 8, 64, 64);   // face
         DrawableHelper.drawTexture(m, 0, 0, 8, 8, 40, 8, 8, 8, 64, 64);  // hat layer
         m.pop();
+    }
+    @Override public void skinPart(Object skin, int u, int v, int w, int h, float x, float y, float k) {
+        c.getTextureManager().bindTexture((Identifier) skin); RenderSystem.enableBlend(); RenderSystem.color4f(1, 1, 1, 1);
+        m.push(); m.translate(x, y, 0); m.scale(k, k, 1); DrawableHelper.drawTexture(m, 0, 0, w, h, (float) u, (float) v, w, h, 512, 512); m.pop();
+    }
+    @Override public boolean entity(Object e, float x, float y, float size) {
+        if (!(e instanceof net.minecraft.entity.LivingEntity)) return false; net.minecraft.entity.LivingEntity le = (net.minecraft.entity.LivingEntity) e;
+        int s = Math.max(2, (int) (size * 0.85f / Math.max(le.getHeight(), le.getWidth())));
+        RenderSystem.pushMatrix(); RenderSystem.multMatrix(m.peek().getModel());
+        try { net.minecraft.client.gui.screen.ingame.InventoryScreen.drawEntity((int) (x + size / 2), (int) (y + size - 2), s, 0, 0, le); } finally { RenderSystem.popMatrix(); }
+        return true;
     }
     @Override public void push(float x, float y, float s) {
         m.push(); m.translate(x, y, 0); m.scale(s, s, 1f);

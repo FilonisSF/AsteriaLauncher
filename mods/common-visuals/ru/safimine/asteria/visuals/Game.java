@@ -81,6 +81,21 @@ public interface Game {
     /** how many boss bars are shown at the top */
     default int bossBars() { return 0; }
 
+    /** what an entity holds in its off hand (null if nothing) */
+    default Item offBy(Object e) { return null; }
+    /** sends a chat message as the player */
+    default void chat(String text) {}
+    /** current server: {name, address, players online} or null in single player */
+    default String[] serverInfo() { return null; }
+    /** the server's icon saved as a png (null if it has none) */
+    default java.io.File serverIcon() { return null; }
+    /** is the entity a player */
+    default boolean isPlayer(Object e) { return skin(e) != null; }
+    /** game perspective: 0 first person, 1 third person back, 2 front */
+    default int perspective() { return thirdPerson() ? 1 : 0; }
+    default void setPerspective(int p) {}
+    /** the block the player looks at up to dist blocks away: {x, y, z} of its top centre, or null */
+    default double[] lookAt(double dist) { return null; }
     /** opens / closes the Asteria menu screen */
     void openMenu();
     void closeMenu();

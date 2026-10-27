@@ -15,6 +15,30 @@ type Design = { bg: 'solid' | 'gradient'; c1: string; c2: string; img: string; s
 const DESIGN: Design = { bg: 'gradient', c1: '#0b1f3a', c2: '#0e7490', img: '', scale: 100, ox: 0, oy: 0, rot: 0, fit: 'cover', back: false, border: 1, borderColor: '#22d3ee' }
 
 /** Skin / cape editor: paint right on the 3D model or on the 2D unwrap; cape designer (background, image, border, HD). */
+/** pick the part of a picture that goes on the cape: a frame in the cape's proportions (10:16) you move and resize */
+function CropBox({ src, aspect, onDone, onCancel }: { src: string; aspect: number; onDone: (png: string) => void; onCancel: () => void }) {
+  const [im, setIm] = useState<HTMLImageElement | null>(null), [sel, setSel] = useState({ x: 0, y: 0, w: 0 }), drag = useRef<{ mode: 'move' | 'size'; px: number; py: number; s: typeof sel } | null>(null)
+  useEffect(() => { const i = new Image(); i.onload = () => { setIm(i); const w = Math.min(i.width, i.height * aspect) * 0.8; setSel({ x: (i.width - w) / 2, y: (i.height - w / aspect) / 2, w }) }; i.src = src }, [src])
+  const BOX = 520, k = im ? Math.min(BOX / im.width, BOX / im.height) : 1, h = sel.w / aspect
+  const clamp = (s: typeof sel) => { if (!im) return s; let w = Math.max(16, Math.min(s.w, im.width, im.height * aspect)); const hh = w / aspect
+    return { w, x: Math.max(0, Math.min(im.width - w, s.x)), y: Math.max(0, Math.min(im.height - hh, s.y)) } }
+  const down = (mode: 'move' | 'size') => (e: React.PointerEvent) => { e.stopPropagation(); (e.target as Element).setPointerCapture(e.pointerId); drag.current = { mode, px: e.clientX, py: e.clientY, s: sel } }
+  const move = (e: React.PointerEvent) => { const d = drag.current; if (!d) return; const dx = (e.clientX - d.px) / k, dy = (e.clientY - d.py) / k
+    setSel(clamp(d.mode === 'move' ? { ...d.s, x: d.s.x + dx, y: d.s.y + dy } : { ...d.s, w: d.s.w + Math.max(dx, dy * aspect) })) }
+  const wheel = (e: React.WheelEvent) => { const nw = sel.w * (e.deltaY > 0 ? 1.08 : 0.92), c = { x: sel.x + sel.w / 2, y: sel.y + h / 2 }; setSel(clamp({ w: nw, x: c.x - nw / 2, y: c.y - nw / aspect / 2 })) }
+  const done = () => { if (!im) return; const H = Math.min(640, Math.round(h)), W = Math.round(H * aspect), c = document.createElement('canvas'); c.width = W; c.height = H
+    const x = c.getContext('2d')!; x.imageSmoothingQuality = 'high'; x.drawImage(im, sel.x, sel.y, sel.w, h, 0, 0, W, H); onDone(c.toDataURL('image/png')) }
+  return <div className="fixed inset-0 z-[90] flex items-center justify-center fade" style={{ background: 'rgba(2,8,14,.8)', backdropFilter: 'blur(6px)' }}>
+    <div className="glass rounded-3xl p-5 flex flex-col gap-3" style={{ width: BOX + 40 }}>
+      <div><div className="text-lg font-extrabold">Выберите область для плаща</div><div className="muted text-sm">Двигайте рамку мышью, тяните за угол или крутите колесо, чтобы изменить размер</div></div>
+      <div className="relative mx-auto checker rounded-xl overflow-hidden select-none" style={{ width: im ? im.width * k : BOX, height: im ? im.height * k : BOX, touchAction: 'none' }} onPointerMove={move} onPointerUp={() => (drag.current = null)} onWheel={wheel}>
+        {im && <><img src={src} draggable={false} style={{ width: im.width * k, height: im.height * k, display: 'block' }} />
+          <div className="absolute cursor-move" onPointerDown={down('move')} style={{ left: sel.x * k, top: sel.y * k, width: sel.w * k, height: h * k, boxShadow: '0 0 0 9999px rgba(0,0,0,.55)', outline: '2px solid var(--a2)', borderRadius: 4 }}>
+            <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.25) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.25) 1px,transparent 1px)', backgroundSize: '33.33% 33.33%' }} />
+            <div className="absolute -right-2 -bottom-2 w-4 h-4 rounded-full cursor-nwse-resize" onPointerDown={down('size')} style={{ background: 'var(--a2)', boxShadow: '0 0 0 2px #fff' }} /></div></>}</div>
+      <div className="flex gap-2 justify-end"><button className="btn" onClick={onCancel}>Отмена</button><button className="btn btn-primary" disabled={!im} onClick={done}>Использовать область</button></div>
+    </div></div>
+}
 export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClose, pickImage }: {
   mode: 'skin' | 'cape'; src: string; skin: string; cape?: string; slim: boolean; onSave: (png: string) => void; onClose: () => void; pickImage: () => Promise<string | null> }) {
   const cv = useRef<HTMLCanvasElement>(null), undo = useRef<ImageData[]>([]), redo = useRef<ImageData[]>([]), raf = useRef(0)
@@ -89,6 +113,7 @@ export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClos
   const setRes = (kk: number) => { snap(); const c = cv.current!, old = document.createElement('canvas'); old.width = c.width; old.height = c.height; old.getContext('2d')!.drawImage(c, 0, 0)
     c.width = 64 * kk; c.height = 32 * kk; const x = ctx(); x.imageSmoothingEnabled = false; x.drawImage(old, 0, 0, c.width, c.height); setK(kk); flush() }
   const upd = (p: Partial<Design>) => setD((o) => ({ ...o, ...p }))
+  const [cropSrc, setCropSrc] = useState('')
 
   const view = { showOver: !isCape, dimOver: layer === 'base', showCape: isCape, animate: false }
   const guideList = isCape ? CAPE_GUIDES : SKIN_GUIDES, mapW = isCape ? 296 : 256, mapH = mapW * TH / TW
@@ -122,7 +147,7 @@ export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClos
             <div className="flex gap-2 items-center"><ColorPick value={d.c1} set={(v) => upd({ c1: v })} />{d.bg === 'gradient' && <ColorPick value={d.c2} set={(v) => upd({ c2: v })} />}
               <button className="pill" onClick={() => upd({ c1: color })}>Текущий цвет</button></div>
             <div className="label">Картинка на плаще</div>
-            <div className="flex gap-2"><button className="btn flex-1 flex items-center justify-center gap-2" onClick={async () => { const im = await pickImage(); if (im) upd({ img: im }) }}><Icon n="image" s={16} />{d.img ? 'Другая' : 'Выбрать'}</button>{d.img && <button className="btn" onClick={() => upd({ img: '' })}><Icon n="trash" s={16} /></button>}</div>
+            <div className="flex gap-2"><button className="btn flex-1 flex items-center justify-center gap-2" onClick={async () => { const im = await pickImage(); if (im) setCropSrc(im) }}><Icon n="image" s={16} />{d.img ? 'Другая' : 'Выбрать'}</button>{d.img && <button className="btn" onClick={() => upd({ img: '' })}><Icon n="trash" s={16} /></button>}</div>
             {d.img && <><div className="seg"><button className={d.fit === 'cover' ? 'on' : ''} onClick={() => upd({ fit: 'cover' })}>Заполнить</button><button className={d.fit === 'contain' ? 'on' : ''} onClick={() => upd({ fit: 'contain' })}>Вписать</button></div>
               {([['scale', 'Масштаб', 20, 300, '%'], ['ox', 'Сдвиг X', -100, 100, ''], ['oy', 'Сдвиг Y', -100, 100, ''], ['rot', 'Поворот', -180, 180, '°']] as [keyof Design, string, number, number, string][]).map(([key, l, mn, mx, u]) =>
                 <label key={key} className="text-sm"><div className="flex justify-between"><span>{l}</span><span className="muted">{d[key] as number}{u}</span></div><input type="range" className="w-full" min={mn} max={mx} value={d[key] as number} onChange={(e) => upd({ [key]: +e.target.value } as any)} /></label>)}
@@ -132,6 +157,7 @@ export default function SkinStudio({ mode, src, skin, cape, slim, onSave, onClos
             <p className="muted text-xs">Картинка лучше всего смотрится в HD: при наложении на классический плащ разрешение само переключится на 512×256. После применения можно дорисовать детали кистью.</p></div>}
         </div>
       </div>
+      {cropSrc && <CropBox src={cropSrc} aspect={10 / 16} onCancel={() => setCropSrc('')} onDone={(png) => { setCropSrc(''); const nd = { ...d, img: png, fit: 'cover' as const, scale: 100, ox: 0, oy: 0, rot: 0 }; setD(nd); compose(nd, Math.max(k, 8)) }} />}
       <div className="flex gap-2 justify-end items-center"><span className="muted text-sm mr-auto">{isCape ? 'Плащ увидят все игроки AsteriaLauncher.' : 'Скин увидят все игроки AsteriaLauncher; для лицензии — ещё и на всех серверах (кнопка «Применить»).'}</span>
         <a className="btn flex items-center gap-2" href={url} download={mode + '.png'}><Icon n="download" s={16} />PNG</a>
         <button className="btn" onClick={onClose}>Отмена</button><button className="btn btn-primary" onClick={() => onSave(cv.current!.toDataURL('image/png'))}>Сохранить</button></div>

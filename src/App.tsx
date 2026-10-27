@@ -105,7 +105,7 @@ function MiniPlayer() {
 export default function App() {
   const [tab, setTab] = useState('home'), [menu, setMenu] = useState(''), [addOpen, setAddOpen] = useState(false), [st, setSt] = useState({ online: false, ping: 0, players: 0, max: 500 })
   const [lang, setLang] = usePref('lang', 'ru'), [theme, setTheme] = usePref('theme', 'dark'), [accent, setAccent] = usePref('accent', 'aqua'), [fx, setFx] = usePref('fx', 'stars'), [custom, setCustom] = usePref('customAccent', '#22d3ee')
-  const [ver, setVer] = usePref('ver', '1.16.5'), [capeId, setCape] = usePref('cape', ''), [badgeId] = usePref('badge', 'crystal')
+  const [skinSpin, setSkinSpin] = usePref('skinSpin', '1'), [ver, setVer] = usePref('ver', '1.16.5'), [capeId, setCape] = usePref('cape', ''), [badgeId] = usePref('badge', 'crystal')
   const [acc, setAcc] = useState<{ list: any[]; active?: string }>({ list: [] }), [cfg, setCfg] = useState<any>(null), [sys, setSys] = useState({ totalMb: 16384 })
   const [prog, setProg] = useState<any>({ stage: '', pct: 0, detail: '', step: 0 }), [toast, setToast] = useState(''), [skin, setSkin] = useState(''), [variant, setVariant] = usePref('variant', 'classic')
   const [q, setQ] = useState(''), [sort, setSort] = useState('downloads'), [cat, setCat] = useState(''), [hits, setHits] = useState<any[]>([]), [mods, setMods] = useState<any[]>([]), [busy, setBusy] = useState(''), [lq, setLq] = useState(''), [offNick, setOffNick] = useState('')
@@ -117,7 +117,7 @@ export default function App() {
   useEffect(() => { (window as any).__setTab = setTab }, []) // lets the UI preview/tests switch tabs
   const t = (k: string) => tr(lang, k), me = acc.list.find((a) => a.id === acc.active), fabricOk = fabricFor(ver)
   CONF = conf
-  const tx = (o: any) => o?.[lang] ?? o?.en ?? o?.ru ?? '', LINKS: [string, string, string][] = conf.links.map((l: any) => [l.title, l.url, l.icon]), CMDS: string[] = conf.commands, about = tx(conf.about) || t('aboutText')
+  const tx = (o: any) => o?.[lang] ?? o?.en ?? o?.ru ?? '', LINKS: [string, string, string][] = conf.links.map((l: any) => [l.title, l.url, l.icon]), CMDS: string[] = conf.commands.includes('/events') ? conf.commands : [...conf.commands.slice(0, 3), '/events', ...conf.commands.slice(3)], about = tx(conf.about) || t('aboutText')
   const sm = streamer === '1', ip = sm ? '••••••••' : conf.server.ip, nick = (n?: string) => (sm ? '••••••' : n ?? ''), rec = conf.server.recommended || '1.16.5'
   const servers: any[] = useMemo(() => [{ name: conf.server.name, ip: conf.server.ip, port: conf.server.port || 25565, version: rec, desc: about, image: '', main: true }, ...(conf.servers || []).filter((s: any) => s.ip && s.ip !== conf.server.ip)], [conf, about])
   useEffect(() => { const a = accent === 'custom' ? [custom, custom] : ACCENTS[accent] ?? ACCENTS.aqua; const r = document.documentElement; r.style.setProperty('--a1', a[0]); r.style.setProperty('--a2', a[1]); r.dataset.theme = theme }, [accent, theme, custom])
@@ -138,8 +138,18 @@ export default function App() {
     st1(40, 'accounts'); await refresh(); st1(65, 'boot2'); setSys(await api.sysInfo()); setStats(await api.stats())
     st1(85, 'boot3'); await new Promise((r) => setTimeout(r, 600)); st1(100, 'boot4') })() }, [])
   useEffect(() => { api.stats().then(setStats) }, [running])
+  // "Download" installs the version completely (Java, libraries, mods, visuals), then "Play"; "Update" when newer mods came with the launcher
+  const [vst, setVst] = useState<any>({ installed: true }), [dling, setDling] = useState(false)
+  const [miniSkin, setMiniSkin] = useState<string | null>(null)
+  useEffect(() => { api.miniGet?.().then(setMiniSkin).catch(() => {}) }, [])
+  const refreshVst = () => api.verStatus?.(ver).then(setVst).catch(() => {})
+  useEffect(() => { refreshVst() }, [ver, running])
+  // newer mods / visuals for an installed version are fetched quietly — nothing to press
+  useEffect(() => { if (vst.installed && vst.update && !running && !dling && !vst.busy) download(true) }, [vst.installed, vst.update, running])
+  const download = async (quiet = false) => { if (dling) return; setDling(true); const r = await api.install(ver).catch((e: any) => ({ error: String(e?.message || e) })); setDling(false); await refreshVst()
+    r?.error ? (!quiet && say(r.error, 'err')) : say(quiet ? 'Моды и визуалы для ' + ver + ' обновлены' : 'Minecraft ' + ver + ' скачан — можно играть') }
   // a Minecraft from this launcher may still be open (launcher restarted / updated): show it as running, and notice when it closes
-  useEffect(() => { const f = () => api.gameState().then((s: any) => setRunning(!!s?.running)).catch(() => {}); f(); const id = setInterval(f, 20000); return () => clearInterval(id) }, [])
+  useEffect(() => { const f = () => api.gameState().then((s: any) => setRunning(!!s?.running)).catch(() => {}); f(); const id = setInterval(f, 10000); return () => clearInterval(id) }, [])
   useEffect(() => { loadMods() }, [ver, tab, kind, profiles.active?.id]); useEffect(() => { if (tab !== 'mods' || !(fabricOk || kind !== 'mod')) return; const id = setTimeout(search, 180); return () => clearTimeout(id) }, [tab, ver, sort, cat, kind, q])
   useEffect(() => { if (tab === 'mods') api.modsTargets().then(setTargets) }, [tab, profiles])
   useEffect(() => { setTsel([instKeyNow]) }, [instKeyNow])
@@ -153,8 +163,11 @@ export default function App() {
   useEffect(() => { if (cfg && cfg.streamer !== sm) setCfg({ ...cfg, streamer: sm }) }, [sm, !!cfg])
   const [toastKind, setToastKind] = useState<'ok' | 'err' | 'info'>('ok')
   /** toast: 'ok' = done, 'err' = something went wrong (stays longer), 'info' = a neutral notice */
-  const say = (m: string, kind: 'ok' | 'err' | 'info' = 'ok') => { setToast(m); setToastKind(kind); clearTimeout((say as any).t); (say as any).t = setTimeout(() => setToast(''), kind === 'err' ? 6000 : 2800) }
-  useEffect(() => { if (!shotView) return; const f = (e: KeyboardEvent) => { if (e.key === 'Escape') setShotView(null) }; addEventListener('keydown', f); return () => removeEventListener('keydown', f) }, [shotView])
+  const say = (m: string, kind: 'ok' | 'err' | 'info' = 'ok') => { setToast(m); setToastKind(kind); clearTimeout((say as any).t); (say as any).t = setTimeout(() => setToast(''), kind === 'err' ? 7000 : 4500) }
+  // screenshots: arrows (and ← →) flip through them
+  const shotList = shots.filter((x) => x.name.toLowerCase().includes(shotQ.toLowerCase()))
+  const shotStep = (d: number) => { if (!shotView || !shotList.length) return; const i = shotList.findIndex((x) => x.file === shotView.file); setShotView(shotList[(i + d + shotList.length) % shotList.length]) }
+  useEffect(() => { if (!shotView) return; const f = (e: KeyboardEvent) => { if (e.key === 'Escape') setShotView(null); if (e.key === 'ArrowRight') shotStep(1); if (e.key === 'ArrowLeft') shotStep(-1) }; addEventListener('keydown', f); return () => removeEventListener('keydown', f) }, [shotView, shots, shotQ])
   const copy = (x: string) => { navigator.clipboard.writeText(x); say(t('copied') + (sm ? '' : ': ' + x)) }
   const pickCape = (n: string, u: string) => { setCape(n); api.saveTexture({ data: u, kind: 'cape' }) }
   const play = async (v: string, join = false, server?: any) => { if (!me) { setAddOpen(true); return say('Сначала добавьте аккаунт', 'info') } let r: any; try { r = await api.launch({ version: v, join, lang, server }) } catch (e: any) { r = { error: 'Не удалось запустить: ' + (e?.message || e) } } if (r?.warn) say(r.warn, 'info'); if (r?.error) say(r.error, 'err') }
@@ -166,13 +179,13 @@ export default function App() {
   const visArt = useImg(OVR.visuals ? [] : [ART['1.21.4'], ART['1.20.1'], ART['1.16.5']].filter(Boolean) as string[]), visBg = OVR.visuals || visArt || hudBg
   const skinImg = useImg(skin ? [] : [`https://mc-heads.net/skin/${me?.name ?? 'Steve'}`, `https://minotar.net/skin/${me?.name ?? 'Steve'}`])
   const skinUrl = skin || skinImg || defSkin, capeUrl = capeId === 'custom' && customCape ? customCape : CAPES.find(([n]) => n === capeId)?.[1]
-  const fps = mods.some((m) => m.slug === 'sodium' && m.enabled) && mods.some((m) => m.slug === 'iris' && m.enabled)
+  const fps = mods.some((m) => m.slug === 'sodium' && m.enabled) // the optimization mods really are in this version's folder
   const ramMax = Math.max(2048, Math.round(sys.totalMb / 512) * 512), ramOpt = sys.totalMb <= 4096 ? 1536 : sys.totalMb <= 8192 ? 3072 : sys.totalMb <= 16384 ? 4096 : 6144
-  const mainBtn = () => (running ? api.killGame() : play(ver)), hrs = (stats.playMs / 3600000).toFixed(1)
+  const needDl = !running && !vst.installed, mainBtn = () => (running ? api.killGame() : dling ? undefined : needDl ? download() : play(ver)), mainLabel = running ? t('closeGame') : dling ? (vst.installed ? 'Обновление…' : 'Скачивание…') : needDl ? 'Скачать' : t('play'), hrs = (stats.playMs / 3600000).toFixed(1)
   const verOpts = ALL_VERSIONS.map((v) => ({ value: v, label: 'Minecraft ' + v, hint: VINFO[v]?.name, icon: <LoaderIcon k={ASTERIA[v] ? 'asteria' : 'vanilla'} s={16} /> }))
   const shop = () => api.openLink(conf.links.find((l: any) => l.icon === 'shop')?.url)
   const cmds: Cmd[] = [...NAV.map(([k, i]) => ({ id: 'go-' + k, label: 'Открыть: ' + SHORT[k], icon: i, run: () => setTab(k) })),
-    { id: 'play', label: running ? 'Закрыть игру' : 'Играть ' + ver, icon: 'play', hint: 'Enter', run: mainBtn }, { id: 'join', label: 'Зайти на ' + conf.server.name, icon: 'servers', run: () => { setVer(rec); play(rec, true) } },
+    { id: 'play', label: running ? 'Закрыть игру' : needDl ? mainLabel + ' ' + ver : 'Играть ' + ver, icon: needDl ? 'download' : 'play', hint: 'Enter', run: mainBtn }, { id: 'join', label: 'Зайти на ' + conf.server.name, icon: 'servers', run: () => { setVer(rec); play(rec, true) } },
     ...ALL_VERSIONS.map((v) => ({ id: 'v-' + v, label: 'Версия ' + v, hint: VINFO[v]?.name, icon: 'versions', run: () => { setVer(v); setTab('versions') } })),
     { id: 'theme', label: theme === 'dark' ? 'Светлая тема' : 'Тёмная тема', icon: theme === 'dark' ? 'sun' : 'moon', run: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
     { id: 'stream', label: sm ? 'Выключить режим стримера' : 'Режим стримера', icon: 'eye', run: () => setStreamer(sm ? '0' : '1') }, { id: 'log', label: t('journal'), icon: 'rules', run: () => setLogOpen(true) },
@@ -202,9 +215,9 @@ export default function App() {
               <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--line)' }}><span className="text-sm">Свой цвет</span><ColorPick value={custom} set={(v) => { setCustom(v); setAccent('custom') }} size="sm" /></div></div>}</div>
           <button className={'topchip ' + (sm ? '!bg-[var(--a1)] !text-white' : '')} title={t('streamer')} onClick={() => { setStreamer(sm ? '0' : '1'); say(sm ? 'Режим стримера выключен' : 'Режим стримера: ник и IP скрыты') }}><Icon n="eye" s={16} /></button>
           <button className="topchip" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}><Icon n={theme === 'dark' ? 'sun' : 'moon'} s={16} /></button>
-          <div className="relative"><button className="topchip !pl-1" onClick={() => setMenu(menu === 'acct' ? '' : 'acct')}>{me ? <Avatar name={me.name} s={26} /> : <Icon n="user" s={18} />}{me ? nick(me.name) : t('noAcc')}<Icon n="chevron" s={14} /></button>
+          <div className="relative"><button className="topchip !pl-1" onClick={() => setMenu(menu === 'acct' ? '' : 'acct')}>{me ? <Avatar name={sm ? 'Steve' : me.name} s={26} /> : <Icon n="user" s={18} />}{me ? nick(me.name) : t('noAcc')}<Icon n="chevron" s={14} /></button>
             {menu === 'acct' && <div className="pop z-50" style={{ width: 280 }}>{acc.list.map((a) => <div key={a.id} className={'row ' + (a.id === acc.active ? 'sel' : '')}><button className="flex items-center gap-2 flex-1 text-left" onClick={async () => { await api.selectAccount(a.id); refresh(); setMenu('') }}>
-              <Avatar name={a.name} s={30} /><span className="flex-1">{nick(a.name)}<span className="muted text-xs block">{a.type === 'microsoft' ? 'Microsoft' : 'Offline'}</span></span>{a.id === acc.active && <Icon n="check" s={16} />}</button>
+              <Avatar name={sm ? 'Steve' : a.name} s={30} /><span className="flex-1">{nick(a.name)}<span className="muted text-xs block">{a.type === 'microsoft' ? 'Microsoft' : 'Offline'}</span></span>{a.id === acc.active && <Icon n="check" s={16} />}</button>
               <button title={t('logout')} className="iconbtn" onClick={async () => { await api.removeAccount(a.id); refresh() }}><Icon n="trash" s={15} /></button></div>)}
               <button className="row" onClick={() => { setAddOpen(true); setMenu('') }}><Icon n="plus" s={18} />{t('addAccount')}</button>
               <button className="row" onClick={() => { setTab('skins'); setMenu('') }}><Icon n="skins" s={18} />{t('changeSkin')}</button></div>}</div>
@@ -231,12 +244,12 @@ export default function App() {
             <div className="min-w-0">
               <div className="hero mb-6">{OVR.hero ? <img src={OVR.hero} className="bg" /> : ART[rec] ? <Pic src={ART[rec]} cls="bg object-cover" /> : <img src={hero} className="bg" />}
                 <div className="heroText relative h-full min-h-[330px] flex flex-col justify-end p-8 text-white">
-                  <div className="flex gap-2 mb-3"><span className="badge ast"><span className={'glow-dot ' + (st.online ? '' : 'off')} />{st.online ? `${st.players} игроков онлайн` : t('maint')}</span>{ver === rec && <span className="badge rec"><Icon n="star" s={11} fill />{t('recommended')}</span>}</div>
+                  <div className="flex gap-2 mb-3"><span className="badge ast"><span className={'glow-dot ' + (st.online ? '' : 'off')} />{st.online ? `${st.players} игроков онлайн` : t('maint')}</span>{ver === rec && <span className="badge rec"><Gem s={11} glow={false} />{t('recommended')}</span>}</div>
                   <div className="text-lg font-bold text-white/85">Добро пожаловать на</div>
                   <h1 className="text-6xl font-black tracking-tight leading-none" style={{ textShadow: '0 6px 40px rgba(0,0,0,.45)' }}>{conf.server.name.slice(0, Math.ceil(conf.server.name.length / 2))}<span style={{ color: 'var(--a2)' }}>{conf.server.name.slice(Math.ceil(conf.server.name.length / 2))}</span></h1>
                   <p className="max-w-xl text-white/85 text-sm mt-3 mb-6 leading-relaxed">{about}</p>
                   <div className="flex gap-3 items-center flex-wrap">
-                    <button className={'playbtn ' + (running ? 'stop' : '')} onClick={mainBtn}><Icon n={running ? 'close' : 'play'} s={20} fill={!running} />{running ? t('closeGame') : t('play')}</button>
+                    <button className={'playbtn ' + (running ? 'stop' : '')} disabled={dling} onClick={mainBtn}><Icon n={running ? 'close' : needDl ? 'download' : 'play'} s={20} fill={!running && !needDl} />{mainLabel}</button>
                     <Dropdown value={ver} set={setVer} options={verOpts} w={260} className="!bg-white/15 !border-white/20 !text-white !h-[50px] !rounded-2xl backdrop-blur" />
                     <button className="btn !bg-white/15 !text-white !border-white/20 !h-[50px] !rounded-2xl backdrop-blur flex items-center gap-2" onClick={() => { setVer(rec); play(rec, true) }}><Icon n="servers" s={16} />{t('join')}</button>
                   </div></div>
@@ -267,7 +280,7 @@ export default function App() {
           </div>}
 
           {/* =============================== VERSIONS */}
-          {tab === 'versions' && <Versions ver={ver} setVer={setVer} cfg={cfg} setCfg={setCfg} running={running} play={mainBtn} VImg={VImg} profiles={profilesBar} recommended={rec} />}
+          {tab === 'versions' && <Versions ver={ver} setVer={setVer} cfg={cfg} setCfg={setCfg} running={running} play={mainBtn} label={needDl || dling ? mainLabel + ' ' + ver : undefined} VImg={VImg} profiles={profilesBar} recommended={rec} />}
 
           {/* =============================== MODS */}
           {tab === 'mods' && <div onDragOver={(e) => { if (kind === 'mod' && fabricOk && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropOn(true) } }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDropOn(false) }} onDrop={onDrop} className="relative">
@@ -292,8 +305,9 @@ export default function App() {
                 <div className="min-w-0 flex-1"><div className="font-bold truncate">{h.title}</div><div className="muted text-xs line-clamp-2">{h.description}</div><div className="muted text-xs mt-0.5 flex items-center gap-1"><Icon n="download" s={11} />{h.downloads?.toLocaleString()}</div></div>
                 <button disabled={have && tsel.length <= 1} className={'btn flex items-center gap-1.5 ' + (have && tsel.length <= 1 ? '' : 'btn-primary')} onClick={() => install(h.slug)}>{have && tsel.length <= 1 ? <><Icon n="check" s={16} />{t('installedBadge')}</> : busy === h.slug ? '…' : <><Icon n="download" s={16} />{t('install')}</>}</button></div> })}</div></div>
               <div><div className="flex items-center justify-between mb-2"><h3 className="text-lg font-bold">{t(kind === 'mod' ? 'installed' : kind === 'shader' ? 'installedShaders' : 'installedPacks')} <span className="muted text-sm">{mods.length}</span></h3>{kind === 'mod' && <button className="pill" title={t('verifyHint')} onClick={async () => { const r = await api.modsVerify(ver, true); say(`${t('verifyDone')}: ${r.total} · ${t('updated2')} ${r.updated} · ${t('fixed')} ${r.fixed}`); loadMods() }}><Icon n="shield" s={14} />{t('verify')}</button>}</div>
-                {fps && <div className="pill mb-3" style={{ background: 'rgba(16,185,129,.18)' }}><Icon n="check" s={14} />{t('fps')}</div>}
-                {ASTERIA[ver] && kind === 'mod' && <div className="mcard mb-2" style={{ borderColor: 'color-mix(in srgb,var(--a2) 45%,transparent)' }}><span className="cmd-ic !w-10 !h-10"><LoaderIcon k="asteria" s={20} /></span><div className="min-w-0 flex-1"><div className="font-semibold text-sm">Asteria</div><div className="muted text-[11px]">Звезда в табе, скины и плащи{ASTERIA[ver] === 'full' ? ' и визуалы' : ''} · ставится сам, бесплатно</div></div></div>}
+                {kind === 'mod' && (fps ? <div className="pill mb-3" style={{ background: 'rgba(16,185,129,.18)' }}><Icon n="check" s={14} />{t('fps')}</div>
+                  : <div className="mcard mb-3 !items-start" style={{ borderColor: 'rgba(245,158,11,.45)', background: 'rgba(245,158,11,.10)' }}><span className="cmd-ic !w-9 !h-9 shrink-0" style={{ color: '#f59e0b' }}><Icon n="close" s={16} /></span><div className="min-w-0"><b className="text-sm">FPS-бусты неактивны</b><div className="muted text-xs">{cfg?.optimize === false ? 'Оптимизация выключена в настройках лаунчера — включите её, и моды добавятся при следующем запуске.' : 'Установите эту версию игры (кнопка «Скачать» или «Играть») — моды-оптимизаторы Sodium, Lithium и другие добавятся сами.'}</div></div></div>)}
+                {ASTERIA[ver] && kind === 'mod' && <div className="mcard mb-2" style={{ borderColor: 'color-mix(in srgb,var(--a2) 45%,transparent)' }}><span className="cmd-ic !w-10 !h-10"><LoaderIcon k="asteria" s={20} /></span><div className="min-w-0 flex-1"><div className="font-semibold text-sm">Asteria</div><div className="muted text-[11px]">Знак AL в табе, скины и плащи{ASTERIA[ver] === 'full' ? ' и визуалы' : ''} · ставится сам, бесплатно</div></div></div>}
                 {kind === 'mod' && <div className="card rounded-2xl p-3 mb-3">
                   <div className="flex items-center justify-between mb-2"><b className="text-sm">Мои моды <span className="muted">{mine.length}</span></b><button className="pill !py-1" title="Открыть папку «Мои моды»" onClick={() => api.modsOpenMine()}><Icon n="folder" s={13} /></button></div>
                   <button className="dropzone w-full" onClick={() => upload(null)}><Icon n="upload" s={18} /><span><b className="block text-sm">Загрузить свой мод</b><span className="muted text-[11px]">Нажмите или перетащите .jar в окно</span></span></button>
@@ -311,14 +325,21 @@ export default function App() {
 
           {/* =============================== SKINS */}
           {tab === 'skins' && <div><PageHead title={t('skins')} sub="Ваш скин и плащ в игре через мод Asteria — на любом сервере и в одиночной игре" />
+            <div className="card rounded-2xl p-3 mb-4 flex items-center gap-3 text-sm"><span className="cmd-ic !w-9 !h-9 shrink-0"><Icon n="eye" s={17} /></span>
+              <div><b>Скин и плащ отсюда видят только игроки с AsteriaLauncher.</b> <span className="muted">Остальные видят ваш обычный скин на сервере.{me?.type === 'microsoft' ? ' Чтобы скин видели все — нажмите «' + t('apply') + '».' : ''}</span></div></div>
             <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)' }}>
-            <div className="card rounded-3xl p-4"><Skin3D skin={skinUrl} slim={variant === 'slim'} cape={capeUrl} height={470} />
+            <div className="card rounded-3xl p-4"><Skin3D skin={skinUrl} slim={variant === 'slim'} cape={capeUrl} height={470} spin={skinSpin === '1'} />
+              <div className="mt-2"><Check on={skinSpin === '1'} set={(v) => setSkinSpin(v ? '1' : '0')} label="Вращать модель" /></div>
               <div className="flex gap-2 items-center flex-wrap mt-3"><button className="btn btn-primary flex items-center gap-2" onClick={() => setEdit('skin')}><Icon n="pencil" s={16} />Редактировать на модели</button>
                 <button className="btn flex items-center gap-2" onClick={async () => { const d = await api.pickSkin(); if (d) { setSkin(d); const r = await api.saveTexture({ data: d, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) } }}><Icon n="upload" s={16} />{t('pickPng')}</button>
                 <div className="seg"><button className={variant === 'classic' ? 'on' : ''} onClick={() => setVariant('classic')}>Classic</button><button className={variant === 'slim' ? 'on' : ''} onClick={() => setVariant('slim')}>{t('slim')}</button></div>
                 {me?.type === 'microsoft' && <button className="btn" title="Скин на всех серверах (Mojang)" onClick={async () => { const r = await api.applySkin(variant); r.error ? say(r.error, 'err') : say(t('applied')) }}>{t('apply')}</button>}</div>
               <p className="muted text-xs mt-2">{t('drag')}</p></div>
             <div className="flex flex-col gap-4">
+              <div className="card rounded-3xl p-5 flex gap-4 items-center"><div className="w-16 h-16 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center" style={{ background: 'var(--chip)' }}>{miniSkin ? <div className="w-full h-full" style={{ backgroundImage: `url(${miniSkin})`, backgroundSize: '512px 512px', backgroundPosition: '-64px -64px', imageRendering: 'pixelated' }} /> : <Icon n="user" s={26} />}</div>
+                <div className="flex-1 min-w-0"><b>Питомец «Мини-я»</b><div className="muted text-sm">Маленькая копия вас бегает следом. Включите в Визуалы → Питомец → «Мини-я»; скин — ваш или отдельный отсюда. Его видят все игроки Asteria</div>
+                  <div className="flex gap-2 mt-2 flex-wrap"><button className="btn !py-1.5 text-sm flex items-center gap-2" onClick={async () => { const d = await api.pickSkin(); if (d) { setMiniSkin(d); const r = await api.saveTexture({ data: d, kind: 'mini' }); say(r?.uploaded ? 'Скин «Мини-я» сохранён' : 'Скин сохранён на этом компьютере', r?.uploaded ? 'ok' : 'info') } }}><Icon n="upload" s={15} />Свой скин для «Мини-я»</button>
+                    {miniSkin && <button className="btn !py-1.5 text-sm" onClick={async () => { setMiniSkin(null); await api.saveTexture({ data: null, kind: 'mini' }); say('«Мини-я» снова в вашем скине') }}>Как мой скин</button>}</div></div></div>
               <div className="card rounded-3xl p-5"><div className="flex items-center justify-between gap-2 mb-1"><h3 className="text-lg font-bold">{t('capes')}</h3>
                 <button className="btn !py-1.5 flex items-center gap-1.5 text-sm" onClick={() => setEdit('cape')}><Icon n="pencil" s={14} />Создать свой</button></div><p className="muted text-xs mb-3">{t('cosm')}</p>
                 <div className="grid grid-cols-5 gap-2.5"><button className={'rounded-xl flex flex-col items-center justify-center gap-1 muted text-xs ' + (!capeId ? 'ring-2 ring-[var(--a1)]' : '')} style={{ height: 112, background: 'var(--chip)' }} onClick={() => { setCape(''); api.saveTexture({ data: null, kind: 'cape' }) }}><Icon n="close" s={18} />Без плаща</button>
@@ -326,7 +347,7 @@ export default function App() {
                 <div className="flex gap-2 mt-3 flex-wrap"><button className="btn flex items-center gap-2 text-sm" onClick={async () => { const d = await api.pickPng(); if (d) { setCustomCape(d); setCape('custom'); const r = await api.saveTexture({ data: d, kind: 'cape' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) } }}><Icon n="upload" s={15} />Загрузить PNG плаща</button>
                   <button className="btn flex items-center gap-2 text-sm" onClick={() => setEdit('cape')}><Icon n="image" s={15} />Плащ из своей картинки</button></div></div>
               <div className="card rounded-3xl p-5 flex gap-4 items-center"><div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#0b2a3c,#0e7490)' }}><Gem s={30} /></div>
-                <div><b>Значок Asteria</b><div className="muted text-sm">Звезда перед ником в табе и над головой. Её видите вы и все, кто играет через AsteriaLauncher — как значок Lunar. Плагин на сервере не нужен.</div></div></div>
+                <div><b>Значок Asteria</b><div className="muted text-sm">Знак AL перед ником в табе и над головой. Его видите вы и все игроки с AsteriaLauncher.</div></div></div>
             </div></div></div>}
 
           {/* =============================== PROFILE */}
@@ -375,7 +396,8 @@ export default function App() {
               {!cfg.fullscreen && <><div className="flex gap-1.5 flex-wrap">{[[1280, 720], [1600, 900], [1920, 1080], [2560, 1440]].map(([a, b]) => <button key={a} className={'pill ' + (cfg.width === a && cfg.height === b ? 'on' : '')} onClick={() => setCfg({ ...cfg, width: a, height: b })}>{a}×{b}</button>)}
                 <button className={'pill ' + (cfg.width === screen.width && cfg.height === screen.height ? 'on' : '')} onClick={() => setCfg({ ...cfg, width: screen.width, height: screen.height })}>{t('screenSize')}</button></div>
               <div className="flex items-center gap-2"><span className="muted text-sm">Свой размер:</span><NumInput v={cfg.width} on={(n) => setCfg({ ...cfg, width: n })} />×<NumInput v={cfg.height} on={(n) => setCfg({ ...cfg, height: n })} /></div></>}
-              <Switch on={cfg.hideOnLaunch !== false} set={(v) => setCfg({ ...cfg, hideOnLaunch: v })} label={t('hideLaunch')} /></div>
+              <Switch on={cfg.hideOnLaunch !== false} set={(v) => setCfg({ ...cfg, hideOnLaunch: v })} label={t('hideLaunch')} />
+              <Switch on={cfg.optimize !== false} set={(v) => setCfg({ ...cfg, optimize: v })} label="Оптимизация" hint="Sodium, Lithium, FerriteCore и др. Включена — удалённые моды скачаются снова; выключена — игра без них" /></div>
             <div className="card rounded-3xl p-5 flex flex-col gap-3"><div className="font-bold flex items-center gap-2"><Icon n="palette" s={16} />Внешний вид</div>
               <label className="text-sm"><div className="flex justify-between"><span>{t('uiScale')}</span><b>{uiscale}%</b></div><input type="range" min={70} max={130} step={5} value={uiscale} onChange={(e) => setUiscale(e.target.value)} className="w-full" /></label>
               <div className="text-sm">{t('effects')}</div><div className="flex gap-1.5 flex-wrap">{['none', 'snow', 'rain', 'leaves', 'stars', 'sparks'].map((k) => <button key={k} className={'pill ' + (fx === k ? 'on' : '')} onClick={() => setFx(k)}>{t('fx_' + k)}</button>)}</div>
@@ -412,6 +434,8 @@ export default function App() {
       <Modal open={!!prev} onClose={() => setPrev(null)} title={prev?.title} w={780}>{prev && <><div className="grid grid-cols-2 gap-2">{(prev.gallery?.length ? prev.gallery : [prev.featured_gallery].filter(Boolean)).slice(0, 6).map((u: string) => <Pic key={u} src={u} cls="w-full h-36 rounded-xl object-cover" />)}</div><p className="muted text-sm mt-3">{prev.description}</p>
         <button className="btn btn-primary mt-3" onClick={() => { install(prev.slug); setPrev(null) }}>{t('install')}</button></>}</Modal>
       {shotView && <div className="fixed inset-0 z-[75] flex items-center justify-center modal-bg" onClick={() => setShotView(null)}><div className="glass rounded-3xl p-4 relative pop-in" style={{ maxWidth: '92vw' }} onClick={(e) => e.stopPropagation()}><button className="absolute top-6 right-6 z-10 w-10 h-10 rounded-full flex items-center justify-center text-white" style={{ background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(6px)' }} title="Закрыть (Esc)" onClick={() => setShotView(null)}><Icon n="close" s={18} /></button><ShotImg file={shotView.file} w={1400} cls="rounded-2xl max-h-[72vh]" />
+        {shotList.length > 1 && <><button className="shot-nav left-6" title="Предыдущий (←)" onClick={() => shotStep(-1)}><Icon n="left" s={22} /></button><button className="shot-nav right-6" title="Следующий (→)" onClick={() => shotStep(1)}><Icon n="right" s={22} /></button>
+          <div className="absolute bottom-[72px] left-1/2 -translate-x-1/2 text-xs text-white px-3 py-1 rounded-full" style={{ background: 'rgba(0,0,0,.55)' }}>{shotList.findIndex((x) => x.file === shotView.file) + 1} / {shotList.length}</div></>}
         <div className="flex gap-2 mt-3"><button className="btn btn-ghost flex items-center gap-2 mr-auto" onClick={() => setShotView(null)}><Icon n="left" s={16} />Назад</button><button className="btn flex items-center gap-2" onClick={() => { api.shotAct(shotView.file, 'copy'); say(t('copiedImg')) }}><Icon n="copy" s={16} /> {t('copyImg')}</button><button className="btn flex items-center gap-2" onClick={() => api.shotAct(shotView.file, 'open')}><Icon n="folder" s={16} /> {t('openIn')}</button>
           <button className="btn flex items-center gap-2" onClick={async () => { await api.shotAct(shotView.file, 'delete'); setShots(shots.filter((x) => x.file !== shotView.file)); setShotView(null) }}><Icon n="trash" s={16} /> {t('del')}</button></div></div></div>}
       {edit && <SkinStudio mode={edit === 'skin' ? 'skin' : 'cape'} src={edit === 'skin' ? skinUrl : (capeUrl || '')} skin={skinUrl} cape={capeUrl} slim={variant === 'slim'} pickImage={() => api.pickImage()} onClose={() => setEdit('')}

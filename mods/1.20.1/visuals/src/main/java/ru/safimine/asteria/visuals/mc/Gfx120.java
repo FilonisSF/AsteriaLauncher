@@ -83,8 +83,10 @@ public final class Gfx120 implements Gfx {
     @Override public void textTop(String s, float x, float y, int argb) { m.push(); m.translate(0, 0, 300); text(s, x, y, argb, true); m.pop(); }
     @Override public int width(String s) { return tr.getWidth(t(s)); }
     /** our smooth TTF font (assets/asteria_visuals/font/ui.json) unless the theme switches it off */
-    private static final Identifier[] UI = new Identifier[16];
-    private static Text t(String s) { if (V.font <= 0) return Text.literal(s); int i = Math.min(15, V.font); if (UI[i] == null) UI[i] = new Identifier("asteria_visuals", "f" + i); return Text.literal(s).setStyle(Style.EMPTY.withFont(UI[i])); }
+    private static final Identifier[][] UI = new Identifier[16][7];
+    /** GUI scale 1..6: the font variant rendered for exactly this many pixels per GUI pixel */
+    private static int gs() { return Math.max(1, Math.min(6, (int) Math.round(net.minecraft.client.MinecraftClient.getInstance().getWindow().getScaleFactor()))); }
+    private static Text t(String s) { if (V.font <= 0) return Text.literal(s); int i = Math.min(15, V.font), k = gs(); if (UI[i][k] == null) UI[i][k] = new Identifier("asteria_visuals", "f" + i + "s" + k); return Text.literal(s).setStyle(Style.EMPTY.withFont(UI[i][k])); }
     @Override public void item(Object stack, int x, int y) { ctx.drawItem((ItemStack) stack, x, y); }
     @Override public boolean effectIcon(Object type, int x, int y, int size) {
         Sprite sp = c.getStatusEffectSpriteManager().getSprite((StatusEffect) type);
@@ -98,6 +100,15 @@ public final class Gfx120 implements Gfx {
         ctx.drawTexture((Identifier) skin, 0, 0, 8, 8, 8f, 8f, 8, 8, 64, 64);   // face
         ctx.drawTexture((Identifier) skin, 0, 0, 8, 8, 40f, 8f, 8, 8, 64, 64);  // hat layer
         m.pop();
+    }
+    @Override public void skinPart(Object skin, int u, int v, int w, int h, float x, float y, float k) {
+        RenderSystem.enableBlend(); m.push(); m.translate(x, y, 0); m.scale(k, k, 1); ctx.drawTexture((Identifier) skin, 0, 0, w, h, (float) u, (float) v, w, h, 512, 512); m.pop();
+    }
+    @Override public boolean entity(Object e, float x, float y, float size) {
+        if (!(e instanceof net.minecraft.entity.LivingEntity)) return false; net.minecraft.entity.LivingEntity le = (net.minecraft.entity.LivingEntity) e;
+        int s = Math.max(2, (int) (size * 0.85f / Math.max(le.getHeight(), le.getWidth())));
+        net.minecraft.client.gui.screen.ingame.InventoryScreen.drawEntity(ctx, (int) (x + size / 2), (int) (y + size - 2), s, 0f, 0f, le);
+        return true;
     }
     @Override public void push(float x, float y, float s) { m.push(); m.translate(x, y, 0); m.scale(s, s, 1f); }
     @Override public void pop() { m.pop(); }

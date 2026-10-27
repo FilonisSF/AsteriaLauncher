@@ -15,5 +15,5 @@ public class InGameHudMixin {
     @Inject(method = "renderHotbar", at = @At("HEAD"), cancellable = true, require = 0)
     private void asteria$hotbar(CallbackInfo ci) { if (V.on("hotbar")) ci.cancel(); }
     @Inject(method = "renderCrosshair", at = @At("HEAD"), cancellable = true)
-    private void asteria$crosshair(MatrixStack m, CallbackInfo ci) { if (V.on("crosshair")) ci.cancel(); }
+    private void asteria$crosshair(MatrixStack m, CallbackInfo ci) { if (V.on("crosshair") && V.mode("crosshair", "style") != 7) ci.cancel(); } // style 7 = vanilla
 }

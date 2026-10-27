@@ -20,7 +20,7 @@ import java.util.Map;
 
 /** Asteria Visuals (PREMIUM) for Minecraft 1.16.5: wiring of the shared visuals code into the game. */
 public class VisualsClient implements ClientModInitializer {
-    public static KeyBinding MENU, ZOOM;
+    public static KeyBinding MENU, ZOOM, FREELOOK, MARK;
     private static final Map<String, Boolean> HELD = new HashMap<>();
     private static int appliedHit = 0;
 
@@ -28,6 +28,8 @@ public class VisualsClient implements ClientModInitializer {
         V.init(MinecraftClient.getInstance().getSession().getUsername()); ru.safimine.asteria.visuals.Menu.tr = k -> net.minecraft.client.resource.language.I18n.translate(k);
         MENU = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.menu", InputUtil.Type.KEYSYM, 344, "category.asteria"));
         ZOOM = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.zoom", InputUtil.Type.KEYSYM, 67, "category.asteria"));
+        MARK = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.mark", InputUtil.Type.KEYSYM, 66, "category.asteria"));
+        FREELOOK = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.freelook", InputUtil.Type.KEYSYM, 342, "category.asteria"));
         HudRenderCallback.EVENT.register((m, delta) -> { try { Hud.render(new Gfx116(m), Game116.I); } catch (Throwable ignored) {} });
         WorldRenderEvents.LAST.register(ctx -> { try { Fx.render(new R3_116(ctx), Game116.I); } catch (Throwable ignored) {} });
         ClientTickEvents.END_CLIENT_TICK.register(VisualsClient::tick);
@@ -38,14 +40,16 @@ public class VisualsClient implements ClientModInitializer {
             V.tick();
             while (MENU.wasPressed()) if (c.currentScreen == null) c.openScreen(new AsteriaScreen());
             Fx.zoomKey(ZOOM.isPressed() && c.currentScreen == null);
+            while (MARK.wasPressed()) if (c.player != null && c.currentScreen == null) Fx.markKey(Game116.I, net.minecraft.client.gui.screen.Screen.hasShiftDown());
+            if (c.player != null) Fx.freeLookKey(Game116.I, FREELOOK.isPressed() && c.currentScreen == null, c.player.yaw, c.player.pitch);
             if (c.player != null) Fx.tick(Game116.I);
             // per-module key binds (only while playing)
             long h = c.getWindow().getHandle();
             for (V.Mod m : V.MODS) {
-                if (m.bind <= 0) continue;
-                boolean down = c.currentScreen == null && InputUtil.isKeyPressed(h, m.bind);
+                if (m.bind == 0) continue;
+                boolean down = c.currentScreen == null && Game116.I.rawKey(m.bind);
                 Boolean was = HELD.put(m.id, down);
-                if (down && (was == null || !was)) { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); }
+                if (down && (was == null || !was)) { m.on = !m.on; V.changed(); Hud.bindToggled(m); }
             }
             int hit = V.on("hitcolor") ? V.color("hitcolor", "color") : 0;
             if (hit != appliedHit) { appliedHit = hit; recolorHit(c, hit); }

@@ -118,7 +118,7 @@ export const Coin = ({ s = 14 }: { s?: number }) => <svg width={s} height={s} vi
 export const Sapph = ({ s = 14 }: { s?: number }) => <svg width={s} height={s} viewBox="0 0 16 16" className="inline-block align-[-2px]"><path d="M8 1.5l5.5 4L8 14.5 2.5 5.5z" fill="#38bdf8" /><path d="M8 1.5l5.5 4H2.5z" fill="#7dd3fc" /><path d="M8 5.5v9" stroke="#0ea5e9" strokeWidth=".8" /></svg>
 const money = (n: number, kind: 'coin' | 'sap') => <span className="inline-flex items-center gap-1">{num(n)}{kind === 'coin' ? <Coin /> : <Sapph />}</span>
 const SORTS: [string, string, (c: any) => number, (c: any, ic: any) => ReactNode][] = [
-  ['level', 'Уровень', (c) => c.level * 1e9 + c.xp, (c) => `${c.level} ★`],
+  ['level', 'Уровень', (c) => c.level * 1e9 + c.xp, (c) => `${c.level} ур.`],
   ['vault', 'Казна', (c) => c.vault, (c) => money(c.vault, 'coin')],
   ['points', 'Сапфиры', (c) => c.points, (c) => money(c.points, 'sap')],
   ['kills', 'Убийства', (c) => c.kills, (c) => `${num(c.kills)} Θ`],
@@ -157,7 +157,7 @@ export function MyClan({ data, me, onOpen }: { data: any; me?: string; onOpen: (
   if (!c) return <div className="card rounded-3xl p-5"><div className="font-bold mb-1 flex items-center gap-2"><Icon n="shield" s={16} />Клан</div><p className="muted text-sm">{data?.clans ? 'Вы пока не в клане. Создайте свой: /clan create <название> или вступите по приглашению.' : 'Данные о кланах появятся, когда сервер передаст их лаунчеру.'}</p></div>
   const role = c.members.find((m: any) => m.name.toLowerCase() === me!.toLowerCase())
   return <button className="card rounded-3xl p-5 text-left clanmini" onClick={() => onOpen(c)}>
-    <div className="flex items-center gap-3"><div className="text-xl"><McText s={c.display} plate /></div><span className="badge rec !py-0.5">{c.level} ★</span><span className="ml-auto muted"><Icon n="arrow" s={16} /></span></div>
+    <div className="flex items-center gap-3"><div className="text-xl"><McText s={c.display} plate /></div><span className="badge rec !py-0.5">{c.level} ур.</span><span className="ml-auto muted"><Icon n="arrow" s={16} /></span></div>
     <div className="text-sm mt-2 flex items-center gap-1.5"><Icon n={ROLE_ICON[role?.role] || 'user'} s={13} /><McText s={role?.roleText} /><span className="muted">· {c.members.length} участников</span></div>
     <div className="mt-3"><Bar v={c.maxLevel ? 1 : c.xp} max={c.maxLevel ? 1 : c.xpNeed} /></div></button>
 }

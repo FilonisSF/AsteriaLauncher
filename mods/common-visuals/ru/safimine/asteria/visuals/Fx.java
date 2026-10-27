@@ -18,13 +18,58 @@ public final class Fx {
         void beginTex(String texture, boolean depth);
         void vt(double x, double y, double z, float u, float v, int argb);
         double[] cam();
+        /** opaque textured quads with a texture id of the game (a player skin): 4 vt() per quad, then end() */
+        default void beginSkin(Object texture) {}
+        /** a png from disk as a texture id (re-uploaded when the key changes; one texture per key prefix before ':') */
+        default Object fileTex(String key, java.io.File png) { return null; }
         float camYaw();
         float camPitch();
         float partial();
     }
 
+    // ------------------------------------------------------------------ markers: B puts a mark where you look (or removes it), Shift+B clears; per server
+    public static final List<double[]> MARKS = new ArrayList<>();
+    private static String marksFor = null;
+    private static java.io.File marksFile() { return new java.io.File(V.dir(), "asteria-marks.json"); }
+    /** loads the marks of the current server (single player = "local") */
+    public static void marksServer(Game g) {
+        String srv = g.server(); if (srv == null) srv = "local"; if (srv.equals(marksFor)) return; marksFor = srv; MARKS.clear();
+        try { com.google.gson.JsonObject o = new com.google.gson.JsonParser().parse(new String(java.nio.file.Files.readAllBytes(marksFile().toPath()), java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            if (o.has(srv)) for (com.google.gson.JsonElement e : o.getAsJsonArray(srv)) { com.google.gson.JsonArray a = e.getAsJsonArray(); MARKS.add(new double[]{a.get(0).getAsDouble(), a.get(1).getAsDouble(), a.get(2).getAsDouble(), System.currentTimeMillis() - 5000}); } } catch (Exception ignored) {}
+    }
+    private static void saveMarks() {
+        try { java.io.File f = marksFile(); com.google.gson.JsonObject o = f.exists() ? new com.google.gson.JsonParser().parse(new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject() : new com.google.gson.JsonObject();
+            com.google.gson.JsonArray l = new com.google.gson.JsonArray(); for (double[] m : MARKS) { com.google.gson.JsonArray a = new com.google.gson.JsonArray(); a.add(new com.google.gson.JsonPrimitive(m[0])); a.add(new com.google.gson.JsonPrimitive(m[1])); a.add(new com.google.gson.JsonPrimitive(m[2])); l.add(a); }
+            o.add(marksFor == null ? "local" : marksFor, l); java.nio.file.Files.write(f.toPath(), new com.google.gson.Gson().toJson(o).getBytes(java.nio.charset.StandardCharsets.UTF_8)); } catch (Exception ignored) {}
+    }
+    public static void markKey(Game g, boolean clear) {
+        if (!V.on("markers")) return; marksServer(g);
+        if (clear) { if (!MARKS.isEmpty()) { MARKS.clear(); saveMarks(); Hud.notify("Метки", "Все метки убраны", false); sound("pop", 0.5f); } return; }
+        double[] at = g.lookAt(256); if (at == null) { Hud.notify("Метки", "Посмотрите на блок", false); return; }
+        for (int i = 0; i < MARKS.size(); i++) { double[] m = MARKS.get(i); if (Math.abs(m[0] - at[0]) + Math.abs(m[1] - at[1]) + Math.abs(m[2] - at[2]) < 3) { MARKS.remove(i); saveMarks(); Hud.notify("Метки", "Метка убрана", false); sound("pop", 0.5f); return; } }
+        MARKS.add(new double[]{at[0], at[1], at[2], System.currentTimeMillis()}); while (MARKS.size() > (int) V.num("markers", "max")) MARKS.remove(0);
+        saveMarks(); Hud.notify("Метки", "Метка поставлена", true); sound("blip", 0.5f);
+    }
+    private static void markBeams(R3 r, Game g, long now) {
+        if (!V.bool("markers", "beam")) return;
+        for (int k = 0; k < MARKS.size(); k++) { double[] m = MARKS.get(k); float in = (float) Math.min(1, (now - m[3]) / 500.0); int c = V.grad(k * 0.17f);
+            r.begin(R3.STRIP, true);
+            for (int i = 0; i <= 16; i++) { double a = Math.PI * 2 * i / 16, rr = 0.18; r.v(m[0] + Math.cos(a) * rr, m[1], m[2] + Math.sin(a) * rr, D.a(c, 0.55f * in)); r.v(m[0] + Math.cos(a) * rr, m[1] + 80 * in, m[2] + Math.sin(a) * rr, D.a(c, 0)); }
+            r.end(); }
+    }
+
     // ------------------------------------------------------------------ target
-    private static Object target; private static long targetAt;
+    private static Object target; private static long targetAt, killMsgAt;
+    // ------------------------------------------------------------------ free look: the camera turns around the player, the player keeps looking ahead
+    public static boolean freeLook; public static float flYaw, flPitch; private static int flPrev = -1;
+    /** called every tick with the free-look key state */
+    public static void freeLookKey(Game g, boolean held, float yaw, float pitch) {
+        boolean on = held && V.on("freelook");
+        if (on && !freeLook) { freeLook = true; flYaw = yaw; flPitch = pitch; flPrev = g.perspective(); if (flPrev == 0) g.setPerspective(1); }
+        else if (!on && freeLook) { freeLook = false; if (flPrev == 0) g.setPerspective(0); flPrev = -1; }
+    }
+    /** mouse movement while free look is on (degrees, as Entity.changeLookDirection gets them * 0.15) */
+    public static void freeLookTurn(double dx, double dy) { flYaw += (float) dx * 0.15f; flPitch = Math.max(-90, Math.min(90, flPitch + (float) dy * 0.15f * (V.bool("freelook", "invert") ? -1 : 1))); }
     public static void onAttack(Game g, Object e) {
         if (!g.living(e)) return;
         target = e; targetAt = System.currentTimeMillis(); game = g;
@@ -57,6 +102,10 @@ public final class Fx {
     private static boolean wasSprint; private static double[] petPos, petPrev;
     /** pets of other launcher players: name -> {kind, size}; from <api>/cosmetics (the launcher sends each player's pet with its heartbeat) */
     private static volatile java.util.Map<String, double[]> PET_OF = new java.util.HashMap<>();
+    /** halo / hat of other launcher players: name -> "halo,hat" */
+    private static volatile java.util.Map<String, String> FX_OF = new java.util.HashMap<>();
+    private static final java.util.Map<String, Object> OTHER_E = new java.util.HashMap<>(); // name -> player entity (for the mini-me skin)
+    private static final java.util.Map<String, double[]> WALK = new java.util.HashMap<>();  // mini-me: name -> phase, last x, last z, yaw, speed
     private static final java.util.Map<String, double[]> OTHER = new java.util.HashMap<>(); // name -> prev x,y,z, cur x,y,z
     private static long petsAt;
     private static void fetchPets() {
@@ -68,13 +117,14 @@ public final class Fx {
                 if (c.getResponseCode() != 200) return;
                 String body; try (java.io.InputStream in = c.getInputStream()) { java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream(); byte[] b = new byte[8192]; int r; while ((r = in.read(b)) > 0) o.write(b, 0, r); body = new String(o.toByteArray(), java.nio.charset.StandardCharsets.UTF_8); }
                 com.google.gson.JsonObject all = new com.google.gson.JsonParser().parse(body).getAsJsonObject();
-                java.util.Map<String, double[]> m = new java.util.HashMap<>();
+                java.util.Map<String, double[]> m = new java.util.HashMap<>(); java.util.Map<String, String> f = new java.util.HashMap<>();
                 for (java.util.Map.Entry<String, com.google.gson.JsonElement> en : all.entrySet()) {
                     com.google.gson.JsonObject v = en.getValue().getAsJsonObject(); String p = v.has("pet") ? v.get("pet").getAsString() : "";
-                    int i = p.indexOf(':'); if (i <= 0) continue;
-                    try { m.put(en.getKey().toLowerCase(), new double[]{Integer.parseInt(p.substring(0, i)), Double.parseDouble(p.substring(i + 1))}); } catch (Exception ignored) {}
+                    String fx = v.has("fx") ? v.get("fx").getAsString() : ""; if (!fx.isEmpty()) f.put(en.getKey().toLowerCase(), fx);
+                    String[] q = p.split(":"); if (q.length < 2) continue;
+                    try { m.put(en.getKey().toLowerCase(), new double[]{Integer.parseInt(q[0]), Double.parseDouble(q[1]), q.length > 2 && q[2].equals("m") ? 1 : 0}); } catch (Exception ignored) {}
                 }
-                PET_OF = m;
+                PET_OF = m; FX_OF = f;
             } catch (Throwable ignored) {}
         }, "asteria-pets"); t.setDaemon(true); t.start();
     }
@@ -90,6 +140,9 @@ public final class Fx {
             if (g.alive(target)) { targetPos = g.pos(target, 1); targetH = g.height(target); }
             else { if (V.on("killeffect") && targetPos != null && now0 - targetAt < 5000) kill(targetPos, targetH, now0);
                 if (V.on("sounds") && V.mode("sounds", "kill") > 0 && now0 - targetAt < 5000) sound(KILL_SOUNDS[V.mode("sounds", "kill") - 1], (float) V.num("sounds", "volume"));
+                if (V.on("killmsg") && now0 - targetAt < 5000 && now0 - killMsgAt > 3000 && g.isPlayer(target)) { killMsgAt = now0;
+                    String txt = V.text("killmsg", "text").replace("{name}", g.playerName(target)).trim();
+                    if (!txt.isEmpty()) { if (V.mode("killmsg", "chat") == 1 && !txt.startsWith("!")) txt = "!" + txt; final String m = txt; try { g.chat(m); } catch (Throwable ignored) {} } }
                 target = null; }
         }
         // ambient particles drifting around the player
@@ -124,7 +177,7 @@ public final class Fx {
         if (V.on("dash") && spr && !wasSprint) { double yr = Math.toRadians(g.yaw()); DASH.add(new double[]{p[0], p[1], p[2], -Math.sin(yr), Math.cos(yr), now0}); }
         wasSprint = spr; DASH.removeIf(q -> now0 - q[5] > 600);
         // pet follows a spot behind the right shoulder
-        if (V.on("pet")) { double yr = Math.toRadians(g.yaw()), tx = p[0] - Math.sin(yr) * -0.2 + Math.cos(yr) * -0.75, tz = p[2] + Math.cos(yr) * -0.2 + Math.sin(yr) * -0.75, ty = p[1] + 1.9;
+        if (V.on("pet")) { double yr = Math.toRadians(g.yaw()), tx = p[0] - Math.sin(yr) * -0.2 + Math.cos(yr) * -0.75, tz = p[2] + Math.cos(yr) * -0.2 + Math.sin(yr) * -0.75, ty = p[1] + (V.mode("pet", "kind") == MINI ? 0 : 1.9);
             if (petPos == null || dist(petPos, new double[]{tx, ty, tz}) > 12) petPos = new double[]{tx, ty, tz};
             petPrev = petPos.clone(); // drawn between petPrev and petPos with the partial tick: smooth, not 20 jumps a second
             petPos[0] += (tx - petPos[0]) * 0.18; petPos[1] += (ty - petPos[1]) * 0.18; petPos[2] += (tz - petPos[2]) * 0.18; } else petPos = null;
@@ -132,13 +185,13 @@ public final class Fx {
         if (now0 - petsAt > 30000) { petsAt = now0; fetchPets(); }
         if (V.bool("pet", "others") && !PET_OF.isEmpty()) {
             java.util.Set<String> seen = new java.util.HashSet<>();
-            for (Object e : g.players()) { String n = g.playerName(e).toLowerCase(); if (!PET_OF.containsKey(n)) continue; seen.add(n);
-                double[] q = g.pos(e, 1); double yr = Math.toRadians(g.yawOf(e)), tx = q[0] + 0.2 * Math.sin(yr) - 0.75 * Math.cos(yr), tz = q[2] - 0.2 * Math.cos(yr) - 0.75 * Math.sin(yr), ty = q[1] + 1.9;
+            for (Object e : g.players()) { String n = g.playerName(e).toLowerCase(); if (!PET_OF.containsKey(n)) continue; seen.add(n); OTHER_E.put(n, e);
+                double[] q = g.pos(e, 1); double yr = Math.toRadians(g.yawOf(e)), tx = q[0] + 0.2 * Math.sin(yr) - 0.75 * Math.cos(yr), tz = q[2] - 0.2 * Math.cos(yr) - 0.75 * Math.sin(yr), ty = q[1] + ((int) PET_OF.get(n)[0] == MINI ? 0 : 1.9);
                 double[] st = OTHER.get(n);
                 if (st == null || Math.abs(st[3] - tx) + Math.abs(st[5] - tz) > 12) st = new double[]{tx, ty, tz, tx, ty, tz};
                 st[0] = st[3]; st[1] = st[4]; st[2] = st[5];
                 st[3] += (tx - st[3]) * 0.18; st[4] += (ty - st[4]) * 0.18; st[5] += (tz - st[5]) * 0.18; OTHER.put(n, st); }
-            OTHER.keySet().retainAll(seen);
+            OTHER.keySet().retainAll(seen); OTHER_E.keySet().retainAll(seen);
         } else OTHER.clear();
         // particles left behind while moving
         if (V.on("particletrail")) {
@@ -204,14 +257,31 @@ public final class Fx {
     }
 
     // ------------------------------------------------------------------ render (after the world, before the hand)
+    /** camera of the last world frame (x, y, z, yaw, pitch, fov, partial): the HUD projects world points with it */
+    private static volatile double[] CAM; private static double lastFov = 70;
+    public static float partial() { double[] c = CAM; return c == null ? 1 : (float) c[6]; }
+    /** world point -> GUI pixels {x, y, depth}; null when behind the camera */
+    public static float[] project(double x, double y, double z, int W, int H) {
+        double[] c = CAM; if (c == null) return null;
+        double yaw = Math.toRadians(c[3]), pit = Math.toRadians(c[4]);
+        double fx = -Math.sin(yaw) * Math.cos(pit), fy = -Math.sin(pit), fz = Math.cos(yaw) * Math.cos(pit), rx = -Math.cos(yaw), rz = -Math.sin(yaw);
+        double ux = -Math.sin(yaw) * Math.sin(pit), uy = Math.cos(pit), uz = Math.cos(yaw) * Math.sin(pit);
+        double dx = x - c[0], dy = y - c[1], dz = z - c[2], d = dx * fx + dy * fy + dz * fz; if (d < 0.1) return null;
+        double k = (H / 2.0) / Math.tan(Math.toRadians(c[5]) / 2);
+        return new float[]{(float) (W / 2.0 + (dx * rx + dz * rz) / d * k), (float) (H / 2.0 - (dx * ux + dy * uy + dz * uz) / d * k), (float) d};
+    }
     public static void render(R3 r, Game g) {
         long now = System.currentTimeMillis(); float pt = r.partial();
+        { double[] cp = r.cam(); CAM = new double[]{cp[0], cp[1], cp[2], r.camYaw(), r.camPitch(), lastFov, pt}; }
         Object self = g.self(); if (self == null) return;
         if (V.on("trails") && TRAIL.size() > 1) trail(r, g, self, pt);
         if (V.on("jumpcircles")) circles(r, now);
         Object t = target(g);
         if (V.on("targetesp") && t != null && t != self) targetEsp(r, g, t, pt, now);
-        if (V.on("chinahat") && g.thirdPerson()) hat(r, g, self, pt, now);
+        if (V.on("chinahat") && g.thirdPerson()) hat(r, g, self, pt, now, g.bodyYaw(pt));
+        if (!FX_OF.isEmpty()) for (Object e : g.players()) { String fx = FX_OF.get(g.playerName(e).toLowerCase()); if (fx == null || !g.alive(e)) continue;
+            if (fx.contains("halo")) halo(r, g, e, pt, now); if (fx.contains("hat")) hat(r, g, e, pt, now, g.yawOf(e)); }
+        if (V.on("markers") && !MARKS.isEmpty()) markBeams(r, g, now);
         if (!PARTS.isEmpty()) { if (V.mode("hitparticles", "style") >= 5) texParticles(r, PARTS, V.mode("hitparticles", "style") - 5, 0.16, now, pt, false); else particles(r, now); }
         if (!KPARTS.isEmpty()) { r.begin(R3.QUADS, true); for (double[] q : KPARTS) { float life = (float) ((now - q[6]) / q[7]), al = 1 - life; int c = D.a(V.grad((float) q[8]), al);
             double x = q[0] + q[3] * pt, y = q[1] + q[4] * pt, z = q[2] + q[5] * pt; shard(r, x, y, z, 0.16 * (0.6 + q[8]), q[8] * 6.28 + life * 4, c, D.a(0xFFFFFFFF, al)); } r.end(); }
@@ -227,6 +297,8 @@ public final class Fx {
         if (petPos != null && (g.thirdPerson() || !V.bool("pet", "third"))) pet(r, now);
         if (!OTHER.isEmpty()) { float pf = r.partial();
             for (java.util.Map.Entry<String, double[]> en : OTHER.entrySet()) { double[] st = en.getValue(), k = PET_OF.get(en.getKey()); if (k == null) continue;
+                if ((int) k[0] == MINI) { Object e = OTHER_E.get(en.getKey()), skin = k[2] > 0 ? miniSkinOf(r, en.getKey()) : null; if (skin == null && e != null) skin = g.skin(e);
+                    if (skin != null) { drawMini(r, en.getKey(), new double[]{st[0] + (st[3] - st[0]) * pf, st[1] + (st[4] - st[1]) * pf, st[2] + (st[5] - st[2]) * pf}, skin, k[1]); continue; } }
                 drawPet(r, new double[]{st[0] + (st[3] - st[0]) * pf, st[1] + (st[4] - st[1]) * pf, st[2] + (st[5] - st[2]) * pf}, (int) k[0], k[1], now + en.getKey().hashCode()); } }
     }
 
@@ -291,7 +363,58 @@ public final class Fx {
     /** a little glowing companion: a soft glow plus its picture, bobbing */
     private static void pet(R3 r, long now) {
         float t = r.partial(); double[] pp = petPrev == null ? petPos : new double[]{petPrev[0] + (petPos[0] - petPrev[0]) * t, petPrev[1] + (petPos[1] - petPrev[1]) * t, petPrev[2] + (petPos[2] - petPrev[2]) * t};
+        if (V.mode("pet", "kind") == MINI && game != null) { Object skin = null;
+            if (V.mode("pet", "miniskin") == 1) { java.io.File f = new java.io.File(System.getProperty("asteria.root", "."), "skins/mini.png"); if (f.exists()) skin = r.fileTex("mini:" + f.lastModified(), f); }
+            if (skin == null) skin = game.skin(game.self());
+            if (skin != null) { drawMini(r, "", pp, skin, V.num("pet", "size")); return; } }
         drawPet(r, pp, V.mode("pet", "kind"), V.num("pet", "size"), now);
+    }
+    static final int MINI = 9;
+    private static long miniAt;
+    /** the custom mini-me skin of another player (uploaded in their launcher), cached in config/asteria-minis */
+    private static Object miniSkinOf(R3 r, String name) {
+        java.io.File f = new java.io.File(new java.io.File(V.dir(), "asteria-minis"), name + ".png");
+        if ((!f.exists() || System.currentTimeMillis() - f.lastModified() > 600000) && System.currentTimeMillis() - miniAt > 5000) { miniAt = System.currentTimeMillis();
+            final String api = System.getProperty("asteria.api"); if (api != null && !api.isEmpty()) { Thread t = new Thread(() -> { try {
+                java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(api + "/mini/" + name + ".png").openConnection(); c.setConnectTimeout(5000); c.setReadTimeout(8000);
+                if (c.getResponseCode() == 200) { f.getParentFile().mkdirs(); try (java.io.InputStream in = c.getInputStream()) { java.nio.file.Files.copy(in, f.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING); } } } catch (Throwable ignored) {} }, "asteria-mini"); t.setDaemon(true); t.start(); } }
+        return f.exists() ? r.fileTex("m_" + name + ":" + f.lastModified(), f) : null;
+    }
+    // ------------------------------------------------------------------ mini-me: a small player with a skin that runs after its owner
+    /** skin boxes: texture offset u, v, size w, h, d (pixels of a 64x64 skin), position x0, y0, z0 (feet = 0, facing +z), pivot y, swing sign */
+    private static final float[][] BODY = {
+        {0, 0, 8, 8, 8, -4, 24, -4, 24, 0}, {16, 16, 8, 12, 4, -4, 12, -2, 12, 0},      // head, body
+        {40, 16, 4, 12, 4, -8, 12, -2, 22, 1}, {32, 48, 4, 12, 4, 4, 12, -2, 22, -1},   // right arm, left arm
+        {0, 16, 4, 12, 4, -4, 0, -2, 12, -1}, {16, 48, 4, 12, 4, 0, 0, -2, 12, 1}};     // right leg, left leg
+    static void drawMini(R3 r, String who, double[] pos, Object skin, double size) {
+        double[] w = WALK.get(who); if (w == null) { w = new double[]{0, pos[0], pos[2], 0, 0}; WALK.put(who, w); }
+        double dx = pos[0] - w[1], dz = pos[2] - w[2], sp = Math.sqrt(dx * dx + dz * dz); w[1] = pos[0]; w[2] = pos[2];
+        w[4] = w[4] * 0.85 + Math.min(0.3, sp) * 0.15; w[0] += w[4] * 4.5;
+        if (sp > 0.004) { double want = Math.toDegrees(Math.atan2(-dx, dz)), d = ((want - w[3]) % 360 + 540) % 360 - 180; w[3] += d * 0.25; }
+        double swing = Math.sin(w[0]) * Math.min(1, w[4] * 25) * 0.9, k = 0.9 * size / 32, yaw = Math.toRadians(w[3]), cy = Math.cos(yaw), sy = Math.sin(yaw);
+        double bob = Math.abs(Math.sin(w[0])) * Math.min(1, w[4] * 25) * 0.6;
+        r.beginSkin(skin);
+        for (int layer = 0; layer < 2; layer++) for (float[] pt : BODY) {
+            if (layer == 1 && pt[1] != 0) continue; // second layer: only the hat
+            double a = pt[9] * swing; float u = pt[0] + (layer == 1 ? 32 : 0), v = pt[1], bw = pt[2], bh = pt[3], bd = pt[4]; double inf = layer == 1 ? 0.5 : 0;
+            double x0 = pt[5] - inf, y0 = pt[6] - inf, z0 = pt[7] - inf, x1 = pt[5] + bw + inf, y1 = pt[6] + bh + inf, z1 = pt[7] + bd + inf, py = pt[8];
+            double[][] c = new double[8][]; // corners: bit0 x, bit1 y, bit2 z
+            for (int n = 0; n < 8; n++) { double lx = (n & 1) == 0 ? x0 : x1, ly = (n & 2) == 0 ? y0 : y1, lz = (n & 4) == 0 ? z0 : z1;
+                double ry = py + (ly - py) * Math.cos(a) - lz * Math.sin(a), rz = (ly - py) * Math.sin(a) + lz * Math.cos(a);
+                c[n] = new double[]{pos[0] + (lx * cy - rz * sy) * k, pos[1] + (ry + bob) * k, pos[2] + (lx * sy + rz * cy) * k}; }
+            // faces seen from outside: top-left, top-right, bottom-right, bottom-left + their skin rectangle
+            face(r, c[6], c[7], c[5], c[4], u + bd, v + bd, bw, bh, 0xFFFFFFFF);                 // front (+z)
+            face(r, c[3], c[2], c[0], c[1], u + bd * 2 + bw, v + bd, bw, bh, 0xFFC8C8C8);        // back
+            face(r, c[2], c[6], c[4], c[0], u, v + bd, bd, bh, 0xFFDCDCDC);                      // right side (-x)
+            face(r, c[7], c[3], c[1], c[5], u + bd + bw, v + bd, bd, bh, 0xFFDCDCDC);            // left side (+x)
+            face(r, c[2], c[3], c[7], c[6], u + bd, v, bw, bd, 0xFFFFFFFF);                      // top
+            face(r, c[4], c[5], c[1], c[0], u + bd + bw, v, bw, bd, 0xFFA8A8A8);                 // bottom
+        }
+        r.end();
+    }
+    private static void face(R3 r, double[] tl, double[] tr, double[] br, double[] bl, float u, float v, float w, float h, int c) {
+        float u0 = u / 64f, v0 = v / 64f, u1 = (u + w) / 64f, v1 = (v + h) / 64f;
+        r.vt(tl[0], tl[1], tl[2], u0, v0, c); r.vt(tr[0], tr[1], tr[2], u1, v0, c); r.vt(br[0], br[1], br[2], u1, v1, c); r.vt(bl[0], bl[1], bl[2], u0, v1, c);
     }
     static void drawPet(R3 r, double[] pp, int kind, double size, long now) {
         double bob = Math.sin(now / 420.0) * 0.08, s = 0.22 * size; int c = V.grad(0.2f);
@@ -402,10 +525,13 @@ public final class Fx {
                 r.v(p[0] + Math.cos(a0) * rad, y, p[2] + Math.sin(a0) * rad, c); r.v(p[0] + Math.cos(a1) * rad, y, p[2] + Math.sin(a1) * rad, c); }
             r.end();
         } else if (V.mode("targetesp", "style") == 2) { // spiral: two helixes of glowing dots climbing around the target
-            r.beginTex("particles/bloom/bloom_small", true);
-            for (int k = 0; k < 2; k++) for (int j = 0; j < 22; j++) { double a = now / 1000.0 * sp * 3 + j * 0.45 + k * Math.PI, yy = p[1] + h * (j / 22.0);
-                tq(r, p[0] + Math.cos(a) * rad, yy, p[2] + Math.sin(a) * rad, 0.12, 0, D.a(V.grad(j / 22f + k * 0.5f), 0.9f * (0.4f + 0.6f * j / 22f))); }
-            r.end();
+            int n = 72; double spin = now / 1000.0 * sp * 1.6; // continuous ribbons (no separate dots that seem to jump)
+            for (int k = 0; k < 2; k++) for (int pass = 0; pass < 2; pass++) { double half = pass == 0 ? 0.09 : 0.03;
+                r.begin(R3.STRIP, true);
+                for (int j = 0; j <= n; j++) { double f = j / (double) n, a = spin + f * Math.PI * 3 + k * Math.PI, yy = p[1] + h * f, x = p[0] + Math.cos(a) * rad, z = p[2] + Math.sin(a) * rad;
+                    float fade = (float) Math.sin(f * Math.PI); int c = pass == 0 ? D.a(V.grad((float) f * 0.6f + k * 0.5f), 0.22f * fade) : D.a(D.mix(V.grad((float) f * 0.6f + k * 0.5f), 0xFFFFFFFF, 0.25f), 0.95f * fade);
+                    r.v(x, yy - half, z, c); r.v(x, yy + half, z, c); }
+                r.end(); }
         } else if (V.mode("targetesp", "style") == 3) { // portal: a turning textured circle under the feet + a soft column
             double rr = rad * 1.6, a = now / 1000.0 * sp * 1.5, cs = Math.cos(a) * rr, sn = Math.sin(a) * rr; int col = D.a(V.grad((float) phase), 0.9f);
             r.beginTex("circles/portal", true);
@@ -434,9 +560,9 @@ public final class Fx {
             }
         }
     }
-    private static void hat(R3 r, Game g, Object self, float pt, long now) {
-        double[] p = g.pos(self, pt); double top = p[1] + g.height(self) - 0.05, rad = V.num("chinahat", "size"); float a = (float) V.num("chinahat", "alpha");
-        int seg = 40; double yaw = Math.toRadians(-g.bodyYaw(pt));
+    private static void hat(R3 r, Game g, Object self, float pt, long now, float bodyYaw) {
+        double[] p = g.pos(self, pt); double top = p[1] + g.height(self) + 0.02, rad = V.num("chinahat", "size"); float a = (float) V.num("chinahat", "alpha");
+        int seg = 40; double yaw = Math.toRadians(-bodyYaw);
         r.begin(R3.TRIS, true);
         for (int i = 0; i < seg; i++) {
             double a0 = yaw + Math.PI * 2 * i / seg, a1 = yaw + Math.PI * 2 * (i + 1) / seg; int c0 = V.grad(i / (float) seg), c1 = V.grad((i + 1) / (float) seg);
@@ -537,7 +663,7 @@ public final class Fx {
         return (w / (float) h) / RATIOS[Math.min(RATIOS.length - 1, V.mode("aspect", "ratio"))];
     }
     /** third person camera distance */
-    public static double camDist(double d) { return V.on("camera") ? V.num("camera", "distance") : d; }
+    public static double camDist(double d) { return freeLook ? V.num("freelook", "distance") : V.on("camera") ? V.num("camera", "distance") : d; }
     /** a totem popped on us: our burst + sound; true = hide the vanilla totem animation */
     public static boolean totem() {
         if (!V.on("totem")) return false;
@@ -590,9 +716,9 @@ public final class Fx {
     public static double fov(double base) {
         float target = zooming() ? 1 : 0;
         zoomT = V.on("zoom") && V.bool("zoom", "smooth") ? zoomT + (target - zoomT) * Math.min(1, D.dt * 14) : target;
-        if (zoomT < 0.002f) { zoomT = 0; return base; }
+        if (zoomT < 0.002f) { zoomT = 0; lastFov = base; return base; }
         double z = zoomLevel > 0 ? zoomLevel : V.num("zoom", "fov");
-        return base + (z - base) * zoomT;
+        return lastFov = base + (z - base) * zoomT;
     }
     /** mouse sensitivity multiplier while zoomed (finer aim) */
     public static double sensitivity() { return zoomT > 0 ? 1 - zoomT * 0.55 : 1; }

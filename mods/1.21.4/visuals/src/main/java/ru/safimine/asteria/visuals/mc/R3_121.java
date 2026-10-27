@@ -5,6 +5,7 @@ import net.minecraft.client.gl.ShaderProgramKeys;
 import net.minecraft.client.gl.ShaderProgramKey;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.util.Identifier;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.BufferRenderer;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.Tessellator;
@@ -52,6 +53,22 @@ final class R3_121 implements Fx.R3 {
         try { BufferRenderer.drawWithGlobalProgram(b.end()); } catch (IllegalStateException empty) { /* nothing was added */ }
         RenderSystem.defaultBlendFunc();
         RenderSystem.depthMask(true); RenderSystem.enableDepthTest(); RenderSystem.enableCull();
+    }
+    @Override public void beginSkin(Object texture) {
+        RenderSystem.setShader(texKey()); RenderSystem.setShaderTexture(0, (Identifier) texture);
+        RenderSystem.enableBlend(); RenderSystem.defaultBlendFunc(); RenderSystem.disableCull(); RenderSystem.depthMask(true); RenderSystem.enableDepthTest();
+        b = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE_COLOR);
+    }
+    private static final java.util.Map<String, Object[]> FT = new java.util.HashMap<>();
+    @Override public Object fileTex(String key, java.io.File png) {
+        String slot = key.contains(":") ? key.substring(0, key.indexOf(':')) : key; Object[] e = FT.get(slot);
+        if (e != null && key.equals(e[0])) return e[1];
+        MinecraftClient mc = MinecraftClient.getInstance(); Identifier id = Identifier.of("asteria_visuals", "dyn/w_" + slot.toLowerCase().replaceAll("[^a-z0-9_]", "_"));
+        try (java.io.InputStream in = new java.io.FileInputStream(png)) {
+            net.minecraft.client.texture.NativeImage img = net.minecraft.client.texture.NativeImage.read(in);
+            if (e != null && e[1] != null) mc.getTextureManager().destroyTexture((Identifier) e[1]);
+            mc.getTextureManager().registerTexture(id, new net.minecraft.client.texture.NativeImageBackedTexture(img)); FT.put(slot, new Object[]{key, id}); return id;
+        } catch (Exception ex) { FT.put(slot, new Object[]{key, null}); return null; }
     }
     @Override public double[] cam() { return new double[]{cam.x, cam.y, cam.z}; }
     @Override public float camYaw() { return camera.getYaw(); }

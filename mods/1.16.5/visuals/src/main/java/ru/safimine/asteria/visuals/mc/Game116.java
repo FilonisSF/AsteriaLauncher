@@ -45,9 +45,12 @@ final class Game116 implements Game {
     @Override public boolean hudHidden() { return c.options.hudHidden; }
     @Override public boolean screenOpen() { return c.currentScreen != null; }
     @Override public boolean key(int i) { return kb(i).isPressed(); }
-    @Override public String keyName(int i) { String s = kb(i).getBoundKeyLocalizedText().getString(); return s.length() > 4 ? s.substring(0, 4) : s.toUpperCase(); }
+    @Override public String keyName(int i) { String k = kb(i).getBoundKeyTranslationKey(); if (k.startsWith("key.keyboard.") && k.length() == 14) return k.substring(13).toUpperCase(); // W A S D, not the letters of the keyboard layout
+        String s = kb(i).getBoundKeyLocalizedText().getString(); return s.length() > 4 ? s.substring(0, 4) : s.toUpperCase(); }
     @Override public boolean rawKey(int code) { long h = c.getWindow().getHandle(); return code < 0 ? GLFW.glfwGetMouseButton(h, -code - 1) == GLFW.GLFW_PRESS : InputUtil.isKeyPressed(h, code); }
-    @Override public String keyLabel(int code) { try { String s = InputUtil.fromKeyCode(code, 0).getLocalizedText().getString(); return s.length() > 10 ? s.substring(0, 10) : s; } catch (Throwable t) { return "#" + code; } }
+    @Override public String keyLabel(int code) { if (code < 0) { String[] mb = {"ЛКМ", "ПКМ", "СКМ", "Мышь 4", "Мышь 5", "Мышь 6", "Мышь 7", "Мышь 8"}; int b = -code - 1; return b < mb.length ? mb[b] : "Мышь " + (b + 1); }
+        try { String tk = InputUtil.fromKeyCode(code, 0).getTranslationKey(); if (tk.startsWith("key.keyboard.") && tk.length() == 14) return tk.substring(13).toUpperCase(); } catch (Throwable ignored) {}
+        try { String s = InputUtil.fromKeyCode(code, 0).getLocalizedText().getString(); return s.length() > 10 ? s.substring(0, 10) : s; } catch (Throwable t) { return "#" + code; } }
     @Override public String username() { return c.getSession().getUsername(); }
     @Override public int ping() { // tab latency; by name when the server changes UUIDs; else the server list ping
         ClientPlayNetworkHandler n = c.getNetworkHandler(); if (n == null || c.player == null) return -1;
@@ -123,6 +126,26 @@ final class Game116 implements Game {
         BlockPos p = ((BlockHitResult) c.crosshairTarget).getBlockPos(); VoxelShape sh = c.world.getBlockState(p).getOutlineShape(c.world, p);
         if (sh.isEmpty()) return null; Box b = sh.getBoundingBox();
         return new double[]{p.getX() + b.minX, p.getY() + b.minY, p.getZ() + b.minZ, p.getX() + b.maxX, p.getY() + b.maxY, p.getZ() + b.maxZ};
+    }
+    @Override public Item offBy(Object e) { if (!(e instanceof LivingEntity)) return null; ItemStack s = ((LivingEntity) e).getOffHandStack(); return s.isEmpty() ? null : itemOf(s); }
+    @Override public boolean isPlayer(Object e) { return e instanceof net.minecraft.entity.player.PlayerEntity; }
+    @Override public int perspective() { return c.options.getPerspective().ordinal(); }
+    @Override public void setPerspective(int p) { c.options.setPerspective(net.minecraft.client.option.Perspective.values()[p]); }
+    @Override public void chat(String text) { if (c.player != null) c.player.sendChatMessage(text); }
+    @Override public String[] serverInfo() { net.minecraft.client.network.ServerInfo si = c.getCurrentServerEntry(); if (si == null || c.getNetworkHandler() == null) return null;
+        return new String[]{si.name, si.address, String.valueOf(c.getNetworkHandler().getPlayerList().size())}; }
+    private String iconFor; private java.io.File iconFile;
+    @Override public java.io.File serverIcon() {
+        net.minecraft.client.network.ServerInfo si = c.getCurrentServerEntry(); if (si == null) return null;
+        String b = si.getIcon(); byte[] png = b == null ? null : java.util.Base64.getDecoder().decode(b.replaceAll("\\s", "")); if (png == null || png.length == 0) return null;
+        String key = si.address + ":" + png.length;
+        if (!key.equals(iconFor)) try { java.io.File f = new java.io.File(ru.safimine.asteria.visuals.V.dir(), "asteria-server-icon.png"); java.nio.file.Files.write(f.toPath(), png); iconFile = f; iconFor = key; } catch (Exception ex) { return null; }
+        return iconFile;
+    }
+    @Override public double[] lookAt(double dist) {
+        if (c.player == null) return null; net.minecraft.util.hit.HitResult h = c.player.raycast(dist, 1f, false);
+        if (!(h instanceof BlockHitResult) || h.getType() != HitResult.Type.BLOCK) return null; BlockPos p = ((BlockHitResult) h).getBlockPos();
+        return new double[]{p.getX() + 0.5, p.getY() + 1, p.getZ() + 0.5};
     }
     @Override public void openMenu() { c.openScreen(new AsteriaScreen()); }
     @Override public void closeMenu() { c.openScreen(null); }

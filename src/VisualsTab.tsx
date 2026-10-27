@@ -5,7 +5,7 @@ import { Check, ColorPick, Dropdown, Switch, Tilt } from './ui'
 declare global { interface Window { api: any } }
 
 // The same schema.json the mod reads: the launcher and the in-game menu edit one file (config/asteria-visuals.json in every build).
-type S = { id: string; name: string; type: 'bool' | 'num' | 'mode' | 'color'; def: any; min?: number; max?: number; step?: number; options?: string[] }
+type S = { id: string; name: string; type: 'bool' | 'num' | 'mode' | 'color' | 'str'; def: any; min?: number; max?: number; step?: number; options?: string[] }
 type M = { id: string; cat: string; name: string; desc: string; on: boolean; hud?: [number, number]; s: S[] }
 type ModCfg = { on: boolean; bind: number; hud?: [number, number]; s: Record<string, any> }
 type Theme = { accent: string; accent2: string; chroma: boolean; shadow: boolean; blur: boolean; bg: number; scale: number; hud?: number; glare?: boolean; font?: number | boolean; menu?: boolean }
@@ -14,7 +14,7 @@ const MODS = (schema as any).modules as M[], CATS = (schema as any).categories a
 const CAT_ICON: Record<string, string> = { hud: 'grid', world: 'cube', combat: 'sparkles', camera: 'eye' }
 // card pictures: src/assets/art/vis-<id>.jpg (or .png / .webp), prompts in src/assets/art/PROMPTS_RU.md
 const PIC: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob('./assets/art/vis-*.{jpg,png,webp}', { eager: true, query: '?url', import: 'default' }) as Record<string, string>).map(([k, v]) => [k.split('/').pop()!.replace(/^vis-|\.(jpg|png|webp)$/g, ''), v]))
-const THEME0: Theme = { accent: '#22d3ee', accent2: '#3b82f6', chroma: false, shadow: true, blur: true, bg: 0.55, scale: 1, hud: 0 }
+const THEME0: Theme = { accent: '#22d3ee', accent2: '#3b82f6', chroma: false, shadow: true, blur: true, bg: 0.55, scale: 1, hud: 0, font: 8 } as Theme
 export function visDefaults(): VisCfg {
   const modules: Record<string, ModCfg> = {}
   for (const m of MODS) modules[m.id] = { on: m.on, bind: 0, ...(m.hud ? { hud: [...m.hud] as [number, number] } : {}), s: Object.fromEntries(m.s.map((x) => [x.id, x.def])) }
@@ -34,7 +34,7 @@ const TEMPLATES: { name: string; desc: string; make: () => VisCfg }[] = [
 const FONTS = ['Minecraft (пиксельный)', 'Ubuntu', 'Montserrat Alt', 'Balsamiq (мило)', 'Pangolin (мило)', 'Neucha (от руки)', 'Marmelad', 'Pacifico', 'Russo One', 'Philosopher', 'Unbounded']
 // closest font the launcher itself has, so the preview looks like the game
 const PREVIEW_FONT = ['ui-monospace,Consolas,monospace', '"Manrope Variable",sans-serif', '"Manrope Variable",sans-serif', '"Comic Sans MS","Manrope Variable",sans-serif', '"Comic Sans MS","Manrope Variable",sans-serif', '"Segoe Print","Manrope Variable",sans-serif', '"Manrope Variable",sans-serif', '"Segoe Script","Manrope Variable",cursive', '"Unbounded Variable",sans-serif', 'Georgia,serif', '"Unbounded Variable",sans-serif']
-const fontIdx = (f: any) => typeof f === 'number' ? Math.min(f, FONTS.length - 1) : f === false ? 0 : 1 // old configs stored a boolean
+const fontIdx = (f: any) => typeof f === 'number' ? Math.min(f, FONTS.length - 1) : f === false ? 0 : 8 // old configs stored a boolean; Russo One by default
 function only(ids: string[], theme: Partial<Theme> = {}): VisCfg { const d = visDefaults(); for (const m of MODS) d.modules[m.id].on = ids.includes(m.id); d.theme = { ...d.theme, ...theme }; return d }
 function merge(saved: any): VisCfg {
   const d = visDefaults(); if (!saved || !saved.modules) return d
@@ -48,7 +48,7 @@ const GLFW: Record<string, number> = { Space: 32, Quote: 39, Comma: 44, Minus: 4
   ArrowRight: 262, ArrowLeft: 263, ArrowDown: 264, ArrowUp: 265, PageUp: 266, PageDown: 267, Home: 268, End: 269, CapsLock: 280, ShiftLeft: 340, ControlLeft: 341, AltLeft: 342, ShiftRight: 344, ControlRight: 345, AltRight: 346 }
 const glfw = (code: string) => code.startsWith('Key') ? code.charCodeAt(3) : code.startsWith('Digit') ? 48 + +code[5] : /^F\d+$/.test(code) ? 289 + +code.slice(1) : /^Numpad\d$/.test(code) ? 320 + +code[6] : GLFW[code] ?? 0
 const NAMES: Record<number, string> = Object.fromEntries(Object.entries(GLFW).map(([k, v]) => [v, k.replace('Left', ' L').replace('Right', ' R').replace('Arrow', '')]))
-export const keyName = (k: number) => !k ? '—' : k >= 65 && k <= 90 ? String.fromCharCode(k) : k >= 48 && k <= 57 ? String(k - 48) : k >= 290 && k <= 314 ? 'F' + (k - 289) : k >= 320 && k <= 329 ? 'Num ' + (k - 320) : NAMES[k] ?? '#' + k
+export const keyName = (k: number) => !k ? '—' : k < 0 ? ({ [-3]: 'Колесо', [-4]: 'Мышь 4', [-5]: 'Мышь 5' } as any)[k] ?? 'Мышь ' + -k : k >= 65 && k <= 90 ? String.fromCharCode(k) : k >= 48 && k <= 57 ? String(k - 48) : k >= 290 && k <= 314 ? 'F' + (k - 289) : k >= 320 && k <= 329 ? 'Num ' + (k - 320) : NAMES[k] ?? '#' + k
 
 // how big each element is in the 640x360 GUI preview (like the mod draws it)
 const BOX: Record<string, [number, number]> = { watermark: [92, 16], arraylist: [78, 74], keystrokes: [70, 84], info: [96, 70], armor: [86, 22], effects: [104, 46], targethud: [124, 38], notifications: [132, 28], island: [170, 18], hotbar: [204, 26], inventory: [178, 76], totems: [48, 22], cooldowns: [104, 44], music: [156, 36] }
@@ -76,7 +76,10 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
   const setS = (id: string, k: string, v: any) => c && mod(id, { s: { ...c.modules[id].s, [k]: v } })
   const theme = (p: Partial<Theme>) => c && save({ ...c, theme: { ...c.theme, ...p } })
   useEffect(() => { if (!bindFor) return; const f = (e: KeyboardEvent) => { e.preventDefault(); e.stopPropagation(); mod(bindFor, { bind: e.code === 'Escape' || e.code === 'Backspace' ? 0 : glfw(e.code) }); setBindFor('') }
-    addEventListener('keydown', f, true); return () => removeEventListener('keydown', f, true) }, [bindFor, c])
+    // mouse buttons too (side buttons 4 / 5, wheel click): stored as negative codes, like the game reads them
+    const mf = (e: MouseEvent) => { if (e.button < 1) return; e.preventDefault(); e.stopPropagation(); mod(bindFor, { bind: -([0, 3, 2, 4, 5][e.button] ?? 0) }); setBindFor('') }
+    addEventListener('keydown', f, true); const tm = setTimeout(() => addEventListener('mousedown', mf, true), 120)
+    return () => { removeEventListener('keydown', f, true); removeEventListener('mousedown', mf, true); clearTimeout(tm) } }, [bindFor, c])
   useEffect(() => { if (!listenKey) return; const f = async (e: KeyboardEvent) => { e.preventDefault(); e.stopPropagation()
       const name = 'key.keyboard.' + (e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : e.code.startsWith('Digit') ? e.code.slice(5) : /^F\d+$/.test(e.code) ? e.code.toLowerCase() : ({ ShiftRight: 'right.shift', ShiftLeft: 'left.shift', ControlLeft: 'left.control', ControlRight: 'right.control', AltLeft: 'left.alt', AltRight: 'right.alt', Space: 'space', Tab: 'tab', Insert: 'insert', Delete: 'delete', Home: 'home', End: 'end', Backquote: 'grave.accent' } as any)[e.code] || e.code.toLowerCase())
       await window.api.optsSet(ver, { ['key_key.asteria.' + listenKey]: name }); setKeys((k) => ({ ...k, [listenKey]: name })); setListenKey(''); say('Клавиша сохранена') }
@@ -111,22 +114,21 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
         {CATS.map((k) => { const n = MODS.filter((m) => m.cat === k.id && c.modules[m.id].on).length
           return <button key={k.id} className={'navw ' + (cat === k.id && !q ? 'on' : '')} onClick={() => { setCat(k.id); setQ('') }}><Icon n={CAT_ICON[k.id] || 'sparkles'} s={18} /><span className="flex-1 text-left">{k.name}</span><span className="text-xs opacity-80">{n}</span></button> })}
       </div>
-      <div className="grid gap-3 content-start items-start stagger" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
+      <div className="vis-cols">
         {mods.map((m) => { const mc = c.modules[m.id], ex = open === m.id
           return <div key={m.id} className={'card rounded-2xl overflow-hidden transition ' + (mc.on ? '' : 'opacity-[.86]')} style={mc.on ? { borderColor: 'color-mix(in srgb,var(--a2) 45%,transparent)' } : {}}>
-            <div className="relative h-[120px] overflow-hidden" style={{ background: 'linear-gradient(135deg,color-mix(in srgb,var(--a1) 38%,#06121c),color-mix(in srgb,var(--a2) 30%,#050b16))' }}>
-              {PIC[m.id] ? <img src={PIC[m.id]} loading="lazy" decoding="async" draggable={false} className={'absolute inset-0 w-full h-full object-cover transition duration-300 ' + (mc.on ? '' : 'grayscale-[.55]')} />
-                : <span className="absolute inset-0 flex items-center justify-center text-white/35"><Icon n={CAT_ICON[m.cat] || 'sparkles'} s={46} /></span>}
+            {PIC[m.id] && <div className="relative h-[120px] overflow-hidden">
+              <img src={PIC[m.id]} loading="lazy" decoding="async" draggable={false} className={'absolute inset-0 w-full h-full object-cover transition duration-300 ' + (mc.on ? '' : 'grayscale-[.55]')} />
               <div className="absolute inset-x-0 bottom-0 h-12" style={{ background: 'linear-gradient(transparent,color-mix(in srgb,var(--card) 85%,transparent))' }} />
-            </div>
+            </div>}
             <div className="p-4 pt-3">
             <div className="flex items-start gap-3">
               <div className="flex-1 min-w-0"><div className="font-bold">{m.name}</div><div className="muted text-xs">{m.desc}</div></div>
-              <Switch on={mc.on} set={(v) => mod(m.id, { on: v })} /></div>
+              <button className={'vswitch ' + (mc.on ? 'on' : '')} title={mc.on ? 'Включено' : 'Выключено'} onClick={() => mod(m.id, { on: !mc.on })} /></div>
             <div className="flex items-center gap-2 mt-3">
               <button className={'pill !py-1 ' + (bindFor === m.id ? 'on' : '')} title="Клавиша включения в игре" onClick={() => setBindFor(bindFor === m.id ? '' : m.id)}><Icon n="keyboard" s={13} />{bindFor === m.id ? 'Нажмите клавишу…' : keyName(mc.bind)}</button>
               {m.s.length > 0 && <button className="pill !py-1 ml-auto" onClick={() => setOpen(ex ? '' : m.id)}><Icon n="sliders" s={13} />Настройки<span className={'transition ' + (ex ? 'rotate-180' : '')}><Icon n="chevron" s={12} /></span></button>}</div>
-            {ex && <div className="mt-3 pt-3 flex flex-col gap-3 fade" style={{ borderTop: '1px solid var(--line)' }}>{m.s.map((s) => <Setting key={s.id} s={s} v={mc.s[s.id]} set={(v) => setS(m.id, s.id, v)} />)}</div>}
+            {ex && <div className="mt-3 pt-3 flex flex-col gap-3 fade" style={{ borderTop: '1px solid var(--line)' }}>{m.s.map((s) => <Setting key={s.id} mod={m.id} s={s} v={mc.s[s.id]} set={(v) => setS(m.id, s.id, v)} />)}</div>}
           </div></div> })}
       </div></div>}
 
@@ -215,11 +217,41 @@ function Configs({ c, pr, set, say }: { c: VisCfg; pr: Presets; set: (p: Presets
 function Range({ label, min, max, step, v, set, show }: { label: string; min: number; max: number; step: number; v: number; set: (n: number) => void; show?: (n: number) => string }) {
   return <label className="block"><div className="flex justify-between text-sm mb-1"><span>{label}</span><b>{show ? show(v) : v}</b></div><input type="range" className="w-full" min={min} max={max} step={step} value={v} onChange={(e) => set(+e.target.value)} /></label>
 }
-function Setting({ s, v, set }: { s: S; v: any; set: (v: any) => void }) {
+/** draw your own crosshair: 15 x 15 cells, saved as a string of 0/1 (the game draws each cell "thickness" pixels big) */
+const PN = 15
+function PatternEditor({ v, set }: { v: string; set: (v: string) => void }) {
+  const cells = (v && v.length === PN * PN ? v : '0'.repeat(PN * PN)).split('')
+  const paint = useRef<string | null>(null)
+  const put = (i: number) => { if (paint.current == null || cells[i] === paint.current) return; cells[i] = paint.current; set(cells.join('')) }
+  const preset = (fn: (x: number, y: number) => boolean) => set(Array.from({ length: PN * PN }, (_, i) => (fn(i % PN - 7, Math.floor(i / PN) - 7) ? '1' : '0')).join(''))
+  return <div onMouseUp={() => (paint.current = null)} onMouseLeave={() => (paint.current = null)}>
+    <div className="text-sm mb-1">Свой рисунок <span className="muted text-xs">— выберите форму «Свой рисунок», рисуйте мышью (правая кнопка стирает)</span></div>
+    <div className="flex gap-3 items-start">
+      <div className="grid select-none rounded-lg overflow-hidden" style={{ gridTemplateColumns: `repeat(${PN}, 14px)`, background: '#0b1220', border: '1px solid var(--line)' }} onContextMenu={(e) => e.preventDefault()}>
+        {cells.map((c, i) => <div key={i} style={{ width: 14, height: 14, background: c === '1' ? 'var(--a1)' : i === 112 ? 'rgba(255,255,255,.12)' : 'transparent', outline: '1px solid rgba(255,255,255,.05)' }}
+          onMouseDown={(e) => { paint.current = e.button === 2 ? '0' : cells[i] === '1' ? '0' : '1'; put(i) }} onMouseEnter={() => put(i)} />)}</div>
+      <div className="flex flex-col gap-1.5">
+        <button className="pill" onClick={() => preset((x, y) => (x === 0 || y === 0) && Math.abs(x) + Math.abs(y) >= 2 && Math.abs(x) + Math.abs(y) <= 5)}>Крест</button>
+        <button className="pill" onClick={() => preset((x, y) => { const d = Math.hypot(x, y); return d > 3.5 && d < 4.6 || (x === 0 && y === 0) })}>Круг</button>
+        <button className="pill" onClick={() => preset((x, y) => Math.abs(x) === Math.abs(y) && Math.abs(x) >= 1 && Math.abs(x) <= 3)}>Икс</button>
+        <button className="pill" onClick={() => set('0'.repeat(PN * PN))}>Очистить</button>
+      </div>
+    </div>
+  </div>
+}
+/** pet pictures: the same textures the game draws (mods/common-visuals/resources/assets/asteria_visuals/textures/fx/trinket) */
+const PET_PIC: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob('../mods/common-visuals/resources/assets/asteria_visuals/textures/fx/trinket/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>).map(([k, v]) => [k.split('/').pop()!.replace('.png', ''), v]))
+const PET_FILES = ['cat', 'ghost', 'flame', 'gem', 'atom', 'flower', 'donut', 'ball', 'banana']
+function Setting({ s, v, set, mod }: { s: S; v: any; set: (v: any) => void; mod?: string }) {
+  if (mod === 'pet' && s.id === 'kind') return <div><div className="text-sm mb-1.5">{s.name}</div><div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+    {s.options!.map((o, i) => { const pic = PET_PIC[PET_FILES[i]]; return <button key={o} title={o} onClick={() => set(i)} className="rounded-xl flex flex-col items-center gap-1 p-1.5 transition" style={{ background: +v === i ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: +v === i ? '#fff' : undefined }}>
+      {pic ? <img src={pic} className="w-9 h-9 object-contain" draggable={false} /> : <span className="w-9 h-9 flex items-center justify-center"><Icon n="user" s={22} /></span>}<span className="text-[10.5px] font-semibold leading-tight truncate w-full text-center">{o}</span></button> })}</div></div>
+  if (s.type === 'str' && s.id === 'pattern') return <PatternEditor v={String(v ?? '')} set={set} />
+  if (s.type === 'str') return <label className="block"><div className="text-sm mb-1">{s.name}</div><input className="w-full" placeholder="ezz" value={String(v ?? '')} maxLength={100} onChange={(e) => set(e.target.value)} /></label>
   if (s.type === 'bool') return <Switch on={!!v} set={set} label={s.name} />
   if (s.type === 'num') return <Range label={s.name} min={s.min!} max={s.max!} step={s.step!} v={+v} set={set} show={(x) => (s.step! < 1 ? x.toFixed(2).replace(/0$/, '') : String(x))} />
   if (s.type === 'color') return <div className="flex items-center justify-between"><span className="text-sm">{s.name}</span><ColorPick value={String(v)} set={set} size="sm" /></div>
-  if (s.options!.length > 5) return <div className="flex items-center justify-between gap-3"><span className="text-sm">{s.name}</span><Dropdown value={String(v)} w={170} set={(x) => set(+x)} options={s.options!.map((o, i) => ({ value: String(i), label: o }))} /></div>
+  if (s.options!.length > 4) return <div><div className="text-sm mb-1.5">{s.name}</div><div className="flex gap-1.5 flex-wrap">{s.options!.map((o, i) => <button key={o} className={'pill !py-1 ' + (+v === i ? 'on' : '')} onClick={() => set(i)}>{o}</button>)}</div></div>
   return <div><div className="text-sm mb-1">{s.name}</div><div className="seg flex w-full">{s.options!.map((o, i) => <button key={o} className={'flex-1 ' + (+v === i ? 'on' : '')} onClick={() => set(i)}>{o}</button>)}</div></div>
 }
 

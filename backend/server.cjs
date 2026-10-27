@@ -48,7 +48,7 @@ const server = http.createServer((req, res) => {
     if (url === '/admin') return file(path.join(__dirname, 'admin.html'), 'text/html; charset=utf-8')
     let m
     if ((m = url.match(/^\/vcfg\/([A-Z0-9]{6})$/i))) return file(path.join(DATA, 'vcfg', m[1].toUpperCase() + '.json'), 'application/json') // shared Asteria Visuals configs
-    if ((m = url.match(/^\/(skin|cape)\/(\w{3,16})\.png$/))) return file(path.join(DATA, 'skins', `${m[1]}-${m[2].toLowerCase()}.png`), 'image/png')
+    if ((m = url.match(/^\/(skin|cape|mini)\/(\w{3,16})\.png$/))) return file(path.join(DATA, 'skins', `${m[1]}-${m[2].toLowerCase()}.png`), 'image/png')
     if ((m = url.match(/^\/skinmeta\/(\w{3,16})$/))) return json({ slim: fs.existsSync(path.join(DATA, 'skins', `slim-${m[1].toLowerCase()}`)) })
     if ((m = url.match(/^\/player\/(\w{3,16})$/))) { const n = m[1].toLowerCase(), c = clanOf(n); return json({ ...planOf(n), ...(stats[n] || { stats: null }), clan: c ? { name: c.name, display: c.display, level: c.level, role: c.members.find((x) => x.name.toLowerCase() === n)?.roleText } : null }) }
     if (url === '/clans') return json(clans || { clans: [], time: 0 })
@@ -131,7 +131,7 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/heartbeat') {
       if (tokens[n] && !authed(n, j.token)) return json({ error: 'owned' }, 403)
-      online.set(n, Date.now()); seenDb[n] = Date.now(); cosm.set(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?$/.test(String(j.pet || '')) ? String(j.pet) : '' }) // pet: "<kind>:<size>" from the visuals, '' = none; return json({ ok: true, ...planOf(n) })
+      online.set(n, Date.now()); seenDb[n] = Date.now(); cosm.set(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?(:m)?$/.test(String(j.pet || '')) ? String(j.pet) : '', fx: /^[a-z,]{0,40}$/.test(String(j.fx || '')) ? String(j.fx || '') : '' }) // pet: "<kind>:<size>" from the visuals, '' = none; return json({ ok: true, ...planOf(n) })
     }
     if (url === '/ticket') { // signed PREMIUM ticket, valid 3 days or until the subscription ends
       adopt(n, j.token); const p = planOf(n); if (p.plan !== 'PREMIUM') return json({ error: 'no premium', ...p }, 403)
@@ -143,7 +143,7 @@ const server = http.createServer((req, res) => {
     if (url === '/skin') {
       if (tokens[n] && !authed(n, j.token)) return json({ error: 'name is owned by another launcher' }, 403)
       let token = j.token; if (!tokens[n]) { token = crypto.randomBytes(16).toString('hex'); tokens[n] = token; wr('tokens.json', tokens) }
-      const kind = j.kind === 'cape' ? 'cape' : 'skin', f = path.join(DATA, 'skins', `${kind}-${n}.png`)
+      const kind = j.kind === 'cape' ? 'cape' : j.kind === 'mini' ? 'mini' : 'skin', f = path.join(DATA, 'skins', `${kind}-${n}.png`)
       if (j.png === null) { fs.rmSync(f, { force: true }); return json({ ok: true, token }) }
       const png = Buffer.from(String(j.png || ''), 'base64')
       if (png.length > 2_500_000 || !png.subarray(0, 4).equals(PNG)) return json({ error: 'bad png' }, 400) // HD capes up to 2.5 MB

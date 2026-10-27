@@ -43,12 +43,12 @@ export type View = { showOver?: boolean; showCape?: boolean; showBody?: boolean;
 
 /** 3D Minecraft player (CSS 3D). Drag to rotate, wheel to zoom. With `paint`, a left click on the model reports the texture pixel
  *  (onHit); rotate with the right mouse button then. The cape is a real 10x16x1 box with the Minecraft cape UV layout. */
-export default function Skin3D({ skin, slim, cape, paint = false, onSkinHit, onCapeHit, view = {}, height = 420, scale = 7 }: {
-  skin: string; slim: boolean; cape?: string; paint?: boolean | 'skin' | 'cape'; onSkinHit?: (h: Hit) => void; onCapeHit?: (h: Hit) => void; view?: View; height?: number; scale?: number }) {
+export default function Skin3D({ skin, slim, cape, paint = false, onSkinHit, onCapeHit, view = {}, height = 420, scale = 7, spin = true }: {
+  skin: string; slim: boolean; cape?: string; paint?: boolean | 'skin' | 'cape'; onSkinHit?: (h: Hit) => void; onCapeHit?: (h: Hit) => void; view?: View; height?: number; scale?: number; spin?: boolean }) {
   const [tm, setTm] = useState(0), [rot, setRot] = useState({ x: -10, y: paint === 'cape' ? 200 : 28 }), [zoom, setZoom] = useState(1)
-  const drag = useRef<{ x: number; y: number } | null>(null), auto = useRef(!paint)
+  const drag = useRef<{ x: number; y: number } | null>(null), auto = useRef(!paint), spinR = useRef(spin); spinR.current = spin
   const [capeSize, setCapeSize] = useState<[number, number]>([64, 32])
-  useEffect(() => { let r = 0; const f = () => { if (auto.current) setRot((o) => ({ ...o, y: o.y + 0.35 })); setTm(performance.now() / 1000); r = requestAnimationFrame(f) }; r = requestAnimationFrame(f); return () => cancelAnimationFrame(r) }, [])
+  useEffect(() => { let r = 0; const f = () => { if (auto.current && spinR.current) setRot((o) => ({ ...o, y: o.y + 0.35 })); setTm(performance.now() / 1000); r = requestAnimationFrame(f) }; r = requestAnimationFrame(f); return () => cancelAnimationFrame(r) }, [])
   useEffect(() => { if (!cape) return; const im = new Image(); im.onload = () => setCapeSize([im.width, im.height]); im.src = cape }, [cape])
   const S = scale * zoom, a = slim ? 3 : 4, showOver = view.showOver !== false, body = view.showBody !== false
   const base: Part[] = [{ w: 8, h: 8, d: 8, u: 0, v: 0, x: 0, y: -12, layer: 'base' }, { w: 8, h: 12, d: 4, u: 16, v: 16, x: 0, y: -2, layer: 'base' },

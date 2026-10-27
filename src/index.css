@@ -52,7 +52,7 @@ button.pill:hover{background:var(--a1);color:#fff;border-color:transparent}
 .poster{aspect-ratio:5/7;border-radius:1.1rem;overflow:hidden;transition:.25s;border:2px solid transparent;position:relative;box-shadow:var(--shadow)}.poster:hover{transform:translateY(-4px)}.poster.on{border-color:var(--a2);box-shadow:0 0 0 3px color-mix(in srgb,var(--a2) 30%,transparent),0 14px 34px color-mix(in srgb,var(--a2) 35%,transparent)}
 .seg{display:inline-flex;padding:3px;border-radius:12px;background:var(--chip);gap:2px}
 .seg button{padding:.35rem .8rem;border-radius:9px;font-weight:600;font-size:.85rem;color:var(--muted);transition:.15s}
-.seg button.on{background:var(--btn-bg);color:var(--text);box-shadow:var(--btn-shadow)}
+.seg button.on{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;box-shadow:var(--btn-shadow)}
 [data-theme=dark] .seg button.on{background:var(--a1);color:#fff}
 .switch{display:inline-block;vertical-align:middle;width:38px;height:22px;border-radius:999px;background:color-mix(in srgb,var(--muted) 35%,transparent);position:relative;transition:.2s;flex:none}
 .switch::after{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
@@ -331,3 +331,11 @@ button.pill:hover{background:color-mix(in srgb,var(--a2) 14%,var(--pill-bg));col
 .tgpost-img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}
 .tgpost-ava{width:26px;height:26px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--a1),var(--a2));color:#032a2e}
 .tgpost-text{font-size:13.5px;line-height:1.5;color:var(--text);white-space:pre-line;display:-webkit-box;-webkit-line-clamp:7;-webkit-box-orient:vertical;overflow:hidden}
+
+.shot-nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:999px;display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);transition:background .15s}
+.shot-nav:hover{background:color-mix(in srgb,var(--a2) 55%,rgba(0,0,0,.5))}
+/* visuals cards: columns (opening one moves only what is under it), switches green = on, red = off */
+.vis-cols{columns:2 320px;column-gap:12px}.vis-cols>*{break-inside:avoid;margin-bottom:12px}
+.vswitch{width:42px;height:24px;border-radius:999px;position:relative;flex:none;transition:background .2s;background:#ef4444;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+.vswitch::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.vswitch.on{background:#22c55e}.vswitch.on::after{left:21px}

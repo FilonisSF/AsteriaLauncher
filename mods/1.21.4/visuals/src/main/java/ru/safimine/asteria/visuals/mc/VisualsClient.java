@@ -21,7 +21,9 @@ import java.util.Map;
 public class VisualsClient implements ClientModInitializer {
     public static final KeyBinding MENU = new KeyBinding("key.asteria.menu", InputUtil.Type.KEYSYM, 344, "category.asteria");
     public static final KeyBinding ZOOM = new KeyBinding("key.asteria.zoom", InputUtil.Type.KEYSYM, 67, "category.asteria");
-    public static final KeyBinding[] KEYS = {MENU, ZOOM};
+    public static final KeyBinding FREELOOK = new KeyBinding("key.asteria.freelook", InputUtil.Type.KEYSYM, 342, "category.asteria");
+    public static final KeyBinding MARK = new KeyBinding("key.asteria.mark", InputUtil.Type.KEYSYM, 66, "category.asteria");
+    public static final KeyBinding[] KEYS = {MENU, ZOOM, FREELOOK, MARK};
     private static final Map<String, Boolean> HELD = new HashMap<>();
     private static int appliedHit = 0;
 
@@ -35,13 +37,15 @@ public class VisualsClient implements ClientModInitializer {
             V.tick();
             while (MENU.wasPressed()) if (c.currentScreen == null) c.setScreen(new AsteriaScreen());
             Fx.zoomKey(ZOOM.isPressed() && c.currentScreen == null);
+            while (MARK.wasPressed()) if (c.player != null && c.currentScreen == null) Fx.markKey(Game121.I, net.minecraft.client.gui.screen.Screen.hasShiftDown());
+            if (c.player != null) Fx.freeLookKey(Game121.I, FREELOOK.isPressed() && c.currentScreen == null, c.player.getYaw(), c.player.getPitch());
             if (c.player != null) Fx.tick(Game121.I);
             long h = c.getWindow().getHandle();
             for (V.Mod m : V.MODS) {
-                if (m.bind <= 0) continue;
-                boolean down = c.currentScreen == null && InputUtil.isKeyPressed(h, m.bind);
+                if (m.bind == 0) continue;
+                boolean down = c.currentScreen == null && Game121.I.rawKey(m.bind);
                 Boolean was = HELD.put(m.id, down);
-                if (down && (was == null || !was)) { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); }
+                if (down && (was == null || !was)) { m.on = !m.on; V.changed(); Hud.bindToggled(m); }
             }
             int hit = V.on("hitcolor") ? V.color("hitcolor", "color") : 0;
             if (hit != appliedHit) { appliedHit = hit; recolorHit(c, hit); }
