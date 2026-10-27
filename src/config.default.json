@@ -6,8 +6,8 @@
   "recommended": "1.16.5"
  },
  "about": {
-  "ru": "SafiMine — грифер-сервер на 1.16.5–1.21.x (mc.safimine.ru). Новый сезон стартовал 17 октября: обновлённое /menu, кланы с уникальной механикой и биржей, 7 видов казино, переработанные кейсы, боевой пропуск и квесты. По воскресеньям — Эндер-Мир с усиленным драконом, а фермы работают сами: авто-спавнеры, авто-пасеки, коптильни и плавильни.",
-  "en": "SafiMine is a grief server for 1.16.5–1.21.x (mc.safimine.ru). The new season started on October 17: a reworked /menu, clans with their own mechanics and exchange, 7 casino games, reworked cases, battle pass and quests. Every Sunday the End World opens with a stronger dragon, and farms run by themselves: auto-spawners, auto-apiaries, smokers and smelters."
+  "ru": "SafiMine — грифер-сервер на 1.16.5–1.21.x, IP mc.safimine.ru. Новый сезон идёт с 17 октября: обновлённое /menu с кланами, 7 видов казино, переработанные кейсы, боевой пропуск, квесты и ранги. По воскресеньям в 17:00 — Эндер-Мир с усиленным драконом, а фермы работают сами: авто-спавнеры до 10 видов мобов, авто-пасеки, скоростные воронки, коптильни и плавильни. Все ссылки сервера — команда /links.",
+  "en": "SafiMine is a grief server for 1.16.5–1.21.x, IP mc.safimine.ru. The new season runs since October 17: a reworked /menu with clans, 7 casino games, reworked cases, battle pass, quests and ranks. Every Sunday at 17:00 the End World opens with a stronger dragon, and farms run by themselves: auto-spawners for up to 10 mob types, auto-apiaries, fast hoppers, smokers and smelters. All server links: /links."
  },
  "links": [
   {
@@ -65,6 +65,66 @@
  ],
  "news": [
   {
+   "id": "ideas",
+   "image": "news",
+   "title": {
+    "ru": "Новое обновление уже близко",
+    "en": "The next update is close"
+   },
+   "text": {
+    "ru": "25 октября в канале показали спойлеры следующей обновы и собирают ваши идеи: что добавить и что улучшить. Пишите в комментарии к посту в Telegram.",
+    "en": "On October 25 the channel showed teasers of the next update and asks for your ideas. Leave them under the post in Telegram."
+   }
+  },
+  {
+   "id": "giveaway25",
+   "image": "about",
+   "title": {
+    "ru": "Розыгрыш на 25 онлайна",
+    "en": "Giveaway at 25 online"
+   },
+   "text": {
+    "ru": "Когда онлайн дойдёт до 25 игроков, разыграем донат HUFRA и 3 кейса с сапфирами. Зови друзей на mc.safimine.ru.",
+    "en": "When 25 players are online we give away the HUFRA rank and 3 sapphire cases. Bring your friends to mc.safimine.ru."
+   }
+  },
+  {
+   "id": "sub",
+   "image": "apiary",
+   "title": {
+    "ru": "Скоро: свои звуки и анимации в /sub",
+    "en": "Coming: own sounds and animations in /sub"
+   },
+   "text": {
+    "ru": "В следующем обновлении — настройка звуков удара, крита и взрыва кристалла, а также кастомные анимации убийства и смерти.",
+    "en": "The next update lets you pick hit, crit and crystal sounds, plus custom kill and death animations."
+   }
+  },
+  {
+   "id": "works",
+   "image": "news",
+   "title": {
+    "ru": "Технические работы позади",
+    "en": "Maintenance is over"
+   },
+   "text": {
+    "ru": "20 октября сервер ненадолго уходил на техработы из-за проблемы на стороне хостинг-провайдера. Всё снова работает в штатном режиме, всем игрокам выдана компенсация.",
+    "en": "On October 20 the server had short maintenance because of a hosting provider issue. Everything works normally again and every player got compensation."
+   }
+  },
+  {
+   "id": "winners",
+   "image": "about",
+   "title": {
+    "ru": "Итоги большого розыгрыша",
+    "en": "Giveaway results"
+   },
+   "text": {
+    "ru": "Победители розыгрыша 19 октября: @Rui_Adept — подписка на 30 дней, авто-скупщик и 7 уровень клана, @Orderinfiniti — 14 дней и 5 уровень, @I_pyatno — 7 дней и 3 уровень клана.",
+    "en": "Winners of the October 19 giveaway: @Rui_Adept (30-day sub, auto-buyer, clan level 7), @Orderinfiniti (14 days, level 5), @I_pyatno (7 days, level 3)."
+   }
+  },
+  {
    "id": "wipe",
    "image": "wipe",
    "title": {
@@ -72,8 +132,20 @@
     "en": "New season — wipe on October 17"
    },
    "text": {
-    "ru": "17.10 в 15:00 по МСК мир, экономика и кланы начались с нуля. Вместе с вайпом вышел большой патч: новое /menu, команды /rang, /bp, /quest, /case и все ссылки в /links.",
-    "en": "On 17.10 at 15:00 MSK the world, economy and clans started from zero, together with a big patch: a new /menu, /rang, /bp, /quest, /case and all links in /links."
+    "ru": "17.10 в 15:00 по МСК мир, экономика и кланы начались с нуля. С вайпом вышел большой патч: новое /menu, команды /rang, /bp, /quest, /case, все ссылки в /links и быстрая привязка Telegram.",
+    "en": "On 17.10 at 15:00 MSK the world, economy and clans started from zero, with a big patch: new /menu, /rang, /bp, /quest, /case, all links in /links and quick Telegram linking."
+   }
+  },
+  {
+   "id": "tops",
+   "image": "ender",
+   "title": {
+    "ru": "Награды за топы прошлого вайпа",
+    "en": "Rewards for last wipe tops"
+   },
+   "text": {
+    "ru": "Лучшие по убийствам: Virtex (643) — 1 000 сапфиров, fraudscammers (306) — 500, s_Dracyla5454pro (256) — 300. Награды получили и лидеры других топов сервера.",
+    "en": "Top killers: Virtex (643) — 1,000 sapphires, fraudscammers (306) — 500, s_Dracyla5454pro (256) — 300. Leaders of the other server tops were rewarded too."
    }
   },
   {
@@ -85,7 +157,7 @@
    },
    "text": {
     "ru": "В /casino и /warp casino — сразу 7 видов игр с честной механикой. Все кейсы в /cases обновлены, шансы на HUFRA в донат-кейсе сбалансированы.",
-    "en": "/casino and /warp casino have 7 games with fair mechanics. All cases in /cases were updated and the HUFRA odds in the donate case were balanced."
+    "en": "/casino and /warp casino have 7 games with fair mechanics. All cases in /cases were updated and the HUFRA odds were balanced."
    }
   },
   {
@@ -97,7 +169,7 @@
    },
    "text": {
     "ru": "Портал открывается сам каждое воскресенье. Дракон стал сильнее и получил новые способности, а яйцо забирает тот, кто нанёс больше всего урона — один раз за вайп.",
-    "en": "The portal opens by itself every Sunday. The dragon is stronger with new abilities, and the egg goes to whoever dealt the most damage — once per wipe."
+    "en": "The portal opens by itself every Sunday. The dragon is stronger, and the egg goes to whoever dealt the most damage — once per wipe."
    }
   },
   {
@@ -109,7 +181,7 @@
    },
    "text": {
     "ru": "В один спавнер можно загрузить до 10 разных яиц мобов и забирать лут прямо из интерфейса. Плюс авто-пасеки, скоростные воронки, коптильни и плавильни.",
-    "en": "One spawner takes up to 10 different mob eggs, and the loot is collected right from its menu. Plus auto-apiaries, fast hoppers, smokers and smelters."
+    "en": "One spawner takes up to 10 mob eggs, loot is collected from its menu. Plus auto-apiaries, fast hoppers, smokers and smelters."
    }
   },
   {
@@ -120,20 +192,32 @@
     "en": "Clans, fights and balance"
    },
    "text": {
-    "ru": "Новые кланы с биржей. Удар по игроку в /god или /fly даёт ему слепоту и замедление, отдача работает и по незериту, а вещи из /kit при полном инвентаре падают под ноги.",
-    "en": "New clans with an exchange. Hitting someone in /god or /fly blinds and slows them, knockback works on netherite too, and /kit items drop at your feet when the inventory is full."
+    "ru": "Новые кланы с биржей. Удар по игроку в /god или /fly даёт ему слепоту и замедление, отдача работает и по незериту, вещи из /kit при полном инвентаре падают под ноги, стрелы переработаны.",
+    "en": "New clans with an exchange. Hitting someone in /god or /fly blinds and slows them, knockback works on netherite, /kit items drop at your feet when full, arrows reworked."
    }
   },
   {
-   "id": "sub",
+   "id": "world",
    "image": "apiary",
    "title": {
-    "ru": "Скоро: звуки и анимации в /sub",
-    "en": "Coming soon: sounds and animations in /sub"
+    "ru": "Обновлённый мир",
+    "en": "A refreshed world"
    },
    "text": {
-    "ru": "В следующем обновлении — свои звуки удара, крита и взрыва кристалла, а также кастомные анимации убийства и смерти. Идеи для обновлений пишите в Telegram-канал.",
-    "en": "The next update brings your own hit, crit and crystal sounds plus custom kill and death animations. Send your ideas to the Telegram channel."
+    "ru": "Новые скины всех NPC, переработанные голограммы, большой выбор новых титулов и новый визуал бонусов в /free.",
+    "en": "New skins for all NPCs, reworked holograms, lots of new titles and a new look for bonuses in /free."
+   }
+  },
+  {
+   "id": "streams",
+   "image": "news",
+   "title": {
+    "ru": "Стримы и авторы сервера",
+    "en": "Streams and creators"
+   },
+   "text": {
+    "ru": "Стримы от Filonis идут по выходным, а на сервере играют и снимают ролики другие ютуберы и тиктокеры — ссылки на свои каналы оставляйте в комментариях в Telegram.",
+    "en": "Filonis streams on weekends, and other YouTubers and TikTokers play and film on the server — post your channel links in the Telegram comments."
    }
   }
  ],

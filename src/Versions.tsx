@@ -24,7 +24,7 @@ export default function Versions({ ver, setVer, cfg, setCfg, running, play, VImg
     {/* selected version */}
     <div className="hero mb-6" style={{ minHeight: 280 }}><VImg v={ver} cls="bg" />
       <div className="relative p-8 text-white flex flex-col justify-end min-h-[280px]">
-        <div className="flex gap-2 mb-2">{ver === recommended && <span className="badge rec"><Icon n="star" s={11} fill />Рекомендуем · SafiMine</span>}{ast && <span className="badge ast"><LoaderIcon k="asteria" s={12} />{ast === 'full' ? 'Asteria + визуалы' : 'Asteria'}</span>}</div>
+        <div className="flex gap-2 mb-2">{ver === recommended && <span className="badge rec"><Icon n="star" s={11} fill />Рекомендуем · SafiMine</span>}{ast && <span className="badge ast"><LoaderIcon k="asteria" s={12} />Значок AL в табе</span>}{ast === 'full' ? <span className="badge ast"><Icon n="sparkles" s={11} />Визуалы Asteria</span> : <span className="badge soft" title="Визуалы Asteria работают на 1.16.5, 1.20.1 и 1.21.4">Без визуалов</span>}</div>
         <div className="flex items-end gap-4"><h2 className="text-6xl font-black tracking-tight leading-none" style={{ textShadow: '0 4px 30px rgba(0,0,0,.5)' }}>{ver}</h2><div className="pb-1.5 text-lg font-bold opacity-90">{info?.name}</div></div>
         <ul className="text-sm mt-3 mb-5 flex flex-col gap-1 opacity-90 max-w-xl">{(info?.ru ?? []).map((b) => <li key={b} className="flex gap-2"><span style={{ color: 'var(--a2)' }}><Icon n="check" s={14} /></span>{b}</li>)}</ul>
         <div className="flex items-center gap-3 flex-wrap">
@@ -38,7 +38,7 @@ export default function Versions({ ver, setVer, cfg, setCfg, running, play, VImg
     <div className="vgrid stagger">{FAMILIES.map((f) => { const v = f.subs.includes(ver) ? ver : f.subs[0], on = f === sel, a = ASTERIA[v]
       return <Tilt key={f.id} className={'vcard ' + (on ? 'on' : '')} onClick={() => setVer(v)} max={5}>
         <div className="art"><VImg v={v} cls="" /><div className="ver">{f.id === '26' ? '26' : f.id}</div>
-          <div className="tagline flex gap-1">{f.subs.includes(recommended) && <span className="badge rec"><Icon n="star" s={10} fill /></span>}{a && <span className="badge ast" title={a === 'full' ? 'Звезда, скины, плащи и визуалы Asteria' : 'Звезда, скины и плащи Asteria'}><LoaderIcon k="asteria" s={11} /></span>}</div></div>
+          <div className="tagline flex gap-1">{f.subs.includes(recommended) && <span className="badge rec"><Icon n="star" s={10} fill /></span>}{a && <span className="badge ast" title="Значок AL в табе и над головой, скины и плащи игроков Asteria"><LoaderIcon k="asteria" s={11} />Значок</span>}{a === 'full' && <span className="badge ast" title="Визуалы Asteria: HUD, частицы, питомцы, музыка и др."><Icon n="sparkles" s={10} />Визуалы</span>}</div></div>
         <div className="p-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <div className="flex-1 min-w-0"><Dropdown value={v} w={200} className="w-full !min-w-0 !py-1.5" set={(x) => setVer(x)} options={f.subs.map((s) => ({ value: s, label: s, hint: VINFO[s]?.name, icon: <LoaderIcon k={ASTERIA[s] ? 'asteria' : 'vanilla'} s={14} /> }))} /></div>
         </div>

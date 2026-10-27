@@ -86,14 +86,17 @@ export function Palette({ cmds, open, setOpen }: { cmds: Cmd[]; open: boolean; s
   useEffect(() => { const k = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.code === 'KeyF') { e.preventDefault(); setOpen(!open) } }; addEventListener('keydown', k); return () => removeEventListener('keydown', k) }, [open])
   useEffect(() => { setQ(''); setI(0) }, [open])
   if (!open) return null
-  const list = cmds.filter((c) => (c.label + ' ' + (c.hint || '')).toLowerCase().includes(q.toLowerCase())).slice(0, 9)
+  const list = q ? cmds.filter((c) => (c.label + ' ' + (c.hint || '')).toLowerCase().includes(q.toLowerCase())).slice(0, 9) : cmds.slice(8, 17)
   const go = (c?: Cmd) => { if (!c) return; setOpen(false); c.run() }
   return <div className="fixed inset-0 z-[95] flex justify-center modal-bg" style={{ paddingTop: '14vh' }} onMouseDown={() => setOpen(false)}>
     <div className="glass rounded-3xl p-2 w-[560px] h-fit pop-in" onMouseDown={(e) => e.stopPropagation()}>
       <div className="relative"><span className="absolute left-4 top-3.5 muted"><Icon n="search" s={18} /></span>
         <input autoFocus className="w-full !pl-11 !py-3 !text-base !border-0 !shadow-none !bg-transparent" placeholder="Куда перейти или что сделать…" value={q} onChange={(e) => { setQ(e.target.value); setI(0) }}
           onKeyDown={(e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setI((i + 1) % Math.max(1, list.length)) } else if (e.key === 'ArrowUp') { e.preventDefault(); setI((i - 1 + list.length) % Math.max(1, list.length)) } else if (e.key === 'Enter') go(list[i]); else if (e.key === 'Escape') setOpen(false) }} /></div>
-      <div className="flex flex-col gap-0.5 p-1" style={{ borderTop: '1px solid var(--line)' }}>{list.map((c, n) => <button key={c.id} className={'row ' + (n === i ? 'sel' : '')} onMouseEnter={() => setI(n)} onClick={() => go(c)}>
+      {!q && <div className="grid grid-cols-4 gap-1.5 px-2 pt-2 pb-1" style={{ borderTop: '1px solid var(--line)' }}>{cmds.slice(0, 8).map((c) =>
+        <button key={c.id} className="quick-tile" onClick={() => go(c)}><span className="cmd-ic"><Icon n={c.icon} s={17} /></span><span className="text-[12px] font-semibold leading-tight text-center line-clamp-2">{c.label.replace(/^Открыть:\s*/, '')}</span></button>)}</div>}
+      {!q && list.length > 0 && <div className="label px-3 pt-2">Ещё команды</div>}
+      <div className="flex flex-col gap-0.5 p-1" style={q ? { borderTop: '1px solid var(--line)' } : {}}>{list.map((c, n) => <button key={c.id} className={'row ' + (n === i ? 'sel' : '')} onMouseEnter={() => setI(n)} onClick={() => go(c)}>
         <span className="cmd-ic"><Icon n={c.icon} s={16} /></span><span className="flex-1 font-semibold text-sm">{c.label}</span>{c.hint && <span className="muted text-xs">{c.hint}</span>}</button>)}
         {!list.length && <div className="muted text-sm p-3">Ничего не найдено</div>}</div>
       <div className="muted text-[11px] px-3 pb-1.5 pt-1 flex gap-3"><span><kbd>↑</kbd> <kbd>↓</kbd> выбрать</span><span><kbd>Enter</kbd> открыть</span><span><kbd>Esc</kbd> закрыть</span></div></div></div>

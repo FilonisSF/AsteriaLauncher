@@ -1,6 +1,6 @@
 {
   "name": "asteria-launcher",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "main": "electron/main.cjs",
   "private": true,
   "type": "module",
@@ -71,7 +71,8 @@
       {
         "provider": "github",
         "owner": "FilonisSF",
-        "repo": "AsteriaLauncher"
+        "repo": "AsteriaLauncher",
+        "releaseType": "release"
       }
     ],
     "extraResources": [

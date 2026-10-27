@@ -17,7 +17,7 @@ public final class Media {
     /** fresh track info, or false when nothing plays / the launcher stopped updating */
     public static boolean active() {
         long now = System.currentTimeMillis();
-        if (now - checked > 1000) { checked = now; read(); }
+        if (now - checked > 300) { checked = now; read(); }
         return playing && !title.isEmpty() && now - at < 8000;
     }
     /** playback position in seconds, moving smoothly between file updates */
@@ -32,7 +32,7 @@ public final class Media {
         if (c.equals("toggle")) playing = !playing; // instant feedback until the next update
     }
     /** shown even when paused (the launcher still reports the track) */
-    public static boolean present() { long now = System.currentTimeMillis(); if (now - checked > 1000) { checked = now; read(); } return !title.isEmpty() && now - at < 8000; }
+    public static boolean present() { long now = System.currentTimeMillis(); if (now - checked > 300) { checked = now; read(); } return !title.isEmpty() && now - at < 8000; }
     private static void read() {
         try {
             File f = new File(V.dir(), "asteria-media.json"); if (!f.exists()) { playing = false; title = ""; return; }

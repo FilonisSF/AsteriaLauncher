@@ -31,6 +31,8 @@ const TEMPLATES: { name: string; desc: string; make: () => VisCfg }[] = [
   { name: 'Красота', desc: 'Шлейфы, частицы, шляпа и радужная тема', make: () => only(['watermark', 'arraylist', 'notifications', 'frame', 'trails', 'jumpcircles', 'ambient', 'chinahat', 'targetesp', 'hitparticles', 'killeffect', 'swing', 'zoom', 'island', 'music', 'halo', 'pet', 'jumpparticles', 'particletrail', 'sonar', 'dash'], { chroma: true }) },
 ]
 const FONTS = ['Minecraft (пиксельный)', 'Inter', 'Montserrat Alternates', 'Unbounded', 'Comfortaa', 'Glitch — «дед инсайд»', 'Ruslan Display', 'Russo One']
+// closest font the launcher itself has, so the preview looks like the game
+const PREVIEW_FONT = ['ui-monospace,Consolas,monospace', '"Manrope Variable",sans-serif', '"Manrope Variable",sans-serif', '"Unbounded Variable",sans-serif', '"Manrope Variable",sans-serif', '"Unbounded Variable",sans-serif', 'Georgia,serif', '"Unbounded Variable",sans-serif']
 const fontIdx = (f: any) => typeof f === 'number' ? f : f === false ? 0 : 2 // old configs stored a boolean
 function only(ids: string[], theme: Partial<Theme> = {}): VisCfg { const d = visDefaults(); for (const m of MODS) d.modules[m.id].on = ids.includes(m.id); d.theme = { ...d.theme, ...theme }; return d }
 function merge(saved: any): VisCfg {
@@ -54,7 +56,9 @@ const GW = 640, GH = 360
 export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string; bg: string; onBuy: () => void; say: (m: string) => void; ver: string }) {
   const premium = plan === 'PREMIUM'
   const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout' | 'configs'>('mods'), [q, setQ] = useState('')
-  const [pr, setPr] = useState<Presets | null>(null), prRef = useRef<Presets | null>(null)
+  const [pr, setPr] = useState<Presets | null>(null), prRef = useRef<Presets | null>(null), [enabled, setEnabled] = useState(true)
+  useEffect(() => { window.api.visEnabled?.().then((v: boolean) => setEnabled(v !== false)) }, [])
+  const toggleAll = async (v: boolean) => { setEnabled(v); await window.api.visEnabled?.(v); say(v ? 'Визуалы включены — со следующего запуска игры' : 'Визуалы выключены — игра запустится без них') }
   const [keys, setKeys] = useState<Record<string, string>>({}), [listenKey, setListenKey] = useState(''), last = useRef(0), tm = useRef<any>()
   const loadPresets = async (cur: VisCfg) => { let p: Presets | null = await window.api.visPresets?.()
     if (!p || !p.list?.length) { const id = uid(); p = { active: id, list: [{ id, name: 'Мой конфиг', cfg: cur }] }; window.api.visPresetsSet?.(p) }
@@ -87,7 +91,8 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
         <div><div className="badge ast mb-2"><Icon n="sparkles" s={12} />Бесплатно для всех</div><h1 className="text-4xl font-black tracking-tight" style={{ textShadow: '0 0 30px var(--a2)' }}>Asteria Visuals</h1>
           <p className="text-sm opacity-85 mt-1 max-w-xl">Свой HUD, шлейфы, круги прыжка, метка цели, зум и многое другое. Работает на 1.16.5, 1.20.1 и 1.21.4. Только визуальные эффекты — без нечестных преимуществ.</p>
           <div className="flex gap-2 mt-3 text-xs"><span className="badge soft !bg-white/15 !text-white"><Icon n="keyboard" s={12} />Меню в игре: <b>{pretty(keys.menu)}</b></span><span className="badge soft !bg-white/15 !text-white"><Icon n="search" s={12} />Зум: <b>{pretty(keys.zoom)}</b></span><span className="badge soft !bg-white/15 !text-white">Включено: {onCount}/{MODS.length}</span></div></div>
-        {!premium && <button className="playbtn !h-[52px] !text-base" onClick={onBuy}><Icon n="star" s={18} fill />Получить PREMIUM</button>}
+        <button className={'vis-master ' + (enabled ? 'on' : '')} onClick={() => toggleAll(!enabled)} title="Мод визуалов Asteria целиком: выключите, чтобы играть без него">
+          <span className={'switch ' + (enabled ? 'on' : '')} /><span className="text-left"><b className="block text-sm">{enabled ? 'Визуалы включены' : 'Визуалы выключены'}</b><span className="text-[11px] opacity-80">{enabled ? 'Нажмите, чтобы играть без них' : 'Игра запускается без мода визуалов'}</span></span></button>
       </div></div>
     {!premium && <div className="card rounded-2xl p-4 mb-4 flex items-center gap-3"><span className="cmd-ic"><Icon n="lock" s={16} /></span><div className="text-sm flex-1"><b>Можно всё настроить заранее.</b> <span className="muted">В игре визуалы включатся, как только на аккаунте появится PREMIUM — лаунчер проверяет подписку при каждом запуске.</span></div></div>}
 
@@ -224,13 +229,22 @@ function Preview({ c }: { c: VisCfg }) {
     : lines ? { background: `rgba(7,6,12,${Math.max(0.35, t.bg) * 0.92})`, borderRadius: 5, borderTop: `1px solid ${t.accent2}`, boxShadow: `inset 2px 0 0 0 ${t.accent}`, color: '#fff', fontSize: 10 * t.scale, padding: '4px 7px', fontWeight: 600 }
     : { background: `rgba(5,11,22,${Math.max(0.35, t.bg)})`, borderRadius: 6, border: `1px solid ${t.accent}cc`, boxShadow: t.shadow ? `0 0 10px ${t.accent}55` : 'none', color: '#fff', fontSize: 10 * t.scale, padding: '4px 7px', fontWeight: 600 }
   const on = (id: string) => c.modules[id]?.on
-  return <div className="absolute inset-0 p-3 font-mono" style={{ fontFamily: 'ui-monospace,Consolas,monospace' }}>
+  return <div className="absolute inset-0 p-3" style={{ fontFamily: PREVIEW_FONT[fontIdx(t.font)] }}>
     {on('watermark') && <div style={{ ...panel, position: 'absolute', left: 10, top: 10, display: 'flex', gap: 6, alignItems: 'center' }}><span style={{ background: grad, WebkitBackgroundClip: 'text', color: 'transparent', fontWeight: 900 }}>✦ Asteria</span><span style={{ opacity: .7 }}>| 144 fps</span></div>}
     {on('info') && <div style={{ ...panel, position: 'absolute', left: 10, top: 44, lineHeight: 1.5 }}><div>FPS <b style={{ color: t.accent }}>144</b></div><div>Ping <b style={{ color: t.accent }}>23</b></div><div>XYZ <b style={{ color: t.accent }}>12 64 -380</b></div></div>}
     {on('arraylist') && <div style={{ position: 'absolute', right: 10, top: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>{MODS.filter((m) => c.modules[m.id].on && m.cat !== 'hud').slice(0, 6).map((m, i) =>
       <div key={m.id} style={{ ...panel, borderRadius: 4, padding: '2px 7px', borderRight: `2px solid ${i % 2 ? t.accent2 : t.accent}` }}>{m.name}</div>)}</div>}
     {on('keystrokes') && <div style={{ position: 'absolute', left: 10, bottom: 12, display: 'grid', gridTemplateColumns: 'repeat(3,22px)', gap: 3 }}>{['', 'W', '', 'A', 'S', 'D'].map((k, i) => <div key={i} style={k ? { ...panel, padding: 0, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: k === 'W' ? grad : panel.background } : {}}>{k}</div>)}</div>}
     {on('targethud') && <div style={{ ...panel, position: 'absolute', left: '56%', top: '56%', width: 130 }}><div>Steve</div><div style={{ height: 4, borderRadius: 3, background: 'rgba(255,255,255,.15)', marginTop: 4 }}><div style={{ width: '64%', height: 4, borderRadius: 3, background: grad }} /></div></div>}
+    {on('island') && <div style={{ ...panel, position: 'absolute', left: '50%', top: 8, transform: 'translateX(-50%)', borderRadius: 999, padding: '3px 12px', display: 'flex', gap: 8, alignItems: 'center', background: 'rgba(5,9,13,.92)', border: 'none', boxShadow: '0 6px 18px rgba(0,0,0,.35)', borderBottom: `1px solid ${t.accent2}` }}><span style={{ background: grad, WebkitBackgroundClip: 'text', color: 'transparent', fontWeight: 900 }}>Asteria</span><span style={{ opacity: .6 }}>12:40 · 144 fps · 23 ms</span></div>}
+    {on('music') && <div style={{ ...panel, position: 'absolute', left: 10, top: '42%', width: 150, display: 'flex', gap: 7, alignItems: 'center', padding: 5 }}>
+      <div style={{ width: 26, height: 26, borderRadius: 6, background: grad, flex: 'none', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 2, padding: 5 }}>{[6, 11, 8, 13].map((h, k) => <i key={k} style={{ width: 2.5, height: h, background: '#fff', borderRadius: 1 }} />)}</div>
+      <div style={{ minWidth: 0, flex: 1 }}><div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Turbo (Majestic)</div><div style={{ opacity: .6, fontSize: 8 * t.scale }}>Big Baby Tape</div>
+        <div style={{ height: 2, borderRadius: 2, background: 'rgba(255,255,255,.15)', marginTop: 3 }}><div style={{ width: '70%', height: 2, borderRadius: 2, background: grad }} /></div></div></div>}
+    {on('cooldowns') && <div style={{ ...panel, position: 'absolute', right: 10, bottom: 44, width: 110, lineHeight: 1.6 }}>{[['Жемчуг', 70], ['Хорус', 35]].map(([n, w]) => <div key={n as string}><div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{n}</span><span style={{ opacity: .6 }}>0:0{Math.round(+w / 10)}</span></div>
+      <div style={{ height: 2, borderRadius: 2, background: 'rgba(255,255,255,.15)' }}><div style={{ width: w + '%', height: 2, borderRadius: 2, background: grad }} /></div></div>)}</div>}
+    {on('totems') && <div style={{ ...panel, position: 'absolute', left: '40%', bottom: 34, display: 'flex', gap: 5, alignItems: 'center', padding: '3px 8px' }}><span style={{ width: 10, height: 12, borderRadius: 3, background: 'linear-gradient(#fde68a,#d97706)' }} /><b>x3</b></div>}
+    {on('hotbar') && <div style={{ ...panel, position: 'absolute', left: '50%', bottom: 4, transform: 'translateX(-50%)', display: 'flex', gap: 2, padding: 2 }}>{Array.from({ length: 9 }, (_, k) => <div key={k} style={{ width: 16, height: 16, borderRadius: 4, background: k === 0 ? grad : 'rgba(255,255,255,.06)' }} />)}</div>}
     {on('crosshair') && <div style={{ position: 'absolute', left: '50%', top: '50%', width: 14, height: 14, transform: 'translate(-50%,-50%)', border: `2px solid ${c.modules.crosshair.s.color}`, borderRadius: '50%' }} />}
   </div>
 }

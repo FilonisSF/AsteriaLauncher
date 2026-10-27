@@ -71,6 +71,17 @@ function CapeTile({ name, url, on, pick }: { name: string; url: string; on: bool
 const PageHead = ({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) => <div className="ph"><div><h1 className="grad-text">{title}</h1>{sub && <div className="sub">{sub}</div>}</div>{right}</div>
 
 /** "Now playing" from Windows (Spotify, Yandex Music, browser): cover, track and controls; the same track shows in the game */
+/** the search in the title bar: wide, glassy, with hints that change every few seconds */
+const HINTS = ['Найти мод, например Sodium', 'Открыть версию 1.20.1', 'Скопировать IP сервера', 'Включить визуалы', 'Сменить скин или плащ', 'Открыть скриншоты']
+function SearchBar({ open }: { open: () => void }) {
+  const [i, setI] = useState(0)
+  useEffect(() => { const id = setInterval(() => setI((x) => (x + 1) % HINTS.length), 2800); return () => clearInterval(id) }, [])
+  return <button className="nodrag searchbar" onClick={open} title="Поиск по лаунчеру и быстрые команды">
+    <span className="search-ic"><Icon n="search" s={15} /></span>
+    <span className="flex-1 min-w-0 text-left relative h-5 overflow-hidden"><span key={i} className="search-hint">{HINTS[i]}</span></span>
+    <kbd>Ctrl</kbd><kbd>F</kbd></button>
+}
+
 function MiniPlayer() {
   const [m, setM] = useState<any>(null)
   useEffect(() => { api.mediaGet?.().then(setM); return api.onMedia?.(setM) }, [])
@@ -180,7 +191,7 @@ export default function App() {
       {/* ---------- title bar */}
       <div className="drag h-12 flex items-center justify-between px-4 relative z-30 gap-3">
         <span className="w-[180px] muted text-xs font-semibold tracking-wide hidden xl:block">{conf.server.name} · {st.online ? st.players + ' онлайн' : t('maint')}</span>
-        <button className="nodrag kbdhint" onClick={() => setPal(true)}><Icon n="search" s={14} /><span className="flex-1 text-left">Поиск и команды</span><kbd>Ctrl F</kbd></button>
+        <SearchBar open={() => setPal(true)} />
         <div className="nodrag flex items-center gap-2">
           <div className="relative"><button className="topchip" onClick={() => setMenu(menu === 'lang' ? '' : 'lang')}><img src={FLAGS[lang]} className="w-5 h-3.5 rounded-sm" />{lang.toUpperCase()}</button>
             {menu === 'lang' && <div className="pop z-50" style={{ width: 260 }}><div className="relative mb-2"><input className="w-full !pl-9" autoFocus placeholder={t('searchLang')} value={lq} onChange={(e) => setLq(e.target.value)} /><span className="absolute left-3 top-2.5 muted"><Icon n="search" s={16} /></span></div>

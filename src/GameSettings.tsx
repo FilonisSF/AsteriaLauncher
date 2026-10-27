@@ -75,8 +75,11 @@ export default function GameSettings({ ver, versions, setVer, say }: { ver: stri
   const clouds = o.renderClouds ?? 'true'
 
   const pct = (v: number) => Math.round(v * 100) + '%'
+  /** string options keep the game's own style: 1.19+ writes some of them in quotes */
+  const str = (k: string, d: string) => (o[k] ?? d).replace(/^"|"$/g, '')
+  const setStr = (k: string, v: string) => set({ [k]: (o[k] ?? '').startsWith('"') ? '"' + v + '"' : v })
 
-  const SECS: [string, string, string][] = [['video', 'Графика', 'image'], ['controls', 'Управление', 'cursor'], ['sound', 'Звук', 'volume'], ['chat', 'Чат', 'chat'], ['keys', 'Клавиши', 'keyboard']]
+  const SECS: [string, string, string][] = [['video', 'Графика', 'image'], ['controls', 'Управление', 'cursor'], ['sound', 'Звук', 'volume'], ['chat', 'Чат', 'chat'], ['skin', 'Скин', 'skins'], ['fx', 'Эффекты', 'eye'], ['keys', 'Клавиши', 'keyboard']]
   return <div className="card rounded-2xl p-5">
     <div className="flex items-center gap-3 flex-wrap mb-4">
       <div className="font-bold text-lg flex items-center gap-2"><Icon n="sliders" s={18} />Игровые настройки</div>
@@ -97,8 +100,12 @@ export default function GameSettings({ ver, versions, setVer, say }: { ver: stri
       {n >= 1300 && <Slider set={set} label="Смешивание биомов" k="biomeBlendRadius" min={0} max={7} value={Math.round(num('biomeBlendRadius', 2))} show={(v) => v === 0 ? 'Выкл' : `${v * 2 + 1}×${v * 2 + 1}`} />}
       {n >= 1600 && <Slider set={set} label="Дальность сущностей" k="entityDistanceScaling" min={0.5} max={5} step={0.25} value={num('entityDistanceScaling', 1)} show={pct} />}
       <Slider set={set} label="Уровни MIP-текстур" k="mipmapLevels" min={0} max={4} value={Math.round(num('mipmapLevels', 4))} show={(v) => v === 0 ? 'Выкл' : String(v)} />
+      {n >= 1800 && <Slider set={set} label="Дальность симуляции" k="simulationDistance" min={5} max={32} value={Math.round(num('simulationDistance', 12))} show={(v) => v + ' чанков'} />}
+      {n >= 1900 && <Seg label="Обновление чанков" items={[[0, 'Обычно'], [1, 'У игрока'], [2, 'Всё рядом']]} value={Math.round(num('prioritizeChunkUpdates', 0))} pick={(v) => set({ prioritizeChunkUpdates: String(v) })} />}
+      {n >= 900 && <Seg label="Индикатор атаки" items={[[0, 'Выкл'], [1, 'У прицела'], [2, 'На панели']]} value={Math.round(num('attackIndicator', 1))} pick={(v) => set({ attackIndicator: String(v) })} />}
+      {n >= 2005 && <Slider set={set} label="Размытие фона меню" k="menuBackgroundBlurriness" min={0} max={10} value={Math.round(num('menuBackgroundBlurriness', 5))} show={(v) => v === 0 ? 'Выкл' : String(v)} />}
       <div className="flex flex-col gap-1"><Switch set={set} label="Вертикальная синхронизация" k="enableVsync" value={bool('enableVsync', true)} /><Switch set={set} label="Тени сущностей" k="entityShadows" value={bool('entityShadows', true)} />
-        <Switch set={set} label="Покачивание камеры" k="bobView" value={bool('bobView', true)} /></div>
+        <Switch set={set} label="Покачивание камеры" k="bobView" value={bool('bobView', true)} /><Switch set={set} label="Полный экран" k="fullscreen" value={bool('fullscreen', false)} /></div>
     </div>}
 
     {sec === 'controls' && <div className="grid grid-cols-2 gap-x-8 gap-y-5">
@@ -108,6 +115,8 @@ export default function GameSettings({ ver, versions, setVer, say }: { ver: stri
         {n >= 1100 && <Switch set={set} label="Автопрыжок" k="autoJump" value={bool('autoJump', false)} />}</div>
       <div className="flex flex-col gap-1">{n >= 1500 ? <><Switch set={set} label="Бег — переключением" k="toggleSprint" value={bool('toggleSprint', false)} /><Switch set={set} label="Присед — переключением" k="toggleCrouch" value={bool('toggleCrouch', false)} /></> : <p className="muted text-sm">В этой версии нет режима переключения бега/приседа.</p>}
         <Switch set={set} label="Подсказки (F3+H)" k="advancedItemTooltips" value={bool('advancedItemTooltips', false)} /></div>
+      {n >= 1400 && <Slider set={set} label="Чувствительность колёсика" k="mouseWheelSensitivity" min={0.25} max={5} step={0.25} value={num('mouseWheelSensitivity', 1)} show={(v) => v.toFixed(2).replace(/0$/, '') + '×'} />}
+      {n >= 900 && <Seg label="Основная рука" items={[['left', 'Левая'], ['right', 'Правая']]} value={str('mainHand', 'right')} pick={(v) => setStr('mainHand', v)} />}
     </div>}
 
     {sec === 'sound' && <div className="grid grid-cols-2 gap-x-8 gap-y-5">{([['master', 'Общая громкость'], ['music', 'Музыка'], ['record', 'Музыкальные блоки'], ['weather', 'Погода'], ['block', 'Блоки'], ['hostile', 'Враждебные'], ['neutral', 'Дружелюбные'], ['player', 'Игроки'], ['ambient', 'Окружение'], ['voice', 'Голос']] as [string, string][]).map(([k, l]) =>
@@ -118,7 +127,33 @@ export default function GameSettings({ ver, versions, setVer, say }: { ver: stri
       {n >= 1400 && <Slider set={set} label="Фон текста" k="textBackgroundOpacity" min={0} max={1} step={0.01} value={num('textBackgroundOpacity', 0.5)} show={pct} />}
       <Slider set={set} label="Размер чата" k="chatScale" min={0} max={1} step={0.01} value={num('chatScale', 1)} show={pct} />
       <Slider set={set} label="Ширина чата" k="chatWidth" min={0} max={1} step={0.01} value={num('chatWidth', 1)} show={(v) => Math.round(40 + v * 280) + ' px'} />
-      <div className="flex flex-col gap-1"><Switch set={set} label="Цвета в чате" k="chatColors" value={bool('chatColors', true)} /><Switch set={set} label="Ссылки в чате" k="chatLinks" value={bool('chatLinks', true)} /></div>
+      <Slider set={set} label="Высота открытого чата" k="chatHeightFocused" min={0} max={1} step={0.01} value={num('chatHeightFocused', 1)} show={(v) => Math.round(20 + v * 160) + ' px'} />
+      <Slider set={set} label="Высота закрытого чата" k="chatHeightUnfocused" min={0} max={1} step={0.01} value={num('chatHeightUnfocused', 0.4375)} show={(v) => Math.round(20 + v * 160) + ' px'} />
+      {n >= 1600 && <Slider set={set} label="Межстрочный интервал" k="chatLineSpacing" min={0} max={1} step={0.01} value={num('chatLineSpacing', 0)} show={pct} />}
+      {n >= 1600 && <Slider set={set} label="Задержка сообщений" k="chatDelay" min={0} max={6} step={0.1} value={num('chatDelay', 0)} show={(v) => v === 0 ? 'Нет' : v.toFixed(1) + ' с'} />}
+      <Seg label="Чат виден" items={[[0, 'Весь'], [1, 'Только команды'], [2, 'Скрыт']]} value={Math.round(num('chatVisibility', 0))} pick={(v) => set({ chatVisibility: String(v) })} />
+      <div className="flex flex-col gap-1"><Switch set={set} label="Цвета в чате" k="chatColors" value={bool('chatColors', true)} /><Switch set={set} label="Ссылки в чате" k="chatLinks" value={bool('chatLinks', true)} />
+        {n >= 1300 && <Switch set={set} label="Автоподсказки команд" k="autoSuggestions" value={bool('autoSuggestions', true)} />}
+        {n >= 1600 && <Switch set={set} label="Скрывать сообщения игнорируемых" k="hideMatchedNames" value={bool('hideMatchedNames', true)} />}
+        {n >= 1901 && <Switch set={set} label="Только защищённый чат" k="onlyShowSecureChat" value={bool('onlyShowSecureChat', false)} />}</div>
+    </div>}
+
+    {sec === 'skin' && <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+      <p className="muted text-sm col-span-2 mb-2">Какие части скина видны вам и другим игрокам.</p>
+      {([['cape', 'Плащ'], ['jacket', 'Куртка'], ['left_sleeve', 'Левый рукав'], ['right_sleeve', 'Правый рукав'], ['left_pants_leg', 'Левая штанина'], ['right_pants_leg', 'Правая штанина'], ['hat', 'Шапка']] as [string, string][]).map(([k, l]) =>
+        <Switch set={set} key={k} label={l} k={'modelPart_' + k} value={bool('modelPart_' + k, true)} />)}
+    </div>}
+
+    {sec === 'fx' && <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+      {n >= 1700 ? <><Slider set={set} label="Искажение FOV" k="fovEffectScale" min={0} max={1} step={0.01} value={num('fovEffectScale', 1)} show={(v) => v === 0 ? 'Выкл' : pct(v)} />
+        <Slider set={set} label="Искажение экрана" k="screenEffectScale" min={0} max={1} step={0.01} value={num('screenEffectScale', 1)} show={(v) => v === 0 ? 'Выкл' : pct(v)} /></> : <p className="muted text-sm col-span-2">Эти эффекты настраиваются начиная с 1.17.</p>}
+      {n >= 1900 && <Slider set={set} label="Эффект темноты" k="darknessEffectScale" min={0} max={1} step={0.01} value={num('darknessEffectScale', 1)} show={(v) => v === 0 ? 'Выкл' : pct(v)} />}
+      {n >= 1904 && <Slider set={set} label="Наклон при уроне" k="damageTiltStrength" min={0} max={1} step={0.01} value={num('damageTiltStrength', 1)} show={(v) => v === 0 ? 'Выкл' : pct(v)} />}
+      {n >= 1903 && <Slider set={set} label="Яркость блеска зачарований" k="glintStrength" min={0} max={1} step={0.01} value={num('glintStrength', 0.75)} show={pct} />}
+      {n >= 1903 && <Slider set={set} label="Скорость блеска зачарований" k="glintSpeed" min={0} max={1} step={0.01} value={num('glintSpeed', 0.5)} show={pct} />}
+      <div className="flex flex-col gap-1">{n >= 900 && <Switch set={set} label="Субтитры" k="showSubtitles" value={bool('showSubtitles', false)} />}
+        {n >= 1900 && <Switch set={set} label="Скрыть вспышки молний" k="hideLightningFlashes" value={bool('hideLightningFlashes', false)} />}
+        {n >= 1600 && <Switch set={set} label="Фон только у чата" k="backgroundForChatOnly" value={bool('backgroundForChatOnly', true)} />}</div>
     </div>}
 
     {sec === 'keys' && <><p className="muted text-sm mb-3">Нажмите на действие, затем клавишу или кнопку мыши. Esc — снять назначение.</p>

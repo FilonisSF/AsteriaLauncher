@@ -8,7 +8,7 @@ const Store = require('electron-store')
 const { Client, Authenticator } = require('minecraft-launcher-core')
 const store = new Store({ encryptionKey: 'safimine-local-key' }) // tokens stay in main process
 const HOST = 'mc.safimine.ru', PORT = 25565
-const API_DEFAULT = process.env.ASTERIA_API || 'https://api.safimine.ru/asteria' // your public backend (README-SETUP.md)
+const API_DEFAULT = process.env.ASTERIA_API || 'https://asteria-api-1ndm.onrender.com/asteria' // the Asteria server on Render (render.yaml): online list, tab icon, skins, pets, config codes
 const API_LOCAL = ['http://127.0.0.1:8080/asteria', 'http://localhost:8080/asteria'] // start-backend.bat on this PC is found automatically
 const LINKS = /^https?:\/\//
 let win
@@ -319,7 +319,7 @@ function liveGameDir() { if (game && gameDirNow) return gameDirNow; return extGa
 function mediaStart() {
   if (process.platform !== 'win32' || mediaProc) return
   try {
-    mediaProc = require('child_process').spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', enc(mediaScript())], { windowsHide: true }); let buf = ''
+    mediaProc = require('child_process').spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', enc(mediaScript())], { windowsHide: true, env: { ...process.env, ASTERIA_MEDIA_CMD: mediaCmdFile() } }); let buf = ''
     mediaProc.stdout.setEncoding('utf8') // keeps Cyrillic letters split between chunks intact
     mediaProc.stdout.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); try { mediaLine(JSON.parse(line)) } catch {} } })
     mediaProc.on('exit', () => { mediaProc = null; if (mediaRetry++ < 20) setTimeout(mediaStart, 5000) })
@@ -336,9 +336,12 @@ function mediaLine(o) {
     const cmdF = path.join(cfg, 'asteria-media-cmd.txt') // buttons in the in-game Asteria menu
     if (fs.existsSync(cmdF)) { const c = fs.readFileSync(cmdF, 'utf8').trim(); fs.rmSync(cmdF, { force: true }); mediaCmd(c) }
   } catch {} }
+const mediaCmdFile = () => path.join(app.getPath('userData'), 'media-cmd.txt')
+/** play/pause/skip: the running reader picks the file up within 0.4 s and answers with the new track */
 function mediaCmd(c) {
   if (process.platform !== 'win32' || !['toggle', 'next', 'prev'].includes(c)) return
-  try { require('child_process').spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', enc(`$Cmd = '${c}'\n` + mediaScript())], { windowsHide: true }) } catch {} }
+  try { fs.writeFileSync(mediaCmdFile(), c) } catch {} if (!mediaProc) mediaStart() }
+ipcMain.handle('vis:enabled', (_, v) => { if (typeof v === 'boolean') store.set('visualsOn', v); return store.get('visualsOn', true) !== false })
 ipcMain.handle('media:get', () => ({ ...media, cover: mediaCover ? 'data:image/png;base64,' + mediaCover.toString('base64') : '' }))
 ipcMain.handle('media:cmd', (_, c) => mediaCmd(String(c)))
 ipcMain.handle('game:kill', () => { if (!game && extGame) { try { process.kill(extGame.pid) } catch {} extGame = null; extAt = 0; try { win?.webContents.send('game', false) } catch {} return }
@@ -392,7 +395,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
       send('Asteria', 2, '', 2); [core, vis] = await Promise.all([coreMod(version).catch(() => null), visualsMod(version).catch(() => null)]) // in parallel: a slow backend must not delay the game
       if (modern || core) { send('Fabric', 5, '', 2); custom = await prepareFabric(s, version, (st, p) => send('Fabric', p, st, 2), legacy).catch(() => null) } }
     if (custom && core) fs.copyFileSync(core, path.join(md, 'asteria-core.jar'))
-    if (custom && vis) fs.copyFileSync(vis, path.join(md, 'asteria-visuals.jar'))
+    if (custom && vis && store.get('visualsOn', true) !== false) fs.copyFileSync(vis, path.join(md, 'asteria-visuals.jar')) // 'Visuals off' = play without the mod
     const warn = wantFabric && modern && !custom ? 'Fabric не установился (нет связи с meta.fabricmc.net?) — игра запущена без модов: без звезды, визуалов и FPS-буста' : ''
     writeVisuals(dir); writePresets(dir)
     const opts = { root: s.dir, overrides: { gameDirectory: dir }, authorization: acc.type === 'offline' ? offlineAuth(acc.name) : acc.auth, version: { number: version, type: 'release', ...(custom ? { custom } : {}) },
@@ -515,7 +518,8 @@ ipcMain.handle('tex:save', async (_, { data, kind, slim }) => {
 // Images: server icon straight from its address (Discord shows https images), launcher logo otherwise.
 const RPC_DEFAULT_ID = process.env.ASTERIA_DISCORD_ID || '1564239727278686230' // Discord Application ID of AsteriaLauncher (README-SETUP.md → Discord)
 // 'logo' = image uploaded in the Discord Developer Portal (Rich Presence -> Art Assets, name: logo): shows instantly, no '?'
-const LOGO_URL = 'logo'
+// Discord takes https pictures directly: the icon from the public repo, no Art Asset upload needed in the Developer Portal
+const LOGO_URL = 'https://raw.githubusercontent.com/FilonisSF/AsteriaLauncher/main/build/icon.png'
 let rpc = null, rpcReady = null, rpcT = Date.now(), rpcTimer = null, rpcLast = ''
 const rpcId = () => settings().discordClientId || (store.get('remoteConf') || {}).discordClientId || RPC_DEFAULT_ID
 async function rpcSend(act) {

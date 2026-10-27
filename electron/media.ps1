@@ -1,7 +1,8 @@
 # "Now playing" for AsteriaLauncher: the Windows media controls (Spotify, Yandex Music, browsers...).
 # Reader mode (default): one UTF-8 JSON line every ~1.5 s: title, artist, playing, pos, dur, app, key;
 #   "cover" (base64 PNG, 128x128) is added only when the track changes.
-# Command mode: the launcher prepends  $Cmd = 'toggle' | 'next' | 'prev'  and the script does it once and exits.
+# Commands: the launcher writes 'toggle' | 'next' | 'prev' into the file in $env:ASTERIA_MEDIA_CMD; the reader runs it
+#   at once and reports the new track right away (starting a new PowerShell per click took ~1 s).
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -15,15 +16,13 @@ function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($nu
 $asStream = [System.IO.WindowsRuntimeStreamExtensions].GetMethod('AsStreamForRead', [Type[]]@([Windows.Storage.Streams.IInputStream]))
 $mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
 
-if ($Cmd) {
-  $s = $mgr.GetCurrentSession()
-  if ($s) {
-    if ($Cmd -eq 'next') { Await ($s.TrySkipNextAsync()) ([bool]) | Out-Null }
-    elseif ($Cmd -eq 'prev') { Await ($s.TrySkipPreviousAsync()) ([bool]) | Out-Null }
-    else { Await ($s.TryTogglePlayPauseAsync()) ([bool]) | Out-Null }
-  }
-  exit
+function RunCmd($c) {
+  $s = $mgr.GetCurrentSession(); if (-not $s) { return }
+  if ($c -eq 'next') { Await ($s.TrySkipNextAsync()) ([bool]) | Out-Null }
+  elseif ($c -eq 'prev') { Await ($s.TrySkipPreviousAsync()) ([bool]) | Out-Null }
+  elseif ($c -eq 'toggle') { Await ($s.TryTogglePlayPauseAsync()) ([bool]) | Out-Null }
 }
+$cmdFile = $env:ASTERIA_MEDIA_CMD
 
 function Cover($p) {
   try {
@@ -43,6 +42,7 @@ function Cover($p) {
 
 $lastKey = ''
 while ($true) {
+  if ($cmdFile -and (Test-Path $cmdFile)) { $c = (Get-Content $cmdFile -Raw).Trim(); Remove-Item $cmdFile -Force; RunCmd $c; Start-Sleep -Milliseconds 250 } # give the player a moment to switch
   $o = @{ playing = $false; title = ''; artist = '' }
   $s = $mgr.GetCurrentSession()
   if ($s) {
@@ -56,5 +56,5 @@ while ($true) {
     if ($key -ne $lastKey) { $lastKey = $key; $c = Cover $p; $o.cover = if ($c) { $c } else { '' } }
   }
   [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress)); [Console]::Out.Flush()
-  Start-Sleep -Milliseconds 1500
+  Start-Sleep -Milliseconds 400
 }

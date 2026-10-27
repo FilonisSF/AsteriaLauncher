@@ -1,0 +1,17 @@
+# Render Blueprint for the Asteria server (online list, star in the tab, skins/capes, pets, config share codes).
+# render.com -> New -> Blueprint -> pick this repository -> Apply. The address will be https://<name>.onrender.com,
+# and the launcher talks to https://<name>.onrender.com/asteria (electron/main.cjs, API_DEFAULT).
+# backend/server.cjs uses only Node's own modules, so nothing is installed (the launcher's Electron stays out of it).
+services:
+  - type: web
+    name: asteria-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: node --version
+    startCommand: node backend/server.cjs
+    healthCheckPath: /asteria/
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
