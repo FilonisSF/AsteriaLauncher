@@ -28,8 +28,9 @@ public class HeldItemRendererMixin {
     private void asteria$viewmodel(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swing, ItemStack item, float equip, MatrixStack m, VertexConsumerProvider vcp, int light, CallbackInfo ci) {
         if (!V.on("viewmodel")) return;
         Arm arm = hand == Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
-        float side = arm == Arm.RIGHT ? 1 : -1, s = (float) V.num("viewmodel", "scale");
-        m.translate(side * V.num("viewmodel", "x") * 0.5, V.num("viewmodel", "y") * 0.5, -V.num("viewmodel", "z") * 0.6);
+        float side = arm == Arm.RIGHT ? 1 : -1; float[] hd = Fx.hand(hand == Hand.MAIN_HAND ? 0 : 1); float s = hd[6];
+        m.translate(side * hd[0] * 0.5, hd[1] * 0.5, -hd[2] * 0.6);
+        m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(hd[3])); m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * hd[4])); m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(side * hd[5]));
         m.scale(s, s, s);
     }
 }

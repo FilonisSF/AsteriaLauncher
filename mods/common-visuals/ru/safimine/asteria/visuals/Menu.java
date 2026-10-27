@@ -12,6 +12,8 @@ public final class Menu {
     public static Function<String, String> tr = k -> k;
 
     public static boolean on() { return V.menu; }
+    /** small icon buttons (language, accessibility, Realms news) keep their own look: our text would cover the icon */
+    public static boolean styled(int w) { return V.menu && w >= 40; }
 
     /** icon on the left of well-known buttons, by their (translated) text; null = text only */
     static String iconFor(String label) {
@@ -52,8 +54,7 @@ public final class Menu {
         D.g = g;
         String name = "AsteriaLauncher"; float sc = 2.6f, tw = D.w(name) * sc, mark = 58, gap = 6, total = mark + gap + tw, x = (screenW - total) / 2f;
         g.texture("textures/gui/logo.png", 512, 512, x, y - 12, mark, mark);
-        g.push(x + mark + gap, y + 8, sc); D.gradText(name, 0, 0, true); g.pop();
-        String sub = "SafiMine"; g.push(x + mark + gap + 1, y + 8 + 9 * sc + 2, 1.1f); g.text(sub, 0, 0, D.a(V.a2(), 0.85f), true); g.pop();
+        g.push(x + mark + gap, y + 17 - 4.5f * sc, sc); D.gradText(name, 0, 0, true); g.pop();
     }
 
     /** the Asteria background on menu screens (cover fit) with a soft dark veil for readable text */

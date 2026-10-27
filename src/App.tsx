@@ -246,7 +246,10 @@ export default function App() {
               <div className="section">{t('news')}</div>
               <div className="grid grid-cols-3 gap-4 stagger">{conf.news.map((n: any) => <Tilt key={n.id} className="newscard cursor-pointer" onClick={() => setNews(n.id)}><NewsImg v={n.image} cls="" />
                 <div className="t flex justify-between items-end gap-2"><span className="leading-tight">{tx(n.title)}</span><span className="w-8 h-8 shrink-0 rounded-full bg-white text-black flex items-center justify-center"><Icon n="arrow" s={14} /></span></div></Tilt>)}</div>
-              {feed.length > 0 && <><div className="section">Telegram</div><div className="grid grid-cols-2 gap-3">{feed.slice(0, 4).map((f: any) => <button key={f.link} className="mcard text-left" onClick={() => api.openLink(f.link)}>{f.img && <Pic src={f.img} cls="w-20 h-20 rounded-xl object-cover shrink-0" />}<div className="min-w-0"><div className="muted text-xs mb-1">{f.date ? new Date(f.date).toLocaleDateString() : ''}</div><div className="text-sm line-clamp-3">{f.text}</div></div></button>)}</div></>}
+              {feed.length > 0 && <><div className="section">Telegram</div><div className="grid grid-cols-2 gap-3 items-start">{feed.slice(0, 4).map((f: any) => <button key={f.link} className="tgpost" onClick={() => api.openLink(f.link)}>
+                {f.img && <Pic src={f.img} cls="tgpost-img" />}
+                <div className="p-4"><div className="flex items-center gap-2 mb-2"><span className="tgpost-ava"><Icon n="telegram" s={14} /></span><b className="text-sm">SafiMine</b><span className="muted text-xs">{f.date ? new Date(f.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : ''}</span><span className="ml-auto muted"><Icon n="link" s={14} /></span></div>
+                  <div className="tgpost-text">{f.text}</div></div></button>)}</div></>}
               <div className="section">{t('links')}</div>
               <div className="linkgrid">{LINKS.map(([n, u, i]) => <button key={u} className="pill justify-center" title={n} onClick={() => api.openLink(u)}><Icon n={i} s={14} /><span className="lbl">{n}</span></button>)}</div>
             </div>

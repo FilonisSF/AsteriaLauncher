@@ -15,8 +15,7 @@ import ru.safimine.asteria.visuals.mc.Gfx121;
 public abstract class ButtonStyleMixin {
     @Inject(method = "renderWidget", at = @At("HEAD"), cancellable = true, require = 0)
     private void asteria$button(DrawContext ctx, int mx, int my, float delta, CallbackInfo ci) {
-        if (!Menu.on()) return;
-        ClickableWidget w = (ClickableWidget) (Object) this;
+        ClickableWidget w = (ClickableWidget) (Object) this; if (!Menu.styled(w.getWidth())) return;
         try { Menu.button(new Gfx121(ctx), w.getX(), w.getY(), w.getWidth(), w.getHeight(), w.isSelected(), w.active, w.getMessage().getString()); ci.cancel(); } catch (Throwable ignored) {}
     }
 }

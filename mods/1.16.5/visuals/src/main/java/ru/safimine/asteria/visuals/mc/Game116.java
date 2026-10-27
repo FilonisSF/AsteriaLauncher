@@ -49,9 +49,12 @@ final class Game116 implements Game {
     @Override public boolean rawKey(int code) { long h = c.getWindow().getHandle(); return code < 0 ? GLFW.glfwGetMouseButton(h, -code - 1) == GLFW.GLFW_PRESS : InputUtil.isKeyPressed(h, code); }
     @Override public String keyLabel(int code) { try { String s = InputUtil.fromKeyCode(code, 0).getLocalizedText().getString(); return s.length() > 10 ? s.substring(0, 10) : s; } catch (Throwable t) { return "#" + code; } }
     @Override public String username() { return c.getSession().getUsername(); }
-    @Override public int ping() {
+    @Override public int ping() { // tab latency; by name when the server changes UUIDs; else the server list ping
         ClientPlayNetworkHandler n = c.getNetworkHandler(); if (n == null || c.player == null) return -1;
-        PlayerListEntry e = n.getPlayerListEntry(c.player.getUuid()); return e == null ? -1 : e.getLatency();
+        PlayerListEntry e = n.getPlayerListEntry(c.player.getUuid()); if (e == null) e = n.getPlayerListEntry(c.player.getGameProfile().getName());
+        int p = e == null ? 0 : e.getLatency();
+        if (p <= 0 && c.getCurrentServerEntry() != null) p = (int) c.getCurrentServerEntry().ping;
+        return p;
     }
     @Override public double x() { return c.player == null ? 0 : c.player.getX(); }
     @Override public double y() { return c.player == null ? 0 : c.player.getY(); }
@@ -97,6 +100,23 @@ final class Game116 implements Game {
     @Override public java.util.List<Object> players() { java.util.List<Object> o = new ArrayList<>(); if (c.world == null) return o; for (Object p : c.world.getPlayers()) if (p != c.player) o.add(p); return o; }
     @Override public String playerName(Object e) { return e instanceof net.minecraft.entity.player.PlayerEntity ? ((net.minecraft.entity.player.PlayerEntity) e).getGameProfile().getName() : ""; }
     @Override public float yawOf(Object e) { return e instanceof Entity ? ((Entity) e).yaw : 0; }
+    @Override public boolean tabOpen() { return c.currentScreen == null && c.options.keyPlayerList.isPressed(); }
+    @Override public Object entityIcon(Object e) {
+        if (!(e instanceof Entity) || e instanceof net.minecraft.entity.player.PlayerEntity) return null;
+        net.minecraft.item.SpawnEggItem egg = net.minecraft.item.SpawnEggItem.forEntity(((Entity) e).getType()); return egg == null ? null : new ItemStack(egg);
+    }
+    private static java.util.List<String> enchOf(ItemStack s) {
+        java.util.List<String> out = new ArrayList<>();
+        try { for (java.util.Map.Entry<net.minecraft.enchantment.Enchantment, Integer> en : net.minecraft.enchantment.EnchantmentHelper.get(s).entrySet()) out.add(en.getKey().getName(en.getValue()).getString()); } catch (Throwable ignored) {}
+        return out;
+    }
+    private static Item itemOf(ItemStack s) { return new Item(s, s.getDamage(), s.isDamageable() ? s.getMaxDamage() : 0, s.getName().getString(), enchOf(s)); }
+    @Override public java.util.List<Item> armorOf(Object e) {
+        java.util.List<Item> out = new ArrayList<>(); if (!(e instanceof LivingEntity)) return out;
+        for (ItemStack s : ((LivingEntity) e).getArmorItems()) if (!s.isEmpty()) out.add(0, itemOf(s)); // armor comes boots first
+        return out;
+    }
+    @Override public Item heldBy(Object e) { if (!(e instanceof LivingEntity)) return null; ItemStack s = ((LivingEntity) e).getMainHandStack(); return s.isEmpty() ? null : itemOf(s); }
     @Override public boolean sprinting() { return c.player != null && c.player.isSprinting(); }
     @Override public double[] targetBlock() {
         if (c.world == null || !(c.crosshairTarget instanceof BlockHitResult) || c.crosshairTarget.getType() != HitResult.Type.BLOCK) return null;

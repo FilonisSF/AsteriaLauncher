@@ -26,14 +26,15 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 /** ready-made starting points for a new config */
 const TEMPLATES: { name: string; desc: string; make: () => VisCfg }[] = [
   { name: 'Стандарт', desc: 'Как после установки', make: visDefaults },
-  { name: 'Минимал', desc: 'Только логотип, инфо и прицел, тонкие линии', make: () => only(['watermark', 'info', 'crosshair'], { hud: 1 }) },
-  { name: 'PvP', desc: 'Всё для боя: цель, броня, клавиши, зум', make: () => only(['arraylist', 'keystrokes', 'info', 'armor', 'effects', 'targethud', 'notifications', 'crosshair', 'targetesp', 'hitparticles', 'hitcolor', 'killeffect', 'fullbright', 'zoom', 'island', 'hotbar', 'inventory', 'totems', 'cooldowns', 'damagenumbers', 'sounds', 'blockhighlight']) },
-  { name: 'Красота', desc: 'Шлейфы, частицы, шляпа и радужная тема', make: () => only(['watermark', 'arraylist', 'notifications', 'frame', 'trails', 'jumpcircles', 'ambient', 'chinahat', 'targetesp', 'hitparticles', 'killeffect', 'swing', 'zoom', 'island', 'music', 'halo', 'pet', 'jumpparticles', 'particletrail', 'sonar', 'dash'], { chroma: true }) },
+  { name: 'Стример', desc: 'Скрытый ник, музыка и аккуратный HUD', make: () => only(['island', 'music', 'nameprotect', 'info', 'hotbar', 'targethud', 'crosshair', 'notifications', 'zoom'], { hud: 2, bg: 0.5 }) },
+  { name: 'Минимал', desc: 'Остров, хотбар и прицел — чистый экран', make: () => only(['island', 'hotbar', 'crosshair', 'blockhighlight', 'zoom'], { hud: 2, bg: 0.55 }) },
+  { name: 'PvP', desc: 'Всё для боя: цель, броня, клавиши, зум', make: () => only(['island', 'info', 'keystrokes', 'armor', 'effects', 'targethud', 'notifications', 'crosshair', 'targetesp', 'hitparticles', 'damagenumbers', 'killeffect', 'sounds', 'hotbar', 'inventory', 'totems', 'cooldowns', 'blockhighlight', 'fullbright', 'zoom', 'totem'], { hud: 2, bg: 0.6 }) },
+  { name: 'Красота', desc: 'Шлейфы, частицы, шляпа и радужная тема', make: () => only(['island', 'music', 'notifications', 'trails', 'jumpcircles', 'jumpparticles', 'ambient', 'halo', 'pet', 'targetesp', 'hitparticles', 'killeffect', 'swing', 'dash', 'totem', 'skycolor', 'zoom'], { hud: 1, chroma: true, glare: true }) },
 ]
-const FONTS = ['Minecraft (пиксельный)', 'Inter', 'Montserrat Alternates', 'Unbounded', 'Comfortaa', 'Glitch — «дед инсайд»', 'Ruslan Display', 'Russo One']
+const FONTS = ['Minecraft (пиксельный)', 'Ubuntu', 'Montserrat Alt', 'Balsamiq (мило)', 'Pangolin (мило)', 'Neucha (от руки)', 'Marmelad', 'Pacifico', 'Russo One', 'Philosopher', 'Unbounded']
 // closest font the launcher itself has, so the preview looks like the game
-const PREVIEW_FONT = ['ui-monospace,Consolas,monospace', '"Manrope Variable",sans-serif', '"Manrope Variable",sans-serif', '"Unbounded Variable",sans-serif', '"Manrope Variable",sans-serif', '"Unbounded Variable",sans-serif', 'Georgia,serif', '"Unbounded Variable",sans-serif']
-const fontIdx = (f: any) => typeof f === 'number' ? f : f === false ? 0 : 2 // old configs stored a boolean
+const PREVIEW_FONT = ['ui-monospace,Consolas,monospace', '"Manrope Variable",sans-serif', '"Manrope Variable",sans-serif', '"Comic Sans MS","Manrope Variable",sans-serif', '"Comic Sans MS","Manrope Variable",sans-serif', '"Segoe Print","Manrope Variable",sans-serif', '"Manrope Variable",sans-serif', '"Segoe Script","Manrope Variable",cursive', '"Unbounded Variable",sans-serif', 'Georgia,serif', '"Unbounded Variable",sans-serif']
+const fontIdx = (f: any) => typeof f === 'number' ? Math.min(f, FONTS.length - 1) : f === false ? 0 : 1 // old configs stored a boolean
 function only(ids: string[], theme: Partial<Theme> = {}): VisCfg { const d = visDefaults(); for (const m of MODS) d.modules[m.id].on = ids.includes(m.id); d.theme = { ...d.theme, ...theme }; return d }
 function merge(saved: any): VisCfg {
   const d = visDefaults(); if (!saved || !saved.modules) return d
@@ -110,7 +111,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
         {CATS.map((k) => { const n = MODS.filter((m) => m.cat === k.id && c.modules[m.id].on).length
           return <button key={k.id} className={'navw ' + (cat === k.id && !q ? 'on' : '')} onClick={() => { setCat(k.id); setQ('') }}><Icon n={CAT_ICON[k.id] || 'sparkles'} s={18} /><span className="flex-1 text-left">{k.name}</span><span className="text-xs opacity-80">{n}</span></button> })}
       </div>
-      <div className="grid gap-3 content-start stagger" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
+      <div className="grid gap-3 content-start items-start stagger" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
         {mods.map((m) => { const mc = c.modules[m.id], ex = open === m.id
           return <div key={m.id} className={'card rounded-2xl overflow-hidden transition ' + (mc.on ? '' : 'opacity-[.86]')} style={mc.on ? { borderColor: 'color-mix(in srgb,var(--a2) 45%,transparent)' } : {}}>
             <div className="relative h-[120px] overflow-hidden" style={{ background: 'linear-gradient(135deg,color-mix(in srgb,var(--a1) 38%,#06121c),color-mix(in srgb,var(--a2) 30%,#050b16))' }}>
@@ -120,7 +121,6 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
             </div>
             <div className="p-4 pt-3">
             <div className="flex items-start gap-3">
-              <span className="cmd-ic !w-10 !h-10" style={mc.on ? { background: 'linear-gradient(135deg,var(--a1),var(--a2))', color: '#fff' } : {}}><Icon n={CAT_ICON[m.cat] || 'sparkles'} s={18} /></span>
               <div className="flex-1 min-w-0"><div className="font-bold">{m.name}</div><div className="muted text-xs">{m.desc}</div></div>
               <Switch on={mc.on} set={(v) => mod(m.id, { on: v })} /></div>
             <div className="flex items-center gap-2 mt-3">

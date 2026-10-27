@@ -435,7 +435,7 @@ public final class Fx {
         }
     }
     private static void hat(R3 r, Game g, Object self, float pt, long now) {
-        double[] p = g.pos(self, pt); double top = p[1] + g.height(self) + 0.08, rad = V.num("chinahat", "size"); float a = (float) V.num("chinahat", "alpha");
+        double[] p = g.pos(self, pt); double top = p[1] + g.height(self) - 0.05, rad = V.num("chinahat", "size"); float a = (float) V.num("chinahat", "alpha");
         int seg = 40; double yaw = Math.toRadians(-g.bodyYaw(pt));
         r.begin(R3.TRIS, true);
         for (int i = 0; i < seg; i++) {
@@ -549,15 +549,26 @@ public final class Fx {
         if (V.bool("totem", "sound")) sound("magic_pok", (float) V.num("sounds", "volume"));
         return V.mode("totem", "style") == 1;
     }
+    /** the computer's clock as Minecraft time of day (6:00 = 0 ticks) */
+    public static long realTime() { java.util.Calendar c = java.util.Calendar.getInstance(); return (((c.get(java.util.Calendar.HOUR_OF_DAY) - 6 + 24) % 24) * 1000L + c.get(java.util.Calendar.MINUTE) * 1000L / 60); }
+    /** hand position and rotation for the main (0) or off hand (1): {x, y, z, rotX, rotY, rotZ, scale} */
+    public static float[] hand(int which) {
+        boolean split = which == 1 && V.bool("viewmodel", "split"); String p = split ? "l" : "";
+        return new float[]{(float) V.num("viewmodel", p + "x"), (float) V.num("viewmodel", p + "y"), (float) V.num("viewmodel", p + "z"),
+            (float) V.num("viewmodel", p + "rx"), (float) V.num("viewmodel", p + "ry"), (float) V.num("viewmodel", p + "rz"), (float) V.num("viewmodel", "scale")};
+    }
     /** first person swing presets: {tx, ty, tz, rotX, rotY, rotZ} for swing progress 0..1 (main hand) */
     public static float[] swingPose(float swing) {
-        if (!V.on("swing") || swing <= 0) return null;
-        float s = (float) Math.sin(swing * Math.PI), s2 = (float) Math.sin(Math.sqrt(swing) * Math.PI);
-        switch (V.mode("swing", "preset")) {
-            case 1: return new float[]{0, -0.08f * s, 0, -30 * s2, 0, 0};                       // smooth: hand dips down
-            case 2: return new float[]{-0.1f * s, 0.05f * s, 0, -20 * s, -55 * s2, 25 * s};      // "1.7 block": sword turns across the screen
-            case 3: return new float[]{0, 0, -0.1f * s, 0, -360 * swing, 0};                     // spin
-            case 4: return new float[]{0, 0.12f * s, 0.08f * s, 45 * s2, 0, 0};                  // chop: up and down
+        if (!V.on("swing")) return null;
+        int preset = V.mode("swing", "preset");
+        float s = (float) Math.sin(Math.max(0, swing) * Math.PI), s2 = (float) Math.sin(Math.sqrt(Math.max(0, swing)) * Math.PI);
+        if (preset == 5) return new float[]{0.02f, 0.06f - 0.05f * s, -0.05f, -70 + 45 * s2, 8, 0}; // flat: lies forward, chops down (also when idle)
+        if (swing <= 0) return null;
+        switch (preset) {
+            case 1: return new float[]{0, -0.05f * s, 0, -18 * s2, 0, 0};                       // smooth: hand dips down
+            case 2: return new float[]{-0.05f * s, 0.03f * s, 0, -12 * s, -35 * s2, 15 * s};     // "1.7 block": sword turns across the screen
+            case 3: return new float[]{0, 0, -0.05f * s, 0, -360 * swing, 0};                    // spin
+            case 4: return new float[]{0, 0.06f * s, 0.04f * s, 28 * s2, 0, 0};                  // chop: up and down
             default: return null;
         }
     }

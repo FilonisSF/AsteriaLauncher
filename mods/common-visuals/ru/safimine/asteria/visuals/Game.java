@@ -60,6 +60,14 @@ public interface Game {
     /** outline box (minX,minY,minZ,maxX,maxY,maxZ) of the block under the crosshair, or null */
     default double[] targetBlock() { return null; }
     default boolean sprinting() { return false; }
+    /** the player list (Tab) is held open: our HUD steps aside */
+    default boolean tabOpen() { return false; }
+    /** a mob's spawn egg (its icon in the target HUD), null for players / no egg */
+    default Object entityIcon(Object e) { return null; }
+    /** armor an entity wears, helmet first, with enchantments */
+    default List<Item> armorOf(Object e) { return java.util.Collections.emptyList(); }
+    /** what an entity holds in its main hand (null if nothing) */
+    default Item heldBy(Object e) { return null; }
     /** other players in the world (not you) */
     default java.util.List<Object> players() { return java.util.Collections.emptyList(); }
     /** the account name of a player entity (no prefixes / team colours) */
@@ -79,7 +87,10 @@ public interface Game {
 
     final class Item {
         public final Object stack; public final int damage, max; public final String name;
-        public Item(Object stack, int damage, int max, String name) { this.stack = stack; this.damage = damage; this.max = max; this.name = name; }
+        /** enchantments as shown in the tooltip, e.g. "Защита IV" */
+        public final List<String> ench;
+        public Item(Object stack, int damage, int max, String name) { this(stack, damage, max, name, java.util.Collections.emptyList()); }
+        public Item(Object stack, int damage, int max, String name, List<String> ench) { this.stack = stack; this.damage = damage; this.max = max; this.name = name; this.ench = ench; }
     }
     final class Effect {
         public final Object type; public final String name; public final int amp, ticks, color;

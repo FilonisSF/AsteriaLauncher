@@ -31,7 +31,9 @@ function Cover($p) {
     $st = $asStream.Invoke($null, @($ras)); $buf = New-Object System.IO.MemoryStream; $st.CopyTo($buf); $buf.Position = 0
     $img = [System.Drawing.Image]::FromStream($buf)
     $bmp = New-Object System.Drawing.Bitmap 128, 128
-    $g = [System.Drawing.Graphics]::FromImage($bmp); $g.InterpolationMode = 'HighQualityBicubic'
+    $g = [System.Drawing.Graphics]::FromImage($bmp); $g.InterpolationMode = 'HighQualityBicubic'; $g.SmoothingMode = 'AntiAlias'; $g.Clear([System.Drawing.Color]::Transparent)
+    $gp = New-Object System.Drawing.Drawing2D.GraphicsPath; $rr = 28 # rounded corners: the game shows the picture as it is
+    $gp.AddArc(0, 0, $rr, $rr, 180, 90); $gp.AddArc(128 - $rr, 0, $rr, $rr, 270, 90); $gp.AddArc(128 - $rr, 128 - $rr, $rr, $rr, 0, 90); $gp.AddArc(0, 128 - $rr, $rr, $rr, 90, 90); $gp.CloseFigure(); $g.SetClip($gp)
     $side = [math]::Min($img.Width, $img.Height); $sx = [int](($img.Width - $side) / 2); $sy = [int](($img.Height - $side) / 2)
     $g.DrawImage($img, (New-Object System.Drawing.Rectangle 0, 0, 128, 128), $sx, $sy, $side, $side, [System.Drawing.GraphicsUnit]::Pixel)
     $ms = New-Object System.IO.MemoryStream; $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)

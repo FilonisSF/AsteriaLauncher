@@ -400,9 +400,10 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
     writeVisuals(dir); writePresets(dir)
     const opts = { root: s.dir, overrides: { gameDirectory: dir }, authorization: acc.type === 'offline' ? offlineAuth(acc.name) : acc.auth, version: { number: version, type: 'release', ...(custom ? { custom } : {}) },
       memory: { max: s.ramMb + 'M', min: Math.min(s.ramMb, 2048) + 'M' }, customLaunchArgs: ['--width', String(winW), '--height', String(winH), ...(s.fullscreen ? ['--fullscreen'] : [])], javaPath,
-      customArgs: [...s.jvm.split(/\s+/).filter(Boolean), '-Dasteria.launcher=1', '-Dasteria.api=' + apiBase(), '-Dasteria.user=' + acc.name, '-Dasteria.gamedir=' + dir, '-Dasteria.root=' + s.dir,
+      customArgs: [...s.jvm.split(/\s+/).filter(Boolean), '-Djava.net.useSystemProxies=true' /* skins, Mojang keys and our API go through the Windows proxy, like in the browser */, '-Dasteria.launcher=1', '-Dasteria.api=' + apiBase(), '-Dasteria.user=' + acc.name, '-Dasteria.gamedir=' + dir, '-Dasteria.root=' + s.dir,
         ...(acc.type === 'offline' ? OFFLINE : [])],
-      ...(join ? { server: { host: srv.host, port: String(srv.port) } } : {}) }
+      // 'Join SafiMine': MCLC ignores the old server option, quickPlay works (1.20+ understands --quickPlayMultiplayer, older versions --server/--port)
+      ...(join ? { quickPlay: { type: /^(1\.2\d|2\d\.)/.test(version) ? 'multiplayer' : 'legacy', identifier: srv.host + ':' + srv.port } } : {}) }
     l.on('progress', (e) => send('Загрузка файлов', e.total ? Math.round((e.task / e.total) * 100) : 0, e.type || '', 3))
     l.on('download-status', (e) => send('Загрузка библиотек', e.total ? Math.round((e.current / e.total) * 100) : 0, e.name || '', 3))
     l.on('package-extract', () => send('Распаковка', 100, '', 4))
@@ -554,7 +555,9 @@ ipcMain.handle('events:get', cachedGet('eventsCache', '/events'))
 ipcMain.handle('player:get', async (_, name) => { try { await resolveApi(); return await (await net.fetch(`${apiBase()}/player/${name}`, { signal: AbortSignal.timeout(7000) })).json() } catch { return null } })
 const confFile = () => path.join(settings().dir, 'launcher-config.json')
 ipcMain.handle('config:get', async () => { let c = null // priority: local file (edited by the owner of this PC) > backend file > last cached backend file
-  try { await resolveApi(); const r = await net.fetch(apiBase() + '/config', { signal: AbortSignal.timeout(6000) }); if (!r.ok) throw 0; c = await r.json(); store.set('remoteConf', c) } catch { c = store.get('remoteConf', null) }
+  try { await resolveApi(); const r = await net.fetch(apiBase() + '/config', { signal: AbortSignal.timeout(6000) })
+    if (r.status === 404) { store.delete('remoteConf'); c = null } // the server has no config of its own: the texts built into the launcher are used (an old cached one would hide new news)
+    else { if (!r.ok) throw 0; c = await r.json(); store.set('remoteConf', c) } } catch { c = store.get('remoteConf', null) }
   try { if (fs.existsSync(confFile())) c = { ...(c || {}), ...JSON.parse(fs.readFileSync(confFile(), 'utf8')) } } catch {}
   if (c) try { c = JSON.parse(JSON.stringify(c).replace(/"\/img\//g, '"' + apiBase() + '/img/')) } catch {} // pictures uploaded in the admin panel
   return c })
@@ -564,11 +567,11 @@ ipcMain.handle('versions:art', async () => { try { const j = await mrJ('https://
   for (const e of j.entries || []) { const v = e.version || ((e.title || '').match(/(\d+\.\d+(?:\.\d+)?)\s*$/) || [])[1], u = e.image?.url
     if (v && u && !out[v]) out[v] = /^https?:/.test(u) ? u : 'https://launchercontent.mojang.com' + u }
   if (Object.keys(out).length) store.set('art', out); return out } catch { return store.get('art', {}) } })
-const dec = (t) => t.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').trim()
+const dec = (t) => t.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/\n{3,}/g, '\n\n').trim()
 ipcMain.handle('tg:feed', async (_, ch) => { try { const html = await (await net.fetch(`https://t.me/s/${ch}`, { signal: AbortSignal.timeout(9000) })).text(), out = []
   for (const blk of html.split('tgme_widget_message_wrap').slice(1)) {
     const text = (blk.match(/tgme_widget_message_text[^>]*>(.*?)<\/div>/s) || [])[1], link = (blk.match(/href="(https:\/\/t\.me\/[^"]+\/\d+)"/) || [])[1], date = (blk.match(/<time[^>]*datetime="([^"]+)"/) || [])[1], img = (blk.match(/tgme_widget_message_photo_wrap[^>]*background-image:url\('([^']+)'\)/) || [])[1]
-    if (link && (text || img)) out.push({ text: text ? dec(text).slice(0, 220) : '', link, date, img }) }
+    if (link && (text || img)) out.push({ text: text ? dec(text).slice(0, 700) : '', link, date, img }) }
   const r = out.slice(-6).reverse(); store.set('tg', r); return r } catch { return store.get('tg', []) } })
 // ---------- launch profiles
 ipcMain.handle('prof:list', () => ({ list: store.get('profiles', []), active: store.get('activeProfile') || null }))

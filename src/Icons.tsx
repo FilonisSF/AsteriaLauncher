@@ -1,4 +1,5 @@
 import logo from './assets/logo.png'
+import alMark from './assets/al.png'
 const P: Record<string, string> = {
   sliders: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4', cursor: 'M5 3l14 7-6 2-2 6L5 3z', volume: 'M4 9h4l5-4v14l-5-4H4V9zM17 9a4 4 0 010 6M19.5 6.5a8 8 0 010 11',
   chat: 'M4 5h16v11H9l-5 4V5z', keyboard: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10', sparkles: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z',
@@ -21,7 +22,9 @@ const P: Record<string, string> = {
 }
 export const Icon = ({ n, s = 20, fill = false }: { n: string; s?: number; fill?: boolean }) => <svg width={s} height={s} viewBox="0 0 24 24" fill={fill ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={P[n]} /></svg>
 /** Asteria star: soft glassy four-point star with a bright core (matches the app icon), coloured by the accent */
-export const Gem = ({ s = 24, glow = true }: { s?: number; glow?: boolean }) => { const id = 'gs' + s
+/** the AL mark (letters with the orbit), used wherever the Asteria star used to be */
+export const Gem = ({ s = 24, glow = true }: { s?: number; glow?: boolean }) => <img src={alMark} width={s * 1.25} height={s * 1.25} draggable={false} style={{ objectFit: 'contain', margin: -s * 0.125, ...(glow ? { filter: 'drop-shadow(0 0 6px color-mix(in srgb, var(--a2) 60%, transparent))' } : {}) }} />
+export const OldGem = ({ s = 24, glow = true }: { s?: number; glow?: boolean }) => { const id = 'gs' + s
   return <svg width={s} height={s} viewBox="0 0 64 64" style={glow ? { filter: 'drop-shadow(0 0 6px color-mix(in srgb, var(--a2) 70%, transparent))', overflow: 'visible' } : undefined}>
     <defs><radialGradient id={id} cx=".5" cy=".5" r=".5"><stop offset="0" stopColor="#fff" /><stop offset=".25" stopColor="color-mix(in srgb, var(--a2) 35%, white)" /><stop offset=".7" stopColor="var(--a2)" /><stop offset="1" stopColor="var(--a1)" /></radialGradient></defs>
     <path d="M32 3C34.5 21 43 29.5 61 32C43 34.5 34.5 43 32 61C29.5 43 21 34.5 3 32C21 29.5 29.5 21 32 3Z" fill={`url(#${id})`} />

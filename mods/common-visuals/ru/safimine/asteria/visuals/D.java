@@ -61,13 +61,12 @@ public final class D {
         if (V.hudStyle == 2) { minimal(x1, y1, x2, y2, r); return; }
         if (V.shadow) for (int i = 3; i >= 1; i--) round(x1 - i, y1 - i, x2 + i, y2 + i, r + i, D.a(V.a1(), 0.10f / i), D.a(V.a2(), 0.10f / i));
         round(x1, y1, x2, y2, r, D.a(bright(V.a1(), 1.1f), 0.85f), D.a(V.a2(), 0.85f));                 // rim
-        int body = alpha(0x050B16, (int) (255 * Math.max(0.35f, V.bg)));
+        int body = alpha(0x050B16, (int) (255 * V.bg));
         round(x1 + 1, y1 + 1, x2 - 1, y2 - 1, Math.max(0, r - 1), body);                                   // body
         round(x1 + 1, y1 + 1, x2 - 1, y2 - 1, Math.max(0, r - 1), D.a(V.a1(), 0.07f), D.a(V.a2(), 0.03f)); // tint
         float h = y2 - y1;
         if (h > 8) round(x1 + 2, y1 + 1.5f, x2 - 2, y1 + Math.min(h * 0.42f, 9), Math.max(0, r - 2), alpha(0xFFFFFF, 14)); // glass sheen
         round(x1 + r * 0.6f, y1 + 0.5f, x2 - r * 0.6f, y1 + 1.3f, 0.4f, alpha(0xFFFFFF, 0), alpha(0xFFFFFF, 140));          // highlight line
-        if (gem && x2 - x1 > 34 && h > 14) { crystal(x1 + 1.5f, y1 + 1.5f, 3.6f); sparkle(x2 - 3.5f, y2 - 3.5f, 1.8f, alpha(0xFFFFFF, 170)); }
         if (V.glare) glare(x1, y1, x2, y2);
     }
     /** a soft vertical sheen sliding across the panel every few seconds (all panels in sync by screen x) */
@@ -82,9 +81,8 @@ public final class D {
     /** "Constellation": dark card, gradient bar on the left, a star-chart line on top and a comet running along it */
     public static void lines(float x1, float y1, float x2, float y2) {
         float w = x2 - x1, h = y2 - y1;
-        round(x1, y1, x2, y2, 5, alpha(0x07060C, (int) (235 * Math.max(0.35f, V.bg))));
+        round(x1, y1, x2, y2, 5, alpha(0x07060C, (int) (235 * V.bg)));
         round(x1, y1, x2, y2, 5, D.a(V.a1(), 0.06f), D.a(V.a2(), 0.02f));
-        vgradRound(x1 + 1, y1 + 3, x1 + 2.6f, y2 - 3, D.a(V.a1(), 1f), D.a(V.a2(), 0.5f));
         // star chart along the top: three nodes joined by a hairline
         float n1 = x1 + 8, n2 = x1 + Math.min(w * 0.35f, 40), n3 = x2 - 8, ty = y1 + 0.6f;
         hgrad(n1, ty - 0.3f, n3, ty + 0.3f, D.a(V.a2(), 0.7f), D.a(V.a1(), 0.15f));
@@ -105,9 +103,8 @@ public final class D {
         r = Math.max(4, r);
         if (V.shadow) shadow(x1, y1, x2, y2, r, 0.8f);
         round(x1, y1, x2, y2, r, alpha(0xFFFFFF, 18));                                              // hairline
-        round(x1 + 0.6f, y1 + 0.6f, x2 - 0.6f, y2 - 0.6f, r - 0.6f, alpha(0x0F0D12, (int) (245 * Math.max(0.4f, V.bg))));
+        round(x1 + 0.6f, y1 + 0.6f, x2 - 0.6f, y2 - 0.6f, r - 0.6f, alpha(0x0F0D12, (int) (245 * V.bg)));
         round(x1 + 0.6f, y1 + 0.6f, x2 - 0.6f, y2 - 0.6f, r - 0.6f, D.a(V.a1(), 0.05f), D.a(V.a2(), 0.02f));
-        if (y2 - y1 > 14) vgradRound(x1 + 3, y1 + 4, x1 + 4.4f, Math.min(y2 - 4, y1 + 14), D.a(V.a1(), 1f), D.a(V.a2(), 1f));
         if (V.glare) glare(x1, y1, x2, y2);
     }
     /** outlined diamond (crosshair / bullets from the asset board) */
@@ -135,7 +132,7 @@ public final class D {
             if (p > 0.01f) round(x1 + 1, y1 + 1, x2 - 1, y2 - 1, 2, D.a(V.a2(), p * 0.85f), D.a(V.a1(), p * 0.85f));
             return; }
         round(x1, y1, x2, y2, r, D.a(V.a1(), 0.55f + 0.45f * p), D.a(V.a2(), 0.55f + 0.45f * p));
-        round(x1 + 1, y1 + 1, x2 - 1, y2 - 1, Math.max(0, r - 1), alpha(0x07111F, (int) (255 * Math.max(0.35f, V.bg))));
+        round(x1 + 1, y1 + 1, x2 - 1, y2 - 1, Math.max(0, r - 1), alpha(0x07111F, (int) (255 * V.bg)));
         if (p > 0.01f) round(x1 + 1, y1 + 1, x2 - 1, y2 - 1, Math.max(0, r - 1), D.a(bright(V.a1(), 1.05f), p * 0.9f), D.a(V.a2(), p * 0.9f));
         if (y2 - y1 > 8) round(x1 + 2, y1 + 1.5f, x2 - 2, y1 + (y2 - y1) * 0.4f, Math.max(0, r - 2), alpha(0xFFFFFF, (int) (16 + 20 * p)));
     }
@@ -192,6 +189,9 @@ public final class D {
     }
     public static int w(String s) { return g.width(s); }
 
+    /** the AL mark (letters with the orbit, the launcher logo) in a size x size box */
+    public static void mark(float x, float y, float size) { g.texture("textures/gui/logo.png", 512, 512, x, y, size, size); }
+
     // ------------------------------------------------------------------ icons (same set and look as the launcher's category icons)
     private static void path(float x, float y, float k, float w, int c, boolean closed, float... p) {
         for (int i = 0; i + 3 < p.length; i += 2) line(x + p[i] * k, y + p[i + 1] * k, x + p[i + 2] * k, y + p[i + 3] * k, w, c);
@@ -225,6 +225,8 @@ public final class D {
             case "move": path(x, y, k, w, c, false, 12, 3, 12, 21); path(x, y, k, w, c, false, 3, 12, 21, 12); path(x, y, k, w, c, false, 9, 6, 12, 3, 15, 6); path(x, y, k, w, c, false, 9, 18, 12, 21, 15, 18); path(x, y, k, w, c, false, 6, 9, 3, 12, 6, 15); path(x, y, k, w, c, false, 18, 9, 21, 12, 18, 15); break;
             case "music": path(x, y, k, w, c, false, 9, 17, 9, 5, 19, 3, 19, 15); circle(x + 6.5f * k, y + 17 * k, 2.6f * k + w / 2, c); circle(x + 16.5f * k, y + 15 * k, 2.6f * k + w / 2, c); break;
             case "dot": circle(x + 12 * k, y + 12 * k, 3.5f * k, c); break;
+            case "heart": circle(x + 8.5f * k, y + 9.5f * k, 4.6f * k, c); circle(x + 15.5f * k, y + 9.5f * k, 4.6f * k, c);
+                g.poly(new float[]{x + 4.1f * k, y + 11 * k, x + 12 * k, y + 20.5f * k, x + 19.9f * k, y + 11 * k, x + 12 * k, y + 9 * k}, new int[]{c, c, c, c}); break;
             case "users": ringIcon(x, y, k, 9, 8, 3.5f, w, c); path(x, y, k, w, c, false, 2.5f, 20, 3.5f, 15.5f, 9, 13, 14.5f, 15.5f, 15.5f, 20); ringIcon(x, y, k, 17, 9, 2.8f, w, c); path(x, y, k, w, c, false, 17.5f, 13.5f, 20.5f, 15, 21.5f, 19); break;
             case "gear": ringIcon(x, y, k, 12, 12, 6, w, c); ringIcon(x, y, k, 12, 12, 2.2f, w, c);
                 for (int i = 0; i < 8; i++) { double an = Math.PI * i / 4; path(x, y, k, w * 1.4f, c, false, (float) (12 + Math.cos(an) * 6.5), (float) (12 + Math.sin(an) * 6.5), (float) (12 + Math.cos(an) * 9.5), (float) (12 + Math.sin(an) * 9.5)); } break;

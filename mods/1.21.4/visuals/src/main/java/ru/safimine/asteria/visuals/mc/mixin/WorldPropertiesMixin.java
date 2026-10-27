@@ -12,5 +12,5 @@ import ru.safimine.asteria.visuals.V;
 public class WorldPropertiesMixin {
     private static final long[] TIMES = {1000, 6000, 12600, 15000, 18000};
     @Inject(method = "getTimeOfDay", at = @At("HEAD"), cancellable = true)
-    private void asteria$time(CallbackInfoReturnable<Long> cir) { if (V.on("worldtime")) cir.setReturnValue(TIMES[V.mode("worldtime", "time")]); }
+    private void asteria$time(CallbackInfoReturnable<Long> cir) { if (V.on("worldtime")) { int m = V.mode("worldtime", "time"); cir.setReturnValue(m >= TIMES.length ? ru.safimine.asteria.visuals.Fx.realTime() : TIMES[m]); } }
 }

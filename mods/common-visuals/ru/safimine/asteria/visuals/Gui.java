@@ -57,7 +57,7 @@ public final class Gui {
     }
 
     private static void sidebar(Gfx g, Game game, float mx, float my) {
-        D.g.push(18, 20, 1); D.star(0, 0, 8, V.a1(), V.a2()); D.g.pop();
+        D.mark(6, 7, 24);
         D.g.push(30, 12, 1.25f); D.gradText("Asteria", 0, 0, true); D.g.pop();
         D.textS("VISUALS", 31, 24, 0.6f, 0xFF6F8B99);
         float y = 44;
@@ -77,11 +77,11 @@ public final class Gui {
         }
         // HUD editor button
         float by = H - 52; boolean hov = in(mx, my, 8, by, SIDE - 8, by + 20);
-        D.round(8, by, SIDE - 8, by + 20, 6, hov ? 0x30FFFFFF : 0x1AFFFFFF); float tw = D.w("Изменить HUD") + 14; D.icon("move", SIDE / 2f - tw / 2, by + 5, 10, 0xFFFFFFFF); D.g.text("Изменить HUD", SIDE / 2f - tw / 2 + 14, by + 6, 0xFFFFFFFF, false);
+        D.round(8, by, SIDE - 8, by + 20, 6, hov ? 0x30FFFFFF : 0x1AFFFFFF); String el = "Изменить HUD"; float es = Math.min(1f, (SIDE - 16 - 26) / (float) D.w(el)), tw = D.w(el) * es + 14; D.icon("move", SIDE / 2f - tw / 2, by + 5, 10, 0xFFFFFFFF); D.textS(el, SIDE / 2f - tw / 2 + 14, by + 10 - 4 * es, es, 0xFFFFFFFF);
         hit(8, by, SIDE - 8, by + 20, "hud", () -> Hud.editing = true);
         // licence line
         D.round(8, H - 26, SIDE - 8, H - 10, 5, D.a(V.a1(), 0.18f), D.a(V.a2(), 0.18f));
-        D.textS("Asteria · бесплатно для всех", 14, H - 21, 0.72f, 0xFFE0F2FE);
+        D.mark(11, H - 27, 18); D.textS("AsteriaLauncher", 31, H - 21, 0.8f, 0xFFE0F2FE);
     }
 
     // ------------------------------------------------------------------ module list
@@ -117,7 +117,7 @@ public final class Gui {
         boolean hov = in(mx, my, x0, y, x1, y + 32) && my > 44;
         float p = D.anim("on." + m.id, m.on ? 1 : 0, 12);
         D.round(x0, y, x1, y + h, 7, hov ? 0x1EFFFFFF : 0x12FFFFFF);
-        if (p > 0.01f) D.round(x0, y, x0 + 2.5f, y + h, 1.2f, D.a(V.a1(), p), D.a(V.a2(), p));
+        if (p > 0.01f) D.vgradRound(x0 + 3, y + 7, x0 + 5.5f, Math.min(y + h - 7, y + 25), D.a(V.a1(), p), D.a(V.a2(), p));
         hit(x0, y, x1, y + 32, "card", () -> { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); if (V.on("sounds") && V.bool("sounds", "menu")) Fx.sound(m.on ? "module_enable" : "module_disable", (float) V.num("sounds", "volume")); });
         D.g.text(m.name, x0 + 10, y + 6, D.mix(0xFFCFE0E8, 0xFFFFFFFF, p), false);
         D.textS(m.desc, x0 + 10, y + 18, 0.72f, 0xFF7E97A4);
@@ -235,7 +235,7 @@ public final class Gui {
         y = themeSlider("Прозрачность панелей", V.bg, 0.15f, 0.95f, Math.round(V.bg * 100) + "%", x0, y, x1, mx, 0);
         y = themeSlider("Размер HUD", V.scale, 0.5f, 2f, Math.round(V.scale * 100) + "%", x0, y, x1, mx, 1);
         y += 6;
-        D.panel(x0, y, x1, y + 36, 6); D.g.push(x0 + 14, y + 18, 1); D.star(0, 0, 7, V.a1(), V.a2()); D.g.pop();
+        D.panel(x0, y, x1, y + 36, 6); D.mark(x0 + 4, y + 8, 20);
         D.gradText("Так выглядят панели HUD", x0 + 28, y + 9, true); D.textS("Настройки тем сохраняются сразу и видны в лаунчере", x0 + 28, y + 21, 0.75f, 0xFF9FB3C0);
     }
     // ------------------------------------------------------------------ configs (made in the launcher)

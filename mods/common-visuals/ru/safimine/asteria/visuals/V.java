@@ -46,7 +46,7 @@ public final class V {
     public static int font = 2;
     /** Asteria style for Minecraft's own menus (buttons, logo, background) */
     public static boolean menu = true;
-    public static final String[] FONTS = {"Minecraft", "Inter", "Montserrat Alt", "Unbounded", "Comfortaa", "Glitch (дед инсайд)", "Ruslan", "Russo One"};
+    public static final String[] FONTS = {"Minecraft", "Ubuntu", "Montserrat Alt", "Balsamiq (мило)", "Pangolin (мило)", "Neucha (от руки)", "Marmelad", "Pacifico", "Russo One", "Philosopher", "Unbounded"};
 
     public static Mod mod(String id) { return BY.get(id); }
     public static boolean on(String id) { Mod m = BY.get(id); return m != null && m.on && licensed(); }

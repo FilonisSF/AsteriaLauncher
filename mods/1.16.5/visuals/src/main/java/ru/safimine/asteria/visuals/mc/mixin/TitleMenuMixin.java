@@ -19,9 +19,11 @@ import java.util.function.BiConsumer;
 /** title screen: no Realms button, and our logo instead of "Minecraft Java Edition" */
 @Mixin(TitleScreen.class)
 public abstract class TitleMenuMixin {
+    @org.spongepowered.asm.mixin.Shadow private String splashText;
     @Inject(method = "init", at = @At("TAIL"), require = 0)
     private void asteria$noRealms(CallbackInfo ci) {
         if (!Menu.on()) return;
+        splashText = null; // no yellow splash next to the logo
         try {
             Screen s = (Screen) (Object) this; String realms = I18n.translate("menu.online"); ClickableWidget rb = null;
             for (Element e : s.children()) if (e instanceof ClickableWidget && ((ClickableWidget) e).getMessage().getString().equals(realms)) rb = (ClickableWidget) e;

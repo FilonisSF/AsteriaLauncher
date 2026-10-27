@@ -2,13 +2,13 @@
  "providers": [
   {
    "type": "ttf",
-   "file": "asteria_visuals:russo.ttf",
+   "file": "asteria_visuals:pacifico.ttf",
    "shift": [
     0,
-    0.5
+    0
    ],
-   "size": 10,
-   "oversample": 4
+   "size": 9,
+   "oversample": 6
   },
   {
    "type": "reference",

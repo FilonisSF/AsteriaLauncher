@@ -2,13 +2,13 @@
  "providers": [
   {
    "type": "ttf",
-   "file": "asteria_visuals:comfortaa.ttf",
+   "file": "asteria_visuals:pangolin.ttf",
    "shift": [
     0,
     0.5
    ],
-   "size": 10,
-   "oversample": 4
+   "size": 9.5,
+   "oversample": 6
   },
   {
    "type": "reference",
