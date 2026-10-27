@@ -5,5 +5,10 @@
   "modmenu.nameTranslation.asteria_visuals": "Asteria Visuals",
   "modmenu.descriptionTranslation.asteria_visuals": "AsteriaLauncher visuals: custom HUD, particles, trails, pets, target marker, now playing, zoom and more. Menu: Right Shift. Visual effects only, no unfair advantages.",
   "key.asteria.freelook": "Free look (hold)",
-  "key.asteria.mark": "Place / remove a marker"
+  "key.asteria.mark": "Place / remove a marker",
+  "key.asteria.music_toggle": "Music: play / pause",
+  "key.asteria.music_next": "Music: next track",
+  "key.asteria.music_prev": "Music: previous track",
+  "key.asteria.music_up": "Music: volume up",
+  "key.asteria.music_down": "Music: volume down"
 }

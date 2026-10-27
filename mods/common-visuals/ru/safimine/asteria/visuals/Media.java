@@ -17,7 +17,7 @@ public final class Media {
     /** fresh track info, or false when nothing plays / the launcher stopped updating */
     public static boolean active() {
         long now = System.currentTimeMillis();
-        if (now - checked > 300) { checked = now; read(); }
+        if (now - checked > 100) { checked = now; read(); }
         return playing && !title.isEmpty() && now - at < 8000;
     }
     /** playback position in seconds, moving smoothly between file updates */
@@ -30,9 +30,12 @@ public final class Media {
     public static void cmd(String c) {
         try { Files.write(new File(V.dir(), "asteria-media-cmd.txt").toPath(), c.getBytes(StandardCharsets.UTF_8)); } catch (Exception ignored) {}
         if (c.equals("toggle")) playing = !playing; // instant feedback until the next update
+        if (c.equals("next") || c.equals("prev")) { pos = 0; checked = 0; }
     }
+    /** 83 -> "1:23" */
+    public static String time(double s) { int t = (int) Math.max(0, s); return (t / 60) + ":" + String.format("%02d", t % 60); }
     /** shown even when paused (the launcher still reports the track) */
-    public static boolean present() { long now = System.currentTimeMillis(); if (now - checked > 300) { checked = now; read(); } return !title.isEmpty() && now - at < 8000; }
+    public static boolean present() { long now = System.currentTimeMillis(); if (now - checked > 100) { checked = now; read(); } return !title.isEmpty() && now - at < 8000; }
     private static void read() {
         try {
             File f = new File(V.dir(), "asteria-media.json"); if (!f.exists()) { playing = false; title = ""; return; }

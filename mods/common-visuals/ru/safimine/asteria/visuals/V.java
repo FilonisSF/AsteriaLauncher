@@ -52,6 +52,8 @@ public final class V {
     public static boolean allFont = false;
     /** light mode: no shadows / sheen on panels (more FPS) */
     public static boolean lite = false;
+    /** own background picture: blurred on screens other than the title screen */
+    public static boolean bgBlur = true;
     public static final String[] FONTS = {"Minecraft", "Ubuntu", "Montserrat Alt", "Balsamiq (мило)", "Pangolin (мило)", "Neucha (от руки)", "Marmelad", "Pacifico", "Russo One", "Philosopher", "Unbounded"};
 
     public static Mod mod(String id) { return BY.get(id); }
@@ -154,7 +156,7 @@ public final class V {
         {
             if (o.has("theme")) { JsonObject t = o.getAsJsonObject("theme");
                 accent = parse(str(t, "accent"), accent); accent2 = parse(str(t, "accent2"), accent2);
-                chroma = b(t, "chroma", chroma); shadow = b(t, "shadow", shadow); blur = b(t, "blur", blur); bg = (float) d(t, "bg", bg); scale = (float) d(t, "scale", scale); hudStyle = (int) d(t, "hud", hudStyle); glare = b(t, "glare", glare); if (t.has("font")) { try { font = t.get("font").isJsonPrimitive() && t.get("font").getAsJsonPrimitive().isBoolean() ? (t.get("font").getAsBoolean() ? 2 : 0) : Math.max(0, Math.min(FONTS.length - 1, t.get("font").getAsInt())); } catch (Exception ignored) {} } menu = b(t, "menu", menu); menuBg = (int) d(t, "menuBg", menuBg); allFont = b(t, "allFont", allFont); lite = b(t, "lite", lite); }
+                chroma = b(t, "chroma", chroma); shadow = b(t, "shadow", shadow); blur = b(t, "blur", blur); bg = (float) d(t, "bg", bg); scale = (float) d(t, "scale", scale); hudStyle = (int) d(t, "hud", hudStyle); glare = b(t, "glare", glare); if (t.has("font")) { try { font = t.get("font").isJsonPrimitive() && t.get("font").getAsJsonPrimitive().isBoolean() ? (t.get("font").getAsBoolean() ? 2 : 0) : Math.max(0, Math.min(FONTS.length - 1, t.get("font").getAsInt())); } catch (Exception ignored) {} } menu = b(t, "menu", menu); menuBg = (int) d(t, "menuBg", menuBg); allFont = b(t, "allFont", allFont); lite = b(t, "lite", lite); bgBlur = b(t, "bgBlur", bgBlur); }
             JsonObject mods = o.has("modules") ? o.getAsJsonObject("modules") : new JsonObject();
             for (Mod md : MODS) {
                 if (!mods.has(md.id)) continue;
@@ -171,7 +173,7 @@ public final class V {
     private static void write() {
         try {
             JsonObject o = new JsonObject(), t = new JsonObject(), mods = new JsonObject();
-            t.addProperty("accent", hex(accent)); t.addProperty("accent2", hex(accent2)); t.addProperty("chroma", chroma); t.addProperty("shadow", shadow); t.addProperty("blur", blur); t.addProperty("bg", bg); t.addProperty("scale", scale); t.addProperty("hud", hudStyle); t.addProperty("glare", glare); t.addProperty("font", font); t.addProperty("menu", menu); t.addProperty("menuBg", menuBg); t.addProperty("allFont", allFont); t.addProperty("lite", lite);
+            t.addProperty("accent", hex(accent)); t.addProperty("accent2", hex(accent2)); t.addProperty("chroma", chroma); t.addProperty("shadow", shadow); t.addProperty("blur", blur); t.addProperty("bg", bg); t.addProperty("scale", scale); t.addProperty("hud", hudStyle); t.addProperty("glare", glare); t.addProperty("font", font); t.addProperty("menu", menu); t.addProperty("menuBg", menuBg); t.addProperty("allFont", allFont); t.addProperty("lite", lite); t.addProperty("bgBlur", bgBlur);
             o.add("theme", t);
             for (Mod m : MODS) {
                 JsonObject j = new JsonObject(), sv = new JsonObject(); j.addProperty("on", m.on); j.addProperty("bind", m.bind);

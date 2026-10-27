@@ -79,7 +79,7 @@ public final class Gfx116 implements Gfx {
     @Override public void text(String s, float x, float y, int argb, boolean shadow) { flush();
         if (((argb >>> 24) & 255) < 5) return;
         RenderSystem.enableBlend();
-        if (shadow) tr.drawWithShadow(m, t(s), x, y, argb); else tr.draw(m, t(s), x, y, argb);
+        Text tx = t(s, px()); float sx = snap(x), sy = snap(y); if (shadow) tr.drawWithShadow(m, tx, sx, sy, argb); else tr.draw(m, tx, sx, sy, argb);
     }
     private static Identifier imgId; private static String imgKey;
     /** loads (or reuses) the png as a texture under a fixed id */
@@ -109,7 +109,9 @@ public final class Gfx116 implements Gfx {
     private static final Identifier[][] UI = new Identifier[16][7];
     /** GUI scale 1..6: the font variant rendered for exactly this many pixels per GUI pixel */
     private static int gs() { return Math.max(1, Math.min(6, (int) Math.round(net.minecraft.client.MinecraftClient.getInstance().getWindow().getScaleFactor()))); }
-    private static Text t(String s) { if (V.font <= 0) return new LiteralText(s); int i = Math.min(15, V.font), k = gs(); if (UI[i][k] == null) UI[i][k] = new Identifier("asteria_visuals", "f" + i + "s" + k); return new LiteralText(s).setStyle(Style.EMPTY.withFont(UI[i][k])); }
+    private static Text t(String s) { return t(s, gs()); }
+    /** k = real screen pixels per GUI pixel (GUI scale x HUD scale): glyphs rasterised for exactly that size stay sharp */
+    private static Text t(String s, int k0) { if (V.font <= 0) return new LiteralText(s); int i = Math.min(15, V.font), k = Math.max(1, Math.min(6, k0)); if (UI[i][k] == null) UI[i][k] = new Identifier("asteria_visuals", "f" + i + "s" + k); return new LiteralText(s).setStyle(Style.EMPTY.withFont(UI[i][k])); }
     @Override public void item(Object stack, int x, int y) { flush();
         RenderSystem.pushMatrix(); RenderSystem.multMatrix(m.peek().getModel());
         c.getItemRenderer().renderInGuiWithOverrides((ItemStack) stack, x, y);
@@ -142,9 +144,13 @@ public final class Gfx116 implements Gfx {
         return true;
     }
     @Override public void push(float x, float y, float s) {
-        m.push(); m.translate(x, y, 0); m.scale(s, s, 1f);
+        scs.push(sc); m.push(); m.translate(snap(x), snap(y), 0); m.scale(s, s, 1f); sc *= s;
     }
-    @Override public void pop() { m.pop(); }
+    @Override public void pop() { m.pop(); if (!scs.isEmpty()) sc = scs.pop(); }
+    /** scale on top of the GUI scale (HUD element scale): picks the font size and snaps positions to whole screen pixels */
+    private float sc = 1f; private final java.util.ArrayDeque<Float> scs = new java.util.ArrayDeque<>();
+    private int px() { return Math.max(1, Math.min(6, Math.round(gs() * sc))); }
+    private float snap(float v) { float g = gs() * sc; return Math.round(v * g) / g; }
     @Override public void scissor(float x, float y, float w, float h) { flush();
         Window win = c.getWindow(); double k = win.getScaleFactor();
         RenderSystem.enableScissor((int) (x * k), (int) (win.getFramebufferHeight() - (y + h) * k), Math.max(0, (int) (w * k)), Math.max(0, (int) (h * k)));

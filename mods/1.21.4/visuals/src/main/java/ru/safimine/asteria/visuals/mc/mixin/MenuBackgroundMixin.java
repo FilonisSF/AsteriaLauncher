@@ -1,5 +1,6 @@
 package ru.safimine.asteria.visuals.mc.mixin;
 
+import net.minecraft.client.MinecraftClient;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -15,6 +16,6 @@ public abstract class MenuBackgroundMixin {
     @Inject(method = "renderPanoramaBackground", at = @At("HEAD"), cancellable = true, require = 0)
     private void asteria$bg(DrawContext ctx, float delta, CallbackInfo ci) {
         if (!Menu.on()) return;
-        try { Menu.background(new Gfx121(ctx), ctx.getScaledWindowWidth(), ctx.getScaledWindowHeight()); ci.cancel(); } catch (Throwable ignored) {}
+        try { Menu.onTitle = MinecraftClient.getInstance().currentScreen instanceof net.minecraft.client.gui.screen.TitleScreen; Menu.background(new Gfx121(ctx), ctx.getScaledWindowWidth(), ctx.getScaledWindowHeight()); ci.cancel(); } catch (Throwable ignored) {}
     }
 }

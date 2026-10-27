@@ -16,6 +16,6 @@ public abstract class MenuBackgroundMixin {
     @Inject(method = "renderBackgroundTexture", at = @At("HEAD"), cancellable = true, require = 0)
     private void asteria$bg(int vOffset, CallbackInfo ci) {
         if (!Menu.on()) return; MinecraftClient c = MinecraftClient.getInstance();
-        try { Menu.background(new Gfx116(new MatrixStack()), c.getWindow().getScaledWidth(), c.getWindow().getScaledHeight()); ci.cancel(); } catch (Throwable ignored) {}
+        try { Menu.onTitle = MinecraftClient.getInstance().currentScreen instanceof net.minecraft.client.gui.screen.TitleScreen; Menu.background(new Gfx116(new MatrixStack()), c.getWindow().getScaledWidth(), c.getWindow().getScaledHeight()); ci.cancel(); } catch (Throwable ignored) {}
     }
 }

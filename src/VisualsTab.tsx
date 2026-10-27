@@ -8,7 +8,7 @@ declare global { interface Window { api: any } }
 type S = { id: string; name: string; type: 'bool' | 'num' | 'mode' | 'color' | 'str'; def: any; min?: number; max?: number; step?: number; options?: string[] }
 type M = { id: string; cat: string; name: string; desc: string; on: boolean; hud?: [number, number]; s: S[] }
 type ModCfg = { on: boolean; bind: number; hud?: [number, number]; s: Record<string, any> }
-type Theme = { accent: string; accent2: string; chroma: boolean; shadow: boolean; blur: boolean; bg: number; scale: number; hud?: number; glare?: boolean; font?: number | boolean; menu?: boolean; menuBg?: number; allFont?: boolean; lite?: boolean }
+type Theme = { accent: string; accent2: string; chroma: boolean; shadow: boolean; blur: boolean; bg: number; scale: number; hud?: number; glare?: boolean; font?: number | boolean; menu?: boolean; menuBg?: number; allFont?: boolean; lite?: boolean; bgBlur?: boolean }
 export type VisCfg = { theme: Theme; modules: Record<string, ModCfg> }
 const MODS = (schema as any).modules as M[], CATS = (schema as any).categories as { id: string; name: string }[]
 const CAT_ICON: Record<string, string> = { hud: 'grid', world: 'cube', combat: 'sparkles', camera: 'eye' }
@@ -75,7 +75,7 @@ const GW = 640, GH = 360
 
 export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string; bg: string; onBuy: () => void; say: (m: string) => void; ver: string }) {
   const premium = plan === 'PREMIUM'
-  const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout' | 'configs' | 'crosshair' | 'marks' | 'abbr'>('mods'), [q, setQ] = useState('')
+  const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout' | 'configs' | 'crosshair' | 'marks' | 'abbr' | 'binds'>('mods'), [q, setQ] = useState('')
   const [pr, setPr] = useState<Presets | null>(null), prRef = useRef<Presets | null>(null), [enabled, setEnabled] = useState(true)
   useEffect(() => { window.api.visEnabled?.().then((v: boolean) => setEnabled(v !== false)) }, [])
   const toggleAll = async (v: boolean) => { setEnabled(v); await window.api.visEnabled?.(v); say(v ? 'Визуалы включены — со следующего запуска игры' : 'Визуалы выключены — игра запустится без них') }
@@ -120,7 +120,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     {!premium && <div className="card rounded-2xl p-4 mb-4 flex items-center gap-3"><span className="cmd-ic"><Icon n="lock" s={16} /></span><div className="text-sm flex-1"><b>Можно всё настроить заранее.</b> <span className="muted">В игре визуалы включатся, как только на аккаунте появится PREMIUM — лаунчер проверяет подписку при каждом запуске.</span></div></div>}
 
     <div className="flex items-center gap-3 mb-4 flex-wrap">
-      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['crosshair', 'Прицел', 'plus'], ['marks', 'Метки', 'servers'], ['layout', 'Расположение HUD', 'move'], ['configs', 'Конфиги', 'folder'], ['abbr', 'Сокращения', 'rules']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
+      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['crosshair', 'Прицел', 'plus'], ['marks', 'Метки', 'servers'], ['binds', 'Бинды команд', 'keyboard'], ['layout', 'Расположение HUD', 'move'], ['configs', 'Конфиги', 'folder'], ['abbr', 'Сокращения', 'rules']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
       <div className="flex-1" />
       <div className="flex items-center gap-2 text-sm"><span className="muted">Клавиши в игре:</span>
         {(['menu', 'zoom'] as const).map((k) => <button key={k} className={'btn !py-1.5 ' + (listenKey === k ? 'btn-on' : '')} onClick={() => setListenKey(k)}>{k === 'menu' ? 'Меню' : 'Зум'} <kbd className="ml-1">{listenKey === k ? '…' : pretty(keys[k])}</kbd></button>)}</div>
@@ -171,6 +171,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
         <div className="flex items-center justify-between gap-3"><div><div className="text-sm">Шрифт в игре</div><div className="muted text-xs">Весь текст HUD и меню Asteria</div></div>
           <Dropdown value={String(fontIdx(c.theme.font))} w={210} set={(v) => theme({ font: +v })} options={FONTS.map((n, i) => ({ value: String(i), label: n }))} /></div>
         {c.theme.menu !== false && <div className="flex items-center justify-between gap-3"><span className="text-sm">Фон меню Minecraft</span><div className="seg">{['Гладкий HD', 'Картинка'].map((l, i) => <button key={l} className={(c.theme.menuBg ?? 0) === i ? 'on' : ''} onClick={() => theme({ menuBg: i })}>{l}</button>)}</div></div>}
+        <OwnBg blur={c.theme.bgBlur !== false} setBlur={(v) => theme({ bgBlur: v })} say={say} />
         <Switch on={!!c.theme.allFont} set={(v) => theme({ allFont: v })} label="Шрифт для всего Minecraft" hint="Чат, ники, меню и названия предметов — выбранным шрифтом (не «Minecraft»)" />
         <Switch on={!!c.theme.lite} set={(v) => theme({ lite: v })} label="Лёгкий режим (больше FPS)" hint="Без теней и бликов на панелях. Визуалы и эффекты в мире всегда немного снижают FPS — выключайте ненужные" />
         <Switch on={c.theme.menu !== false} set={(v) => theme({ menu: v })} label="Свой стиль меню Minecraft" hint="Неоновые кнопки, логотип AsteriaLauncher вместо Minecraft, фон Asteria и без кнопки Realms" />
@@ -184,6 +185,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     {view === 'configs' && pr && <Configs c={c} pr={pr} set={setPresets} say={say} />}
     {view === 'marks' && <MarksTab ver={ver} say={say} />}
     {view === 'abbr' && <AbbrTab />}
+    {view === 'binds' && <BindsTab say={say} />}
     {view === 'crosshair' && c.modules.crosshair && <CrosshairTab m={c.modules.crosshair} on={(v) => mod('crosshair', { on: v })} set={(k, v) => setS('crosshair', k, v)} say={say} />}
 
     {view === 'layout' && <Layout c={c} bg={bg} move={(id, x, y) => mod(id, { hud: [x, y] })} />}
@@ -251,27 +253,60 @@ function Range({ label, min, max, step, v, set, show }: { label: string; min: nu
 type MarkT = { x: number; y: number; z: number; name?: string; color?: string }
 function MarksTab({ ver, say }: { ver: string; say: (s: string) => void }) {
   const [all, setAll] = useState<Record<string, any[]>>({}), [srv, setSrv] = useState(''), [f, setF] = useState({ x: '', y: '', z: '', name: '', color: '#22d3ee' })
-  useEffect(() => { window.api.marksGet(ver).then((d: any) => { const o = d || {}; setAll(o); setSrv((s) => s || Object.keys(o)[0] || 'mc.safimine.ru') }) }, [ver])
+  useEffect(() => { window.api.marksGet(ver).then((d: any) => { const o = d || {}; setAll(o); setSrv((s) => s || Object.keys(o)[0] || 'mc.safimine.ru|minecraft:overworld') }) }, [ver])
   const norm = (m: any): MarkT => Array.isArray(m) ? { x: m[0], y: m[1], z: m[2] } : m
   const list: MarkT[] = (all[srv] || []).map(norm)
   const save = (l: MarkT[]) => { const n = { ...all, [srv]: l }; setAll(n); window.api.marksSet(ver, n) }
   const add = () => { const x = +f.x, y = +f.y, z = +f.z; if ([f.x, f.y, f.z].some((v) => v.trim() === '' || isNaN(+v))) return say('Введите X, Y и Z'); save([...list, { x: Math.floor(x) + 0.5, y: Math.floor(y), z: Math.floor(z) + 0.5, name: f.name || 'Метка ' + (list.length + 1), color: f.color }]); setF({ ...f, x: '', y: '', z: '', name: '' }); say('Метка добавлена — в игре появится через пару секунд') }
-  const servers = Array.from(new Set([...Object.keys(all), 'mc.safimine.ru', 'local']))
+  const DIMS: Record<string, string> = { 'minecraft:overworld': 'Верхний мир', 'minecraft:the_nether': 'Ад', 'minecraft:the_end': 'Энд' }
+  const label = (k: string) => { const [sv, d] = k.split('|'); return (sv === 'local' ? 'Одиночная игра' : sv) + (d ? ' · ' + (DIMS[d] || d.replace(/^minecraft:/, '')) : '') }
+  const servers = Array.from(new Set([...Object.keys(all), 'mc.safimine.ru|minecraft:overworld', 'mc.safimine.ru|minecraft:the_nether', 'mc.safimine.ru|minecraft:the_end', 'local|minecraft:overworld']))
   return <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.3fr)' }}>
     <div className="card rounded-3xl p-5 flex flex-col gap-3"><b className="text-lg">Новая метка</b>
-      <div className="flex items-center gap-2"><span className="text-sm w-20">Сервер</span><select className="flex-1" value={srv} onChange={(e) => setSrv(e.target.value)}>{servers.map((s) => <option key={s} value={s}>{s === 'local' ? 'Одиночная игра' : s}</option>)}</select></div>
+      <div className="flex items-center gap-2"><span className="text-sm w-20">Сервер и мир</span><select className="flex-1" value={srv} onChange={(e) => setSrv(e.target.value)}>{servers.map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></div>
       <div className="grid grid-cols-3 gap-2">{(['x', 'y', 'z'] as const).map((k) => <input key={k} placeholder={k.toUpperCase()} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className="text-center font-mono" />)}</div>
       <input placeholder="Название (База, Шахта…)" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
       <div className="flex items-center justify-between"><span className="text-sm">Цвет</span><ColorPick value={f.color} set={(v) => setF({ ...f, color: v })} size="sm" /></div>
       <button className="btn btn-primary" onClick={add}><Icon n="plus" s={15} /> Добавить</button>
       <p className="muted text-xs">В игре: B — метка туда, куда смотрите (ещё раз B рядом — убрать), Shift+B — убрать все. В чат: <b>.метка 100 64 -200 База</b> — координаты из чата тоже можно скопировать так.</p></div>
-    <div className="card rounded-3xl p-5"><div className="flex items-center justify-between mb-3"><b className="text-lg">Метки · {srv === 'local' ? 'одиночная игра' : srv}</b>{list.length > 0 && <button className="pill" onClick={() => save([])}><Icon n="trash" s={13} />Убрать все</button>}</div>
+    <div className="card rounded-3xl p-5"><div className="flex items-center justify-between mb-3"><b className="text-lg">Метки · {label(srv)}</b>{list.length > 0 && <button className="pill" onClick={() => save([])}><Icon n="trash" s={13} />Убрать все</button>}</div>
       {!list.length && <div className="muted text-sm">Пока нет меток на этом сервере</div>}
       <div className="flex flex-col gap-2">{list.map((m, i) => <div key={i} className="mcard !p-2.5 flex items-center gap-2">
         <ColorPick value={m.color || '#22d3ee'} set={(v) => save(list.map((x, j) => j === i ? { ...x, color: v } : x))} size="sm" />
         <input className="flex-1 min-w-0" value={m.name || ''} placeholder="Без названия" onChange={(e) => save(list.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
         <span className="muted text-xs font-mono shrink-0">{Math.floor(m.x)} {Math.floor(m.y)} {Math.floor(m.z)}</span>
         <button className="iconbtn" title="Удалить" onClick={() => save(list.filter((_, j) => j !== i))}><Icon n="trash" s={14} /></button></div>)}</div></div></div>
+}
+/** own picture for the Minecraft menus: as it is on the title screen, blurred on the others */
+function OwnBg({ blur, setBlur, say }: { blur: boolean; setBlur: (v: boolean) => void; say: (s: string) => void }) {
+  const [img, setImg] = useState<string | null>(null); useEffect(() => { window.api.bgGet?.().then(setImg) }, [])
+  const pick = async () => { const d = await window.api.pickImage(); if (!d) return; const im = new Image(); im.onload = () => {
+      const k = Math.min(1, 2560 / im.width), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d')!.drawImage(im, 0, 0, c.width, c.height)
+      const orig = c.toDataURL('image/png'), b = document.createElement('canvas'); b.width = Math.round(c.width / 2); b.height = Math.round(c.height / 2); const x = b.getContext('2d')!; x.filter = 'blur(14px) brightness(0.85)'; x.drawImage(c, -20, -20, b.width + 40, b.height + 40)
+      window.api.bgSet(orig, b.toDataURL('image/png')); setImg(orig); say('Фон установлен — в игре сразу') }; im.src = d }
+  return <div className="rounded-2xl p-3 flex items-center gap-3" style={{ background: 'var(--chip)' }}>
+    <span className="w-20 h-12 rounded-lg shrink-0 overflow-hidden flex items-center justify-center" style={{ background: 'rgba(0,0,0,.3)' }}>{img ? <img src={img} className="w-full h-full object-cover" /> : <Icon n="image" s={18} />}</span>
+    <div className="flex-1 min-w-0"><b className="text-sm">Свой фон Minecraft</b><div className="muted text-[11px]">В главном меню — как есть, в остальных меню — размыто</div>
+      <div className="mt-1"><Switch on={blur} set={setBlur} label="Размытие в меню" /></div></div>
+    <div className="flex flex-col gap-1"><button className="btn !py-1 text-sm" onClick={pick}>Выбрать</button>{img && <button className="btn !py-1 text-sm" onClick={() => { window.api.bgSet(null, null); setImg(null) }}>Убрать</button>}</div></div>
+}
+/** key -> command: pressed in the game, the command is sent (V -> /spawn) */
+function BindsTab({ say }: { say: (s: string) => void }) {
+  const [list, setList] = useState<{ key: number; cmd: string }[]>([]), [listen, setListen] = useState(-1)
+  useEffect(() => { window.api.bindsGet?.().then((l: any) => setList(l || [])) }, [])
+  const save = (l: { key: number; cmd: string }[]) => { setList(l); window.api.bindsSet(l) }
+  useEffect(() => { if (listen < 0) return
+    const kd = (e: KeyboardEvent) => { e.preventDefault(); e.stopPropagation(); save(list.map((b, i) => i === listen ? { ...b, key: e.code === 'Escape' ? 0 : glfw(e.code) } : b)); setListen(-1) }
+    const md = (e: MouseEvent) => { if (e.button === 0) return; e.preventDefault(); save(list.map((b, i) => i === listen ? { ...b, key: -([0, 3, 2, 4, 5][e.button] || 0) } : b)); setListen(-1) }
+    addEventListener('keydown', kd, true); addEventListener('mousedown', md, true); return () => { removeEventListener('keydown', kd, true); removeEventListener('mousedown', md, true) } }, [listen, list])
+  return <div className="card rounded-3xl p-5 flex flex-col gap-3"><div className="flex items-center justify-between"><div><b className="text-lg">Бинды команд</b><div className="muted text-sm">Нажимаете клавишу в игре — отправляется команда или сообщение. Работает, когда функция «Бинды команд» включена</div></div>
+    <button className="btn btn-primary" onClick={() => save([...list, { key: 0, cmd: '/spawn' }])}><Icon n="plus" s={15} /> Добавить</button></div>
+    {!list.length && <div className="muted text-sm">Пока нет биндов. Например: V → /spawn, H → /home, J → /warp casino</div>}
+    {list.map((b, i) => <div key={i} className="mcard !p-2.5 flex items-center gap-2">
+      <button className={'btn !py-1.5 min-w-[90px] ' + (listen === i ? 'btn-on' : '')} onClick={() => setListen(i)}>{listen === i ? 'Нажмите…' : b.key ? keyName(b.key) : 'Клавиша'}</button>
+      <Icon n="right" s={14} /><input className="flex-1 min-w-0 font-mono" value={b.cmd} placeholder="/spawn" onChange={(e) => save(list.map((x, j) => j === i ? { ...x, cmd: e.target.value } : x))} />
+      <button className="iconbtn" title="Удалить" onClick={() => save(list.filter((_, j) => j !== i))}><Icon n="trash" s={14} /></button></div>)}
+  </div>
 }
 /** what the short enchantment names above players mean (same table as Hud.ABBR in the mod) */
 const ABBR: [string, string][] = [['ЗСн', 'Защита от снарядов'], ['ЗОг', 'Защита от огня / Огнеупорность'], ['ЗВз', 'Защита от взрывов'], ['Защ', 'Защита'], ['Нев', 'Невесомость'], ['Дых', 'Подводное дыхание'], ['Вод', 'Родство с водой'],

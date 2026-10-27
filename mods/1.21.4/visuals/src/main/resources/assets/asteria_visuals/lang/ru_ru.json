@@ -5,5 +5,10 @@
   "modmenu.nameTranslation.asteria_visuals": "Визуалы Asteria",
   "modmenu.descriptionTranslation.asteria_visuals": "Визуалы AsteriaLauncher: свой HUD, частицы, шлейфы, питомцы, метка цели, «Сейчас играет», зум и многое другое. Меню — Right Shift. Только визуальные эффекты, без нечестных преимуществ.",
   "key.asteria.freelook": "Свободный обзор (удерживать)",
-  "key.asteria.mark": "Поставить / убрать метку"
+  "key.asteria.mark": "Поставить / убрать метку",
+  "key.asteria.music_toggle": "Музыка: пауза / играть",
+  "key.asteria.music_next": "Музыка: следующий трек",
+  "key.asteria.music_prev": "Музыка: предыдущий трек",
+  "key.asteria.music_up": "Музыка: громче",
+  "key.asteria.music_down": "Музыка: тише"
 }

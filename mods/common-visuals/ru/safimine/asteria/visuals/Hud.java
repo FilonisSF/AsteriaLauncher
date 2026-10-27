@@ -69,6 +69,7 @@ public final class Hud {
         if (V.on("markers") && !editing) try { marks(game, W, H); } catch (Throwable ignored) {}
         if (!Fx.DMG.isEmpty() && !editing) try { damageNumbers(W, H); } catch (Throwable ignored) {}
         if (alertAt > 0) try { alertBanner(W, H); } catch (Throwable ignored) {}
+        if (Fx.totemAt > 0) try { totemPop(game, W, H); } catch (Throwable ignored) {}
     }
 
     // ------------------------------------------------------------------ wave 2: island, hotbar, inventory, totems, cooldowns, music
@@ -81,16 +82,16 @@ public final class Hud {
         p.add(fps + " fps"); int ping = game.ping(); if (ping >= 0) p.add(ping + " ms");
         return String.join("  ·  ", p);
     }
-    private static float[] islandSize(Game game) { return new float[]{D.anim("island.w", Math.min(260, D.w(islandText(game)) + 22), 10), 18}; }
+    private static float[] islandSize(Game game) { return new float[]{D.anim("island.w", Math.min(280, D.w(islandText(game)) + 36), 10), 18}; }
     private static void island(Game game) {
         String t = islandText(game); float w = islandSize(game)[0];
         D.shadow(0, 0, w, 18, 9, 1.2f);
         int base = D.alpha(0x05090D, (int) (255 * Math.max(0.55f, V.bg)));
         D.round(0, 0, w, 18, 9, D.mix(base, D.alpha(V.a1() & 0xFFFFFF, 255), 0.22f), D.mix(base, D.alpha(V.a2() & 0xFFFFFF, 255), 0.22f)); // theme-tinted glass
-        D.round(w * 0.2f, 16.6f, w * 0.8f, 17.6f, 0.5f, D.a(V.a1(), 0.9f), D.a(V.a2(), 0.9f));
-        String shown = t; while (D.w(shown) > w - 16 && shown.length() > 3) shown = shown.substring(0, shown.length() - 2);
+        D.mark(4, 1, 16);
+        String shown = t; while (D.w(shown) > w - 30 && shown.length() > 3) shown = shown.substring(0, shown.length() - 2);
         if (!shown.equals(t)) shown = shown + "…";
-        D.g.text(shown, (w - D.w(shown)) / 2, 5, 0xFFFFFFFF, V.shadow);
+        D.g.text(shown, 20 + (w - 24 - D.w(shown)) / 2, 5, 0xFFFFFFFF, V.shadow);
     }
     private static float[] hotbarSize(Game game) { return new float[]{9 * 20 + 4 + (game.offhand() != null ? 26 : 0), 22}; }
     private static void slot(Game game, Object st, float x, float y, float sz) {
@@ -133,12 +134,17 @@ public final class Hud {
         for (Object st : all) if (st != null && game.itemCooldown(st) > 0.001f && seen.add(game.itemId(st))) out.add(st);
         return out;
     }
+    private static final Map<String, float[]> CD = new HashMap<>(); // item -> last progress, time, speed
     private static void cooldownList(Game game, List<Object> l) {
         D.panel(0, 0, 104, Math.max(1, l.size()) * 20 + 4, 5);
         float y = 2;
-        for (Object st : l) { float f = game.itemCooldown(st);
+        long now = System.currentTimeMillis();
+        for (Object st : l) { float f = game.itemCooldown(st); String id = game.itemId(st); float[] r = CD.get(id);
+            if (r == null || f > r[0] + 0.02f) r = new float[]{f, now % 100000, 0}; else if (f < r[0]) { float dt = ((now % 100000) - r[1]) / 1000f; if (dt > 0.05f) { float rate = (r[0] - f) / dt; r[2] = r[2] == 0 ? rate : r[2] * 0.7f + rate * 0.3f; r[0] = f; r[1] = now % 100000; } }
+            CD.put(id, r); String left = r[2] > 0 ? String.format(java.util.Locale.ROOT, "%.1fс", f / r[2]) : "";
             D.g.item(st, 3, (int) y + 1);
-            D.round(24, y + 8, 98, y + 12, 2, 0x30FFFFFF); D.round(24, y + 8, 24 + 74 * f, y + 12, 2, V.a1(), V.a2());
+            D.round(24, y + 8, 98 - (left.isEmpty() ? 0 : 24), y + 12, 2, 0x30FFFFFF); D.round(24, y + 8, 24 + (74 - (left.isEmpty() ? 0 : 24)) * f, y + 12, 2, V.a1(), V.a2());
+            if (!left.isEmpty()) D.textS(left, 78, y + 6.5f, 0.8f, 0xFFFFFFFF);
             y += 20; }
         if (l.isEmpty()) D.g.text("Перезарядки", 6, 8, 0xFF9FB3C0, false);
     }
@@ -155,7 +161,9 @@ public final class Hud {
         String aa = a; while (D.w(aa) * 0.8f > 114 && aa.length() > 3) aa = aa.substring(0, aa.length() - 2); if (!aa.equals(a)) aa += "…";
         D.textS(aa, 37, 15, 0.8f, 0xFF9FB3C0);
         double d = Media.dur(), p = Media.pos(); float f = d > 0 ? (float) Math.min(1, p / d) : 0;
-        D.round(37, 27, 150, 29, 1, 0x30FFFFFF); D.round(37, 27, 37 + 113 * f, 29, 1, V.a1(), V.a2());
+        String tm = d > 0 ? Media.time(p) + " / " + Media.time(d) : ""; float tw = D.w(tm) * 0.6f;
+        D.round(37, 28, 150 - tw - 4, 30, 1, 0x30FFFFFF); D.round(37, 28, 37 + (113 - tw - 4) * f, 30, 1, V.a1(), V.a2());
+        if (!tm.isEmpty()) D.textS(tm, 150 - tw, 26.5f, 0.6f, 0xFF9FB3C0);
     }
 
     /** elements that always grow from their middle */
@@ -302,7 +310,7 @@ public final class Hud {
         D.panel(0, 0, w, h, 6);
         if (t == null) { D.text("Цель", 8, 15, 0xAAFFFFFF); return; }
         boolean head = V.bool("targethud", "head"); float tx = 7;
-        if (head) { Object skin = game.skin(t); float hs = 26; D.round(5, 5, 5 + hs + 2, 5 + hs + 2, 7, D.a(V.a1(), 0.9f), D.a(V.a2(), 0.9f));
+        if (head) { Object skin = game.skin(t); float hs = 26; D.round(5.4f, 5.4f, 5 + hs + 1.6f, 5 + hs + 1.6f, 6.6f, D.a(V.a1(), 0.6f), D.a(V.a2(), 0.6f));
             if (skin != null) D.g.headRound(skin, 6, 6, hs, 6);
             else { D.round(6, 6, 6 + hs, 6 + hs, 6, 0xFF10202A); boolean drawn = false; try { drawn = D.g.entity(t, 6, 6, hs); } catch (Throwable ignored) {}
                 if (!drawn) { Object egg = game.entityIcon(t); if (egg != null) D.g.item(egg, 6 + 5, 6 + 5); else D.icon("dot", 6 + 7, 6 + 7, 12, 0xFF9FB3C0); } }
@@ -423,6 +431,14 @@ public final class Hud {
             String label = (m.name.isEmpty() ? "" : m.name + "  ·  ") + (V.bool("markers", "dist") ? dist + " м" : ""); if (label.endsWith("  ·  ")) label = label.substring(0, label.length() - 5);
             if (!label.isEmpty()) { float tw = D.w(label) * 0.8f; D.round(x - tw / 2 - 4, y + 16, x + tw / 2 + 4, y + 26, 4, D.a(0xFF05090D, 0.7f * near)); D.round(x - tw / 2 - 4, y + 16, x - tw / 2 - 2, y + 26, 1, D.a(c, near)); D.textS(label, x - tw / 2, y + 17.5f, 0.8f, D.a(0xFFFFFFFF, near)); } }
     }
+    private static void totemPop(Game game, int W, int H) {
+        float t = (System.currentTimeMillis() - Fx.totemAt) / 1300f; if (t >= 1) { Fx.totemAt = 0; return; }
+        Object tot = game.totemStack(); float cx = W / 2f, cy = H * 0.42f, a = t < 0.75f ? 1 : (1 - t) / 0.25f, pop = D.ease(Math.min(1, t * 3.2f)) * (1 + 0.15f * (float) Math.sin(t * 12) * (1 - t));
+        for (int i = 0; i < 3; i++) { float rt = Math.max(0, t * 1.6f - i * 0.18f); if (rt <= 0 || rt >= 1) continue; float rr = 14 + rt * 70; D.ring(cx, cy, rr, rr + 2.2f, D.a(V.grad(i * 0.3f), (1 - rt) * a), D.a(0xFFFFD86B, (1 - rt) * a)); }
+        for (int i = 8; i >= 1; i--) D.circle(cx, cy, 6 + i * 4 * pop, D.alpha(0xFFE08A, (int) (10 * a)));
+        if (tot != null) { float s = 3.2f * pop; D.g.push(cx - 8 * s, cy - 8 * s, s); D.g.item(tot, 0, 0); D.g.pop(); }
+        String txt = "Тотем спас вас!"; D.textS(txt, cx - D.w(txt) * 0.6f, cy + 34 * pop, 1.2f, D.a(0xFFFFE8A0, a));
+    }
     // ------------------------------------------------------------------ alerts (armour, HP, food, totem, effects)
     private static String alertT = "", alertS = ""; private static int alertC; private static long alertAt; private static String alertIcon = "heart";
     public static void alert(String title, String text, int color, String icon) {
@@ -489,11 +505,16 @@ public final class Hud {
     }
 
     // ------------------------------------------------------------------ crosshair
-    private static void xrect(float x0, float y0, float x1, float y1, int c, int o, float ot) { if (ot > 0) D.rect(x0 - ot, y0 - ot, x1 + ot, y1 + ot, o); D.rect(x0, y0, x1, y1, c); }
+    private static float xrot, xcx, xcy;
+    private static void rrect(float x0, float y0, float x1, float y1, int c) {
+        if (xrot == 0) { D.rect(x0, y0, x1, y1, c); return; } double a = Math.toRadians(xrot), cs = Math.cos(a), sn = Math.sin(a); float[] xy = new float[8]; float[][] p = {{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}};
+        for (int i = 0; i < 4; i++) { float dx = p[i][0] - xcx, dy = p[i][1] - xcy; xy[i * 2] = (float) (xcx + dx * cs - dy * sn); xy[i * 2 + 1] = (float) (xcy + dx * sn + dy * cs); }
+        D.g.poly(xy, new int[]{c, c, c, c}); }
+    private static void xrect(float x0, float y0, float x1, float y1, int c, int o, float ot) { if (ot > 0) rrect(x0 - ot, y0 - ot, x1 + ot, y1 + ot, o); rrect(x0, y0, x1, y1, c); }
     private static void crosshair(int W, int H, Game game) {
         int st = V.mode("crosshair", "style"); if (st == 7) return; // vanilla: the game draws its own
         if (V.bool("crosshair", "hidef5") && game.thirdPerson()) return;
-        float cx = W / 2f, cy = H / 2f, al = (float) V.num("crosshair", "alpha"); int c = D.a(V.color("crosshair", "color"), al), o = D.a(0xFF000000, al * 0.85f);
+        float cx = W / 2f, cy = H / 2f, al = (float) V.num("crosshair", "alpha"); xrot = (float) V.num("crosshair", "rotate"); xcx = cx; xcy = cy; int c = D.a(V.color("crosshair", "color"), al), o = D.a(0xFF000000, al * 0.85f);
         float size = (float) V.num("crosshair", "size"), gap = (float) V.num("crosshair", "gap"), th = (float) V.num("crosshair", "thick"), ot = V.bool("crosshair", "outline") ? (float) V.num("crosshair", "othick") : 0;
         if (V.bool("crosshair", "dynamic")) gap += (1 - game.cooldown()) * 4;
         if (st == 8) { java.io.File f = new java.io.File(V.dir(), "asteria-crosshair.png"); float s = size * 4 + 8;
@@ -501,7 +522,7 @@ public final class Hud {
         if (st == 6) { String p = V.text("crosshair", "pattern"); int n = (int) Math.round(Math.sqrt(p.length())); if (n < 3 || n * n != p.length()) return;
             float cs = th, x0 = cx - n * cs / 2, y0 = cy - n * cs / 2;
             for (int pass = ot > 0 ? 0 : 1; pass < 2; pass++) for (int i = 0; i < n * n; i++) if (p.charAt(i) == '1') { float x = x0 + (i % n) * cs, y = y0 + (i / n) * cs;
-                if (pass == 0) D.rect(x - ot, y - ot, x + cs + ot, y + cs + ot, o); else D.rect(x, y, x + cs, y + cs, c); }
+                if (pass == 0) rrect(x - ot, y - ot, x + cs + ot, y + cs + ot, o); else rrect(x, y, x + cs, y + cs, c); }
             return; }
         if (st == 0 || st == 1 || st == 5) for (float[] d : new float[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) { if (st == 5 && d[1] < 0) continue;
             float x1 = cx + d[0] * gap, y1 = cy + d[1] * gap, x2 = cx + d[0] * (gap + size), y2 = cy + d[1] * (gap + size), hx = d[0] == 0 ? th / 2 : 0, hy = d[1] == 0 ? th / 2 : 0;

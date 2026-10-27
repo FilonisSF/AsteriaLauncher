@@ -39,7 +39,7 @@ public final class Fx {
     private static java.io.File marksFile() { return new java.io.File(V.dir(), "asteria-marks.json"); }
     /** loads the marks of the current server (single player = "local") */
     public static void marksServer(Game g) {
-        String srv = g.server(); if (srv == null) srv = "local"; long now = System.currentTimeMillis();
+        String srv = (g.server() == null ? "local" : g.server()) + "|" + g.dimension(); long now = System.currentTimeMillis();
         if (srv.equals(marksFor) && now - marksCheck < 1500) return; marksCheck = now; long m = marksFile().exists() ? marksFile().lastModified() : -1;
         if (srv.equals(marksFor) && m == marksMtime) return; marksFor = srv; marksMtime = m; MARKS.clear(); // the launcher edits the same file
         try { com.google.gson.JsonObject o = new com.google.gson.JsonParser().parse(new String(java.nio.file.Files.readAllBytes(marksFile().toPath()), java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
@@ -93,6 +93,56 @@ public final class Fx {
 
     // ------------------------------------------------------------------ target
     private static Object target; private static long targetAt, killMsgAt;
+    // ------------------------------------------------------------------ hitboxes
+    private static void hitboxes(R3 r, Game g, float pt) {
+        Object tgt = target(g); double range = V.num("hitboxes", "range"); Object self = g.self(); double[] me = g.pos(self, pt);
+        List<Object> list = new ArrayList<>(); if (V.bool("hitboxes", "players")) list.addAll(g.players()); if (V.bool("hitboxes", "mobs")) for (Object e : g.living(range)) if (!list.contains(e)) list.add(e);
+        float al = (float) V.num("hitboxes", "alpha"), fa = (float) V.num("hitboxes", "fillalpha");
+        for (Object e : list) { if (e == self || !g.alive(e)) continue; double[] p = g.pos(e, pt); if (Math.abs(p[0] - me[0]) + Math.abs(p[2] - me[2]) > range * 1.5) continue;
+            double w = g.width(e) / 2, h = g.height(e); int col = V.bool("hitboxes", "target") && e == tgt ? V.color("hitboxes", "tcolor") : V.color("hitboxes", "color");
+            double x0 = p[0] - w, y0 = p[1], z0 = p[2] - w, x1 = p[0] + w, y1 = p[1] + h, z1 = p[2] + w;
+            if (V.bool("hitboxes", "fill") && fa > 0) { int fc = D.a(col, fa); r.begin(R3.QUADS, true);
+                double[][] f = {{x0,y0,z0,x1,y0,z0,x1,y1,z0,x0,y1,z0},{x0,y0,z1,x0,y1,z1,x1,y1,z1,x1,y0,z1},{x0,y0,z0,x0,y1,z0,x0,y1,z1,x0,y0,z1},{x1,y0,z0,x1,y0,z1,x1,y1,z1,x1,y1,z0},{x0,y1,z0,x1,y1,z0,x1,y1,z1,x0,y1,z1}};
+                for (double[] q : f) for (int i = 0; i < 4; i++) r.v(q[i * 3], q[i * 3 + 1], q[i * 3 + 2], fc); r.end(); }
+            int lc = D.a(col, al); r.begin(R3.LINES, true);
+            double[][] ed = {{x0,y0,z0,x1,y0,z0},{x1,y0,z0,x1,y0,z1},{x1,y0,z1,x0,y0,z1},{x0,y0,z1,x0,y0,z0},{x0,y1,z0,x1,y1,z0},{x1,y1,z0,x1,y1,z1},{x1,y1,z1,x0,y1,z1},{x0,y1,z1,x0,y1,z0},{x0,y0,z0,x0,y1,z0},{x1,y0,z0,x1,y1,z0},{x1,y0,z1,x1,y1,z1},{x0,y0,z1,x0,y1,z1}};
+            for (double[] q : ed) { r.v(q[0], q[1], q[2], lc); r.v(q[3], q[4], q[5], lc); }
+            if (V.bool("hitboxes", "look")) { double yr = Math.toRadians(g.yawOf(e)), ey = p[1] + h * 0.9; r.v(p[0], ey, p[2], lc); r.v(p[0] - Math.sin(yr) * 2, ey, p[2] + Math.cos(yr) * 2, D.a(col, 0)); }
+            r.end(); }
+    }
+    // ------------------------------------------------------------------ trajectories: the flight of what you are about to throw / shoot
+    private static void trajectory(R3 r, Game g, long now) {
+        double[] a = g.aim(); if (a == null || a[0] == 0) return; int kind = (int) a[0];
+        double speed = kind == 1 ? 3 * a[1] : kind == 2 ? 3.15 : kind == 4 ? 2.5 : kind == 5 ? 0.5 : 1.5, grav = kind == 1 || kind == 2 || kind == 4 ? 0.05 : kind == 5 ? 0.05 : 0.03, drag = kind == 4 ? 0.99 : 0.99;
+        if (kind == 1 && a[1] < 0.1) return;
+        double yaw = Math.toRadians(a[5]), pit = Math.toRadians(a[6] - (kind == 5 ? 20 : 0)); double vx = -Math.sin(yaw) * Math.cos(pit) * speed, vy = -Math.sin(pit) * speed, vz = Math.cos(yaw) * Math.cos(pit) * speed;
+        double x = a[2] - Math.cos(yaw) * 0.16, y = a[3] - 0.1, z = a[4] - Math.sin(yaw) * 0.16; int col = V.color("trajectories", "color");
+        r.begin(R3.STRIP, true); double[] hit = null;
+        for (int i = 0; i < 240; i++) { double nx = x + vx, ny = y + vy, nz = z + vz;
+            for (int s = 1; s <= 4 && hit == null; s++) { double fx = x + vx * s / 4, fy = y + vy * s / 4, fz = z + vz * s / 4; if (g.solid(fx, fy, fz)) hit = new double[]{fx, fy, fz}; }
+            float f = 1 - i / 240f; int cc = D.a(col, 0.9f * f);
+            r.v(x, y - 0.02, z, cc); r.v(x, y + 0.02, z, cc);
+            if (hit != null) break; x = nx; y = ny; z = nz; vx *= drag; vy = vy * drag - grav; vz *= drag; if (y < -64) break; }
+        r.end();
+        if (hit != null && V.bool("trajectories", "landing")) { r.begin(R3.STRIP, true); double pr = 0.35 + 0.08 * Math.sin(now / 150.0);
+            for (int i = 0; i <= 24; i++) { double an = Math.PI * 2 * i / 24; r.v(hit[0] + Math.cos(an) * pr, hit[1] + 0.03, hit[2] + Math.sin(an) * pr, D.a(col, 0.95f)); r.v(hit[0] + Math.cos(an) * (pr - 0.12), hit[1] + 0.03, hit[2] + Math.sin(an) * (pr - 0.12), D.a(col, 0)); }
+            r.end(); }
+    }
+    /** small items in the hand: extra scale for the item's category */
+    public static float miniScale(int cat) {
+        if (!V.on("miniitems")) return 1; String[] k = {"weapons", "tools", "blocks", "food", "other"};
+        return V.bool("miniitems", k[Math.max(0, Math.min(4, cat))]) ? (float) V.num("miniitems", "size") : 1;
+    }
+    // ------------------------------------------------------------------ command binds (config/asteria-binds.json, edited in the launcher)
+    private static final List<Object[]> BINDS = new ArrayList<>(); private static long bindsMtime = -2, bindsCheck; private static final java.util.Map<Integer, Boolean> BHELD = new java.util.HashMap<>();
+    public static void commandBinds(Game g, boolean screenOpen) {
+        if (!V.on("cmdbinds")) return; long now = System.currentTimeMillis();
+        if (now - bindsCheck > 2000) { bindsCheck = now; java.io.File f = new java.io.File(V.dir(), "asteria-binds.json"); long m = f.exists() ? f.lastModified() : -1;
+            if (m != bindsMtime) { bindsMtime = m; BINDS.clear(); try { for (com.google.gson.JsonElement e : new com.google.gson.JsonParser().parse(new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8)).getAsJsonArray()) {
+                com.google.gson.JsonObject o = e.getAsJsonObject(); if (o.has("key") && o.has("cmd") && o.get("key").getAsInt() != 0) BINDS.add(new Object[]{o.get("key").getAsInt(), o.get("cmd").getAsString()}); } } catch (Exception ignored) {} } }
+        for (Object[] bnd : BINDS) { int key = (Integer) bnd[0]; boolean down = !screenOpen && g.rawKey(key); Boolean was = BHELD.put(key, down);
+            if (down && (was == null || !was)) { String cmd = ((String) bnd[1]).trim(); if (!cmd.isEmpty()) { if (cmd.startsWith("/")) g.command(cmd); else g.chat(cmd); } } }
+    }
     // ------------------------------------------------------------------ alerts
     private static final java.util.Map<String, Long> ALERTED = new java.util.HashMap<>(); private static int lastTotems = -1; private static long alertAll;
     private static boolean once(String k, long now, long gap) { Long t = ALERTED.get(k); if (t != null && now - t < gap) return false; ALERTED.put(k, now); return true; }
@@ -109,7 +159,7 @@ public final class Fx {
     // ------------------------------------------------------------------ pets: following and looks
     static final class Follow { double[] pos, prev, owner, spot; double phase, speed, yaw, idleYaw; long wanderAt; }
     private static Follow selfF; private static final java.util.Map<String, Follow> OTHER_F = new java.util.HashMap<>();
-    static boolean onGroundKind(int k) { return k == MINI || (k >= 10 && k != 14); } // 3D pets walk, the pictures and the bee float
+    static boolean onGroundKind(int k) { return k == MINI || (k >= 10 && k != 14); } // 16 = own model: walks // 3D pets walk, the pictures and the bee float
     /** one tick of a pet near its owner: wanders around when the owner stands, follows behind (never in front) when the owner moves */
     static void follow(Follow f, double[] o, boolean ground, long seed) {
         double oy = o[1] + (ground ? 0 : 1.35);
@@ -174,7 +224,13 @@ public final class Fx {
     private static final java.util.Map<String, Object> OTHER_E = new java.util.HashMap<>(); // name -> player entity (for the mini-me skin)
     private static final java.util.Map<String, double[]> WALK = new java.util.HashMap<>();  // mini-me: name -> phase, last x, last z, yaw, speed
     private static final java.util.Map<String, double[]> OTHER = new java.util.HashMap<>(); // name -> prev x,y,z, cur x,y,z
-    private static long petsAt;
+    private static long petsAt; private static volatile boolean revOk = true, revBusy; private static volatile String revLast = "";
+    private static void checkRev() {
+        final String api = System.getProperty("asteria.api"); if (api == null || api.isEmpty() || revBusy) return; revBusy = true;
+        Thread t = new Thread(() -> { try { java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(api + "/rev").openConnection(); c.setConnectTimeout(4000); c.setReadTimeout(4000);
+                if (c.getResponseCode() != 200) { revOk = false; return; } String s; try (java.io.InputStream in = c.getInputStream()) { s = new java.util.Scanner(in, "UTF-8").useDelimiter("\\A").next(); }
+                if (!s.equals(revLast)) { revLast = s; fetchPets(); } } catch (Throwable e) { revOk = false; } finally { revBusy = false; } }, "asteria-rev"); t.setDaemon(true); t.start();
+    }
     private static void fetchPets() {
         final String api = System.getProperty("asteria.api"); if (api == null || api.isEmpty()) return;
         Thread t = new Thread(() -> {
@@ -208,7 +264,8 @@ public final class Fx {
             else { if (V.on("killeffect") && targetPos != null && now0 - targetAt < 5000) kill(targetPos, targetH, now0);
                 if (V.on("sounds") && V.mode("sounds", "kill") > 0 && now0 - targetAt < 5000) sound(KILL_SOUNDS[V.mode("sounds", "kill") - 1], (float) V.num("sounds", "volume"));
                 if (V.on("killmsg") && now0 - targetAt < 5000 && now0 - killMsgAt > 3000 && g.isPlayer(target)) { killMsgAt = now0;
-                    String txt = V.text("killmsg", "text").replace("{name}", g.playerName(target)).trim();
+                    String nick = g.playerName(target), txt = V.text("killmsg", "text").replace("{name}", nick).trim(); int adr = V.mode("killmsg", "address");
+                    if (adr == 1 && !txt.contains(nick)) txt = nick + ", " + txt; else if (adr == 2 && !txt.contains(nick)) txt = txt + ", " + nick;
                     if (!txt.isEmpty()) { if (V.mode("killmsg", "chat") == 1 && !txt.startsWith("!")) txt = "!" + txt; final String m = txt; try { g.chat(m); } catch (Throwable ignored) {} } }
                 target = null; }
         }
@@ -253,7 +310,7 @@ public final class Fx {
         // our pet
         if (V.on("pet")) { if (selfF == null) selfF = new Follow(); follow(selfF, p, onGroundKind(V.mode("pet", "kind")), now0); petPos = selfF.pos; petPrev = selfF.prev; } else { selfF = null; petPos = null; }
         // pets of other Asteria players (list refreshed every 10 s)
-        if (now0 - petsAt > 10000) { petsAt = now0; fetchPets(); }
+        if (now0 - petsAt > (revOk ? 2000 : 10000)) { petsAt = now0; if (revOk) checkRev(); else fetchPets(); }
         if (V.bool("pet", "others") && !PET_OF.isEmpty()) {
             java.util.Set<String> seen = new java.util.HashSet<>();
             for (Object e : g.players()) { String n = g.playerName(e).toLowerCase(); double[] k = PET_OF.get(n); if (k == null) continue; seen.add(n); OTHER_E.put(n, e);
@@ -352,10 +409,12 @@ public final class Fx {
         if (!FX_OF.isEmpty()) for (Object e : g.players()) { String fx = FX_OF.get(g.playerName(e).toLowerCase()); if (fx == null || !g.alive(e)) continue;
             if (fx.contains("halo")) halo(r, g, e, pt, now); if (fx.contains("hat,") || fx.endsWith("hat")) hat(r, g, e, pt, now, g.yawOf(e));
             if (V.bool("cosmetics", "others") && fx.contains("c:")) try { String[] c = fx.substring(fx.indexOf("c:") + 2).split("[,;]")[0].split("\\."); double[] q = g.pos(e, pt);
-                Cosmetics.draw(r, q, g.yawOf(e), g.yawOf(e), g.height(e), Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2]), c.length > 3 ? (int) Long.parseLong(c[3], 16) : -1, false, Math.max(0.2f, g.light(q[0], q[1] + 1, q[2])), now); } catch (Throwable ignored) {} }
+                Cosmetics.who = g.playerName(e).toLowerCase(); Cosmetics.draw(r, q, g.yawOf(e), g.yawOf(e), g.height(e), Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2]), c.length > 3 ? (int) Long.parseLong(c[3], 16) : -1, false, Math.max(0.2f, g.light(q[0], q[1] + 1, q[2])), now); } catch (Throwable ignored) {} finally { Cosmetics.who = ""; } }
         if (V.on("cosmetics") && g.thirdPerson()) try { double[] q = g.pos(self, pt);
             Cosmetics.draw(r, q, g.bodyYaw(pt), g.yaw(), g.height(self), V.mode("cosmetics", "wings"), V.mode("cosmetics", "hat"), V.mode("cosmetics", "back"), V.bool("cosmetics", "tint") ? -1 : V.color("cosmetics", "color"), !g.onGround(), Math.max(0.2f, g.light(q[0], q[1] + 1, q[2])), now); } catch (Throwable ignored) {}
         if (V.on("markers") && !MARKS.isEmpty()) markBeams(r, g, now);
+        if (V.on("hitboxes")) try { hitboxes(r, g, pt); } catch (Throwable ignored) {}
+        if (V.on("trajectories")) try { trajectory(r, g, now); } catch (Throwable ignored) {}
         if (!PARTS.isEmpty()) { if (V.mode("hitparticles", "style") >= 5) texParticles(r, PARTS, V.mode("hitparticles", "style") - 5, 0.16, now, pt, false); else particles(r, now); }
         if (!KPARTS.isEmpty()) { r.begin(R3.QUADS, true); for (double[] q : KPARTS) { float life = (float) ((now - q[6]) / q[7]), al = 1 - life; int c = D.a(V.grad((float) q[8]), al);
             double x = q[0] + q[3] * pt, y = q[1] + q[4] * pt, z = q[2] + q[5] * pt; shard(r, x, y, z, 0.16 * (0.6 + q[8]), q[8] * 6.28 + life * 4, c, D.a(0xFFFFFFFF, al)); } r.end(); }
@@ -441,7 +500,9 @@ public final class Fx {
         float lt = Math.max(0.16f, g.light(pp[0], pp[1] + 0.4, pp[2]));
         shadow(r, pp[0], pp[1] - (onGroundKind(kind) ? 0 : 1.35) + 0.02, pp[2], 0.32 * size, lt);
         if (kind == MINI && skin != null) { drawMini(r, who, pp, skin, size, lt); return; }
-        if (kind >= 10 && kind - 10 < VOX.length) { drawVox(r, VOX[kind - 10], pp, f, size, lt, now); return; }
+        if (kind == 16) { java.io.File mf = who.isEmpty() ? Model.own("pet") : Model.other(who, "pet"); double mv = Math.min(1, f.speed * 9), hop = Math.abs(Math.sin(f.phase)) * 0.08 * mv + Math.sin(now / 600.0) * 0.015, yaw = Math.toRadians(f.yaw), cy = Math.cos(yaw), sy = Math.sin(yaw), k = size;
+            if (Model.draw(r, mf, (x, y, z) -> new double[]{pp[0] + (x * cy - z * sy) * k, pp[1] + (y + hop) * k, pp[2] + (x * sy + z * cy) * k}, lt)) return; }
+        int vi = kind < 16 ? kind - 10 : kind - 11; if (kind >= 10 && kind != 16 && vi < VOX.length) { drawVox(r, VOX[vi], pp, f, size, lt, now); return; }
         drawPet(r, pp, kind, size, now, f, lt);
     }
     private static void shadow(R3 r, double x, double y, double z, double rad, float lt) {
@@ -455,43 +516,90 @@ public final class Fx {
     // pivots: head x,y,z; tail x,y,z; leg top y; style (0 walk, 1 hop, 2 squash, 3 fly)
     static final class Vox { final float[][] b; final float[] pv; Vox(float[] pv, float[]... b) { this.pv = pv; this.b = b; } }
     private static float[] bx(double x0, double y0, double z0, double x1, double y1, double z1, int c, int part) { return new float[]{(float) x0, (float) y0, (float) z0, (float) x1, (float) y1, (float) z1, c >>> 16, part, c & 0xFFFF}; } // colour kept exactly as two 16-bit halves
+    // colours shared by the pets
+    private static final int WH = 0xFFFFFFFF, CREAM = 0xFFFFF4E4, PINK = 0xFFFF9FB8, BLUSH = 0xFFFF8FAE;
+    /** both eyes: iris, pupil, two shine dots (all part 9, so they blink together); eyes on the plane z, centred at x = +-ex, from y0 to y1 */
+    private static float[][] eyes(double ex, double y0, double y1, double z, double w, int iris, int pupil, double pw) {
+        java.util.List<float[]> l = new java.util.ArrayList<>(); double h = y1 - y0;
+        for (int s = -1; s <= 1; s += 2) { double cx = s * ex;
+            l.add(bx(cx - w / 2, y0, z, cx + w / 2, y1, z + 0.12, iris, 9));
+            if (pw > 0) l.add(bx(cx - pw / 2, y0 + h * 0.08, z + 0.12, cx + pw / 2, y1 - h * 0.08, z + 0.2, pupil, 9));
+            l.add(bx(cx - w * 0.38, y0 + h * 0.58, z + 0.2, cx - w * 0.38 + w * 0.3, y0 + h * 0.88, z + 0.26, WH, 9));
+            l.add(bx(cx + w * 0.12, y0 + h * 0.16, z + 0.2, cx + w * 0.12 + w * 0.16, y0 + h * 0.32, z + 0.26, 0xD0FFFFFF, 9)); }
+        return l.toArray(new float[0][]);
+    }
+    /** the same box on both sides (x mirrored) */
+    private static float[][] pair(double x0, double y0, double z0, double x1, double y1, double z1, int c, int part) { return new float[][]{bx(x0, y0, z0, x1, y1, z1, c, part), bx(-x1, y0, z0, -x0, y1, z1, c, part == 4 ? 5 : part == 6 ? 7 : part)}; }
+    private static float[][] cat(float[][]... a) { java.util.List<float[]> l = new java.util.ArrayList<>(); for (float[][] x : a) java.util.Collections.addAll(l, x); return l.toArray(new float[0][]); }
+    private static float[][] one(float[]... b) { return b; }
     static final Vox[] VOX = {
-        new Vox(new float[]{0, 6, 4.5f, 0, 6.8f, -4, 3, 0}, // kitten
-            bx(-2.5, 3, -4, 2.5, 7.5, 4, 0xFFF0A050, 0), bx(-2.6, 7.4, -2.6, 2.6, 7.6, -1.8, 0xFFD27F2E, 0), bx(-2.6, 7.4, 0.2, 2.6, 7.6, 1, 0xFFD27F2E, 0), bx(-1.5, 3.4, 4, 1.5, 6.6, 4.3, 0xFFFFF4E6, 0),
-            bx(-3, 5, 3, 3, 10.5, 8.5, 0xFFF4AE60, 1), bx(-1.6, 5.5, 8.5, 1.6, 7.4, 9.4, 0xFFFFF0DC, 1), bx(-0.5, 7.1, 9.4, 0.5, 7.7, 9.6, 0xFFFF8FA8, 1),
-            bx(-2.3, 8, 8.5, -0.9, 9.4, 8.7, 0xFF20242E, 9), bx(0.9, 8, 8.5, 2.3, 9.4, 8.7, 0xFF20242E, 9), bx(-1.9, 8.9, 8.7, -1.5, 9.3, 8.8, 0xFFFFFFFF, 9), bx(1.3, 8.9, 8.7, 1.7, 9.3, 8.8, 0xFFFFFFFF, 9),
-            bx(-3, 10.5, 4.5, -1.2, 12.5, 6.5, 0xFFE08840, 3), bx(1.2, 10.5, 4.5, 3, 12.5, 6.5, 0xFFE08840, 3), bx(-2.6, 10.5, 6.5, -1.6, 11.8, 6.7, 0xFFFFA6BF, 3), bx(1.6, 10.5, 6.5, 2.6, 11.8, 6.7, 0xFFFFA6BF, 3),
-            bx(-2.3, 0, 2, -0.8, 3, 3.5, 0xFFE89A4C, 4), bx(0.8, 0, 2, 2.3, 3, 3.5, 0xFFE89A4C, 5), bx(-2.3, 0, -3.5, -0.8, 3, -2, 0xFFE89A4C, 6), bx(0.8, 0, -3.5, 2.3, 3, -2, 0xFFE89A4C, 7),
-            bx(-0.7, 6, -9, 0.7, 7.4, -4, 0xFFE08840, 2), bx(-0.75, 6, -10, 0.75, 7.45, -9, 0xFFFFF4E6, 2)),
-        new Vox(new float[]{0, 6.5f, 4.5f, 0, 6.5f, -4, 3, 0}, // fox
-            bx(-2.4, 3, -4, 2.4, 7.4, 4, 0xFFE8742C, 0), bx(-1.6, 3.2, 3.9, 1.6, 6.2, 4.2, 0xFFFFF4EA, 0),
-            bx(-3, 5, 3, 3, 10.3, 8, 0xFFEE8236, 1), bx(-1.8, 5, 8, 1.8, 7.3, 10.2, 0xFFFFF4EA, 1), bx(-0.6, 6.6, 10.2, 0.6, 7.4, 10.5, 0xFF231A18, 1),
-            bx(-2.3, 8, 8, -1, 9.3, 8.2, 0xFF231A18, 9), bx(1, 8, 8, 2.3, 9.3, 8.2, 0xFF231A18, 9), bx(-1.9, 8.8, 8.2, -1.5, 9.2, 8.3, 0xFFFFFFFF, 9), bx(1.4, 8.8, 8.2, 1.8, 9.2, 8.3, 0xFFFFFFFF, 9),
-            bx(-3, 10.3, 4.5, -1, 13.4, 6.3, 0xFFEE8236, 3), bx(1, 10.3, 4.5, 3, 13.4, 6.3, 0xFFEE8236, 3), bx(-3, 12.6, 4.5, -1, 13.4, 6.3, 0xFF231A18, 3), bx(1, 12.6, 4.5, 3, 13.4, 6.3, 0xFF231A18, 3),
-            bx(-2.2, 0, 2, -0.8, 3, 3.4, 0xFF2A2020, 4), bx(0.8, 0, 2, 2.2, 3, 3.4, 0xFF2A2020, 5), bx(-2.2, 0, -3.4, -0.8, 3, -2, 0xFF2A2020, 6), bx(0.8, 0, -3.4, 2.2, 3, -2, 0xFF2A2020, 7),
-            bx(-1.6, 4.6, -10, 1.6, 7.6, -4, 0xFFEE8236, 2), bx(-1.65, 4.6, -12, 1.65, 7.65, -10, 0xFFFFF4EA, 2)),
-        new Vox(new float[]{0, 6, 3.5f, 0, 5, -3.5f, 2, 1}, // bunny
-            bx(-2.6, 1.6, -3.6, 2.6, 6.6, 3, 0xFFF6F0E8, 0),
-            bx(-2.4, 5, 2, 2.4, 9.6, 6.6, 0xFFFBF6F0, 1), bx(-0.5, 6.6, 6.6, 0.5, 7.3, 6.8, 0xFFFF8FA8, 1), bx(-1.2, 5.6, 6.6, 1.2, 6.6, 6.8, 0xFFFFFFFF, 1),
-            bx(-2, 7.4, 6.6, -0.8, 8.7, 6.8, 0xFF2A2430, 9), bx(0.8, 7.4, 6.6, 2, 8.7, 6.8, 0xFF2A2430, 9), bx(-1.7, 8.2, 6.8, -1.3, 8.6, 6.9, 0xFFFFFFFF, 9), bx(1.1, 8.2, 6.8, 1.5, 8.6, 6.9, 0xFFFFFFFF, 9),
-            bx(-1.9, 9.4, 3.6, -0.6, 15, 4.6, 0xFFF6F0E8, 3), bx(0.6, 9.4, 3.6, 1.9, 15, 4.6, 0xFFF6F0E8, 3), bx(-1.6, 9.8, 4.6, -0.9, 14.4, 4.7, 0xFFFFB3C6, 3), bx(0.9, 9.8, 4.6, 1.6, 14.4, 4.7, 0xFFFFB3C6, 3),
-            bx(-2.2, 0, 1.4, -0.9, 2, 2.8, 0xFFEFE6DA, 4), bx(0.9, 0, 1.4, 2.2, 2, 2.8, 0xFFEFE6DA, 5), bx(-2.4, 0, -3.4, -0.8, 2, -1, 0xFFEFE6DA, 6), bx(0.8, 0, -3.4, 2.4, 2, -1, 0xFFEFE6DA, 7),
-            bx(-1.2, 3.6, -4.8, 1.2, 6, -3.6, 0xFFFFFFFF, 2)),
-        new Vox(new float[]{0, 4, 0, 0, 4, 0, 0, 2}, // slime
-            bx(-2.2, 1.8, -2.2, 2.2, 6.2, 2.2, 0xFF3F8F33, 0), bx(-4, 0, -4, 4, 8, 4, 0x9C7CDB5E, 0),
-            bx(-2.6, 4.4, 4.02, -0.8, 6.2, 4.12, 0xFF1E3A1A, 9), bx(0.8, 4.4, 4.02, 2.6, 6.2, 4.12, 0xFF1E3A1A, 9), bx(-0.8, 2.4, 4.02, 0.8, 3, 4.12, 0xFF1E3A1A, 0)),
-        new Vox(new float[]{0, 10, 3, 0, 10, -3.5f, 8, 3}, // bee
-            bx(-2.5, 8, -3.5, 2.5, 12, 3.5, 0xFFF7C948, 0), bx(-2.6, 7.9, -1.4, 2.6, 12.1, -0.4, 0xFF2B2118, 0), bx(-2.6, 7.9, 0.8, 2.6, 12.1, 1.8, 0xFF2B2118, 0), bx(-0.4, 9.6, -4.4, 0.4, 10.4, -3.5, 0xFF2B2118, 2),
-            bx(-2, 10, 3.5, -0.8, 11.3, 3.7, 0xFF2B2118, 9), bx(0.8, 10, 3.5, 2, 11.3, 3.7, 0xFF2B2118, 9), bx(-1.6, 10.8, 3.7, -1.2, 11.2, 3.8, 0xFFFFFFFF, 9), bx(1.2, 10.8, 3.7, 1.6, 11.2, 3.8, 0xFFFFFFFF, 9),
-            bx(-1.6, 12, 2.6, -1.2, 14, 3, 0xFF2B2118, 3), bx(1.2, 12, 2.6, 1.6, 14, 3, 0xFF2B2118, 3),
-            bx(-6, 12, -1.6, -0.5, 12.2, 1.6, 0xB8E8F6FF, 8), bx(0.5, 12, -1.6, 6, 12.2, 1.6, 0xB8E8F6FF, 8)),
-        new Vox(new float[]{0, 2.2f, 3, 0, 2.2f, -5, 1.2f, 0}, // axolotl
-            bx(-2, 0.6, -5, 2, 3.6, 3, 0xFFF7A6C4, 0),
-            bx(-3, 0.5, 3, 3, 4, 7, 0xFFF9B4CE, 1), bx(-1.6, 1.4, 7, 1.6, 1.8, 7.1, 0xFFC2507E, 1),
-            bx(-2.4, 2.4, 7, -1.2, 3.4, 7.15, 0xFF2A1A24, 9), bx(1.2, 2.4, 7, 2.4, 3.4, 7.15, 0xFF2A1A24, 9),
-            bx(-4.6, 2.4, 4, -3, 4.8, 5.4, 0xFFE5508A, 3), bx(3, 2.4, 4, 4.6, 4.8, 5.4, 0xFFE5508A, 3), bx(-1, 4, 4.6, 1, 5.4, 5.4, 0xFFE5508A, 3),
-            bx(-3, 0, 1.4, -2, 1.2, 2.4, 0xFFF7A6C4, 4), bx(2, 0, 1.4, 3, 1.2, 2.4, 0xFFF7A6C4, 5), bx(-3, 0, -3.6, -2, 1.2, -2.6, 0xFFF7A6C4, 6), bx(2, 0, -3.6, 3, 1.2, -2.6, 0xFFF7A6C4, 7),
-            bx(-0.4, 0.8, -11, 0.4, 4.4, -5, 0xFFF3C0D4, 2)),
+        new Vox(new float[]{0, 6, 4.5f, 0, 6.8f, -4, 3, 0}, cat( // kitten: orange tabby, white muzzle, chest and paws, striped tail
+            one(bx(-2.5, 3, -4, 2.5, 7.5, 4, 0xFFF2A65A, 0), bx(-1.7, 3.2, 3.9, 1.7, 6.8, 4.3, CREAM, 0), bx(-1.8, 2.9, -3, 1.8, 3.1, 3, CREAM, 0),
+                bx(-2.6, 7.4, -3.1, 2.6, 7.6, -2.3, 0xFFC9752E, 0), bx(-2.6, 7.4, -1, 2.6, 7.6, -0.2, 0xFFC9752E, 0), bx(-2.6, 7.4, 1.2, 2.6, 7.6, 2, 0xFFC9752E, 0),
+                bx(-3, 5, 3, 3, 10.5, 8.5, 0xFFF6B068, 1), bx(-1.9, 5.3, 8.5, 1.9, 7.6, 9.5, CREAM, 1), bx(-0.5, 7.15, 9.5, 0.5, 7.75, 9.7, PINK, 1), bx(-0.12, 6.3, 9.5, 0.12, 7.15, 9.6, 0xFF9A5A44, 1),
+                bx(-0.35, 9.6, 8.48, 0.35, 10.55, 8.6, 0xFFC9752E, 1), bx(-1.5, 9.9, 8.48, -1, 10.55, 8.6, 0xFFC9752E, 1), bx(1, 9.9, 8.48, 1.5, 10.55, 8.6, 0xFFC9752E, 1)),
+            pair(2, 6.3, 8.5, 2.9, 6.9, 8.6, BLUSH, 1), pair(1.8, 6.65, 9.0, 4.4, 6.8, 9.1, WH, 1), pair(1.8, 6.15, 9.0, 4.1, 6.3, 9.1, WH, 1),
+            eyes(1.6, 7.9, 9.5, 8.5, 1.6, 0xFF8BD06E, 0xFF15151D, 0.55),
+            pair(1.2, 10.5, 4.8, 3, 12.6, 6.6, 0xFFF2A65A, 3), pair(1.5, 12.6, 5.2, 2.7, 13.3, 6.2, 0xFFF2A65A, 3), pair(1.5, 10.7, 6.6, 2.6, 12.2, 6.75, PINK, 3),
+            pair(0.8, 0.9, 2, 2.3, 3, 3.5, 0xFFF2A65A, 4), pair(0.7, 0, 1.9, 2.4, 0.9, 3.8, CREAM, 4), pair(0.8, 0.9, -3.5, 2.3, 3, -2, 0xFFF2A65A, 6), pair(0.7, 0, -3.6, 2.4, 0.9, -1.9, CREAM, 6),
+            one(bx(-0.7, 6, -9, 0.7, 7.4, -4, 0xFFF2A65A, 2), bx(-0.75, 5.95, -6.6, 0.75, 7.45, -5.8, 0xFFC9752E, 2), bx(-0.7, 6.2, -10.2, 0.7, 9.6, -8.8, 0xFFF2A65A, 2),
+                bx(-0.75, 7.6, -10.25, 0.75, 8.3, -8.75, 0xFFC9752E, 2), bx(-0.75, 9.6, -10.25, 0.75, 10.8, -8.75, CREAM, 2)))),
+        new Vox(new float[]{0, 6.5f, 4.5f, 0, 6.5f, -4, 3, 0}, cat( // fox: white cheeks and chest, black socks and ear tips, a big bushy tail
+            one(bx(-2.4, 3, -4, 2.4, 7.4, 4, 0xFFE8742C, 0), bx(-1.6, 7.35, -3.6, 1.6, 7.5, 3, 0xFFCF5F1C, 0), bx(-1.7, 3.2, 3.9, 1.7, 6.6, 4.3, 0xFFFFF6EC, 0), bx(-1.6, 2.9, -3, 1.6, 3.1, 3, 0xFFFFF6EC, 0),
+                bx(-3, 5, 3, 3, 10.3, 8, 0xFFEE8236, 1), bx(-3, 5, 6.6, 3, 7, 8.05, 0xFFFFF6EC, 1), bx(-1.7, 5.9, 8, 1.7, 7.2, 10.4, 0xFFEE8236, 1), bx(-1.75, 4.95, 8, 1.75, 6.1, 10.45, 0xFFFFF6EC, 1),
+                bx(-0.6, 6.6, 10.4, 0.6, 7.4, 10.7, 0xFF231A18, 1), bx(-0.9, 9.4, 7.98, 0.9, 10.3, 8.1, 0xFFF59A50, 1)),
+            pair(3, 5.2, 5, 4, 7.4, 7.4, 0xFFFFF6EC, 1), pair(3.6, 5.4, 5.4, 4.4, 6.6, 7, 0xFFFFF6EC, 1),
+            eyes(1.7, 8, 9.3, 8, 1.4, 0xFFF0A830, 0xFF1A1414, 0.45),
+            pair(1, 10.3, 4.6, 3, 12.6, 6.3, 0xFFEE8236, 3), pair(1.2, 12.6, 4.9, 2.8, 13.6, 6, 0xFF231A18, 3), pair(1.4, 10.4, 6.3, 2.6, 12.2, 6.45, 0xFFFFF6EC, 3),
+            pair(0.8, 0, 2, 2.2, 2.2, 3.4, 0xFF2A2020, 4), pair(0.75, 2.1, 1.95, 2.25, 3.2, 3.45, 0xFFE8742C, 4), pair(0.8, 0, -3.4, 2.2, 2.2, -2, 0xFF2A2020, 6), pair(0.75, 2.1, -3.45, 2.25, 3.2, -1.95, 0xFFE8742C, 6),
+            one(bx(-1.6, 4.6, -9.6, 1.6, 7.6, -4, 0xFFE8742C, 2), bx(-2.1, 4.2, -9.2, 2.1, 8, -6.2, 0xFFEE8236, 2), bx(-1.8, 4.4, -12.4, 1.8, 7.8, -9.6, 0xFFFFF6EC, 2), bx(-1.2, 4.8, -13, 1.2, 7.4, -12.4, 0xFFFFF6EC, 2)))),
+        new Vox(new float[]{0, 6, 3.5f, 0, 5, -3.5f, 2, 1}, cat( // bunny: fluffy cheeks, pink nose and inner ears, big hind feet, a pompom tail
+            one(bx(-2.6, 1.6, -3.6, 2.6, 6.6, 3, 0xFFF6F0E8, 0), bx(-1.8, 1.8, 2.9, 1.8, 5.2, 3.2, WH, 0), bx(-1.4, 6.55, -2.6, 1.6, 6.7, 0.4, 0xFFD9C7B4, 0),
+                bx(-2.4, 5, 2, 2.4, 9.6, 6.6, 0xFFFBF6F0, 1), bx(-1.2, 5.5, 6.6, 1.2, 6.7, 6.85, WH, 1), bx(-0.5, 6.6, 6.6, 0.5, 7.2, 6.92, PINK, 1), bx(-0.4, 5.1, 6.6, 0.4, 5.55, 6.78, WH, 1)),
+            pair(2.3, 5.2, 4.4, 2.9, 6.8, 6.2, WH, 1), pair(1.6, 6.2, 6.6, 2.3, 6.7, 6.7, BLUSH, 1),
+            eyes(1.4, 7.4, 8.7, 6.6, 1.2, 0xFF3A2A40, 0, 0),
+            pair(0.6, 9.4, 3.6, 1.9, 15, 4.6, 0xFFF6F0E8, 3), pair(0.9, 9.8, 4.6, 1.6, 14.4, 4.72, 0xFFFFB3C6, 3), pair(0.65, 14.6, 3.65, 1.85, 15.4, 4.55, 0xFFE8DCCE, 3),
+            pair(0.9, 0, 1.4, 2.2, 2, 2.8, 0xFFEFE6DA, 4), pair(0.8, 0, -3.4, 2.5, 1.6, 0.3, 0xFFEFE6DA, 6), pair(1.1, 0, 0.3, 2.2, 0.5, 0.42, PINK, 6),
+            one(bx(-1.4, 3.4, -4.9, 1.4, 6.2, -3.5, WH, 2), bx(-1.1, 3.7, -5.4, 1.1, 5.9, -4.9, WH, 2)))),
+        new Vox(new float[]{0, 4, 0, 0, 4, 0, 0, 2}, cat( // slime: a dark core with bubbles inside a jelly shell, shiny eyes and blush
+            one(bx(-2.2, 1.8, -2.2, 2.2, 6.2, 2.2, 0xFF3F8F33, 0), bx(1.2, 5.4, -1, 2, 6.2, -0.2, 0xC0B8F5A0, 0), bx(-2.8, 1.2, 1, -2.2, 1.8, 1.6, 0xC0B8F5A0, 0), bx(2.4, 2, 2.2, 2.9, 2.5, 2.7, 0xC0B8F5A0, 0),
+                bx(-4, 0, -4, 4, 8, 4, 0x9C7CDB5E, 0), bx(-3, 7.98, -3, -1.2, 8.08, -1.2, 0xA0FFFFFF, 0), bx(-0.8, 2.4, 4.02, 0.8, 3, 4.12, 0xFF1E3A1A, 0), bx(-0.4, 2.1, 4.02, 0.4, 2.4, 4.12, 0xFF1E3A1A, 0)),
+            pair(2.4, 3.2, 4.02, 3.4, 3.7, 4.1, 0xC0FF8FAE, 0),
+            eyes(1.7, 4.4, 6.2, 4.02, 1.8, 0xFF1E3A1A, 0, 0))),
+        new Vox(new float[]{0, 10, 3, 0, 10, -3.5f, 8, 3}, cat( // bee: fuzzy stripes, big shiny eyes, antennae, two pairs of wings, a stinger
+            one(bx(-2.5, 8, -3.5, 2.5, 12, 3.5, 0xFFF7C948, 0), bx(-2.6, 7.9, -1.4, 2.6, 12.1, -0.4, 0xFF2B2118, 0), bx(-2.6, 7.9, 0.8, 2.6, 12.1, 1.8, 0xFF2B2118, 0), bx(-2, 12, -2.5, 2, 12.4, 2.5, 0xFFFFE07A, 0),
+                bx(-0.5, 8.8, 3.5, 0.5, 9.1, 3.58, 0xFF2B2118, 0), bx(-0.4, 9.6, -4.4, 0.4, 10.4, -3.5, 0xFF2B2118, 2), bx(-0.2, 9.8, -5, 0.2, 10.2, -4.4, 0xFF4A3A2A, 2)),
+            pair(1.6, 9, 3.5, 2.3, 9.5, 3.58, BLUSH, 0), pair(0.8, 7.3, 1, 1.4, 8, 1.6, 0xFF2B2118, 0), pair(0.8, 7.3, -1.6, 1.4, 8, -1, 0xFF2B2118, 0),
+            eyes(1.4, 9.6, 11.3, 3.5, 1.4, 0xFF2B2118, 0, 0),
+            pair(1.2, 12, 2.6, 1.6, 14, 3, 0xFF2B2118, 3), pair(1, 14, 2.4, 1.8, 14.8, 3.2, 0xFF2B2118, 3),
+            pair(0.5, 12, -1.6, 6, 12.2, 1.6, 0xB8E8F6FF, 8), pair(0.5, 11.9, -2.8, 4.5, 12.05, -0.9, 0x90E8F6FF, 8))),
+        new Vox(new float[]{0, 2.2f, 3, 0, 2.2f, -5, 1.2f, 0}, cat( // axolotl: frilly gills, spots, a smile and a tall tail fin
+            one(bx(-2, 0.6, -5, 2, 3.6, 3, 0xFFF7A6C4, 0), bx(-1.6, 0.55, -4, 1.6, 0.7, 2.6, 0xFFFCC9DB, 0), bx(-0.25, 3.6, -4.6, 0.25, 4.4, 1.8, 0xFFF3C0D4, 0),
+                bx(-1.4, 3.55, -3, -0.6, 3.7, -2.2, 0xFFE57AA6, 0), bx(0.4, 3.55, -1, 1.2, 3.7, -0.2, 0xFFE57AA6, 0), bx(-0.8, 3.55, 1, 0, 3.7, 1.8, 0xFFE57AA6, 0),
+                bx(-3, 0.5, 3, 3, 4, 7, 0xFFF9B4CE, 1), bx(-1.6, 1.4, 7, 1.6, 1.7, 7.1, 0xFFC2507E, 1), bx(-1, 4, 4.6, 1, 5.4, 5.4, 0xFFE5508A, 3)),
+            pair(2, 1.8, 7, 2.7, 2.3, 7.08, BLUSH, 1),
+            eyes(1.8, 2.4, 3.4, 7, 1.2, 0xFF2A1A24, 0, 0),
+            pair(3, 3.2, 4.2, 4.8, 3.8, 4.8, 0xFFE5508A, 3), pair(3, 2.2, 4.4, 4.6, 2.8, 5, 0xFFE5508A, 3), pair(3, 1.2, 4.6, 4.2, 1.8, 5.2, 0xFFE5508A, 3), pair(4.8, 3.3, 4.25, 5.3, 3.7, 4.75, 0xFFFF7AA8, 3),
+            pair(2, 0, 1.4, 3, 1.2, 2.4, 0xFFF7A6C4, 4), pair(2, 0, -3.6, 3, 1.2, -2.6, 0xFFF7A6C4, 6),
+            one(bx(-0.4, 0.8, -11, 0.4, 4.4, -5, 0xFFF3C0D4, 2), bx(-0.8, 1.4, -8, 0.8, 3.2, -5, 0xFFF7A6C4, 2)))),
+        new Vox(new float[]{0, 10, 3, 0, 9, -4, 7, 0}, cat( // dragonling (17): purple scales, golden belly, horns, teal wings and a spade tail
+            one(bx(-2.2, 7, -4, 2.2, 11, 3, 0xFF6C5CE7, 0), bx(-1.6, 6.95, -3, 1.6, 7.1, 2.6, 0xFFFFD27A, 0), bx(-1.5, 7.4, 2.95, 1.5, 10.4, 3.15, 0xFFFFD27A, 0),
+                bx(-0.3, 11, -3, 0.3, 11.8, -2, 0xFF00D2D3, 0), bx(-0.3, 11, -0.5, 0.3, 12, 0.5, 0xFF00D2D3, 0), bx(-0.3, 11, 2, 0.3, 11.7, 2.8, 0xFF00D2D3, 0),
+                bx(-2.6, 9, 2.5, 2.6, 13.6, 7.2, 0xFF7B6CF0, 1), bx(-1.7, 9.3, 7.2, 1.7, 11.3, 9.2, 0xFF7B6CF0, 1), bx(-1.6, 9.7, 9.2, 1.6, 9.9, 9.28, 0xFF2D2560, 1)),
+            pair(0.6, 10.6, 9.2, 1.1, 11, 9.3, 0xFF2D2560, 1), pair(1.8, 10, 7.2, 2.5, 10.5, 7.28, BLUSH, 1),
+            eyes(1.6, 11.2, 12.6, 7.2, 1.5, 0xFFFFD43B, 0xFF1A1428, 0.3),
+            pair(1.2, 13.6, 3.4, 2, 15, 4.2, 0xFFFFF0C8, 3), pair(1.3, 15, 3, 1.9, 15.8, 3.6, 0xFFFFF0C8, 3), pair(2.6, 11.4, 3.6, 3.4, 12.8, 4.8, 0xFF00D2D3, 3),
+            pair(2.2, 11.5, -2.5, 7, 11.7, 1.5, 0xD000D2D3, 8), pair(2.2, 11.5, 1.2, 7, 12, 1.6, 0xFF5A4BD0, 8),
+            pair(0.8, 5.6, 1, 2, 7.2, 2.4, 0xFF6C5CE7, 4), pair(0.7, 5.4, 2, 2.1, 5.8, 2.6, 0xFFFFF0C8, 4), pair(0.8, 5.6, -3.4, 2, 7.2, -2, 0xFF6C5CE7, 6),
+            one(bx(-1, 8, -9, 1, 9.8, -4, 0xFF6C5CE7, 2), bx(-0.6, 8.3, -12, 0.6, 9.5, -9, 0xFF6C5CE7, 2), bx(-1.6, 8.1, -13.6, 1.6, 9.7, -12, 0xFF00D2D3, 2)))),
+        new Vox(new float[]{0, 9, 1, 0, 1.5f, -2.5f, 1.5f, 0}, cat( // penguin (18): white belly, orange beak and feet, a red scarf, flapping flippers
+            one(bx(-2.6, 1.5, -2.4, 2.6, 9, 2.4, 0xFF263042, 0), bx(-2, 1.7, 2.35, 2, 8, 2.6, WH, 0), bx(-2.65, 8.3, -2.45, 2.65, 9, 2.65, 0xFFE84855, 0), bx(1.4, 6.6, 2.6, 2.2, 8.4, 2.8, 0xFFE84855, 0),
+                bx(-2.4, 8.6, -2.2, 2.4, 12.6, 2.4, 0xFF263042, 1), bx(-1.9, 8.8, 2.35, 1.9, 11.6, 2.6, WH, 1), bx(-0.7, 9.6, 2.6, 0.7, 10.4, 3.8, 0xFFFFA62B, 1),
+                bx(-1, 1.5, -3.2, 1, 2.5, -2.4, 0xFF263042, 2)),
+            pair(1.3, 9.2, 2.6, 1.9, 9.6, 2.66, BLUSH, 1),
+            eyes(1.1, 10.4, 11.3, 2.6, 0.8, 0xFF141820, 0, 0),
+            pair(2.6, 3.5, -1.2, 3.3, 7.8, 1.2, 0xFF263042, 10),
+            pair(0.5, 0, -0.2, 2.1, 0.6, 3, 0xFFFFA62B, 4), pair(0.9, 0.6, -0.6, 1.7, 1.6, 0.6, 0xFFFFA62B, 4))),
     };
     static void drawVox(R3 r, Vox m, double[] pos, Follow f, double size, float lt, long now) {
         double t = now / 1000.0, mv = Math.min(1, f.speed * 9), ph = f.phase, style = m.pv[7], k = size * 0.04, yaw = Math.toRadians(f.yaw), cy = Math.cos(yaw), sy = Math.sin(yaw);
@@ -507,16 +615,20 @@ public final class Fx {
                 if (part == 1 || part == 3 || part == 9) { double[] q = rotX(y, z, m.pv[1], m.pv[2], headTilt); y = q[0]; z = q[1]; if (part == 3) { double[] e = rotX(y, z, m.pv[1] + 5, m.pv[2], earTw); y = e[0]; z = e[1]; } }
                 else if (part == 2) { double[] q = rotY(x, z, m.pv[3], m.pv[5], tailWag); x = q[0]; z = q[1]; }
                 else if (part >= 4 && part <= 7) { double sgn = (part == 4 || part == 7) ? 1 : -1; double[] q = rotX(y, z, m.pv[6], (b[2] + b[5]) / 2, Math.sin(ph) * 0.8 * mv * sgn); y = q[0]; z = q[1]; }
+                else if (part == 10) { double side = b[0] < 0 ? -1 : 1, px = side * 2.6, py = 7.8, an = side * (0.18 + 0.55 * Math.abs(Math.sin(ph)) * mv + 0.07 * Math.sin(t * 2.2)); double dx = x - px, dy = y - py; x = px + dx * Math.cos(an) - dy * Math.sin(an); y = py + dx * Math.sin(an) + dy * Math.cos(an); }
                 else if (part == 8) { double side = b[0] < 0 ? -1 : 1; double ang = wing * side; double yy = m.pv[6] + 4 + (y - (m.pv[6] + 4)) * Math.cos(ang) + Math.abs(x) * Math.sin(ang * 0.6); y = yy; }
                 y = y * squash; double hx = x * (style == 2 ? 2 - squash : 1);
                 c[n] = new double[]{pos[0] + (hx * cy - z * sy) * k, pos[1] + (y + hop) * k, pos[2] + (hx * sy + z * cy) * k}; }
-            quad(r, c[6], c[7], c[5], c[4], shade(col, 0.95f * lt)); quad(r, c[3], c[2], c[0], c[1], shade(col, 0.8f * lt));
-            quad(r, c[2], c[6], c[4], c[0], shade(col, 0.85f * lt)); quad(r, c[7], c[3], c[1], c[5], shade(col, 0.85f * lt));
-            quad(r, c[2], c[3], c[7], c[6], shade(col, 1.05f * lt)); quad(r, c[4], c[5], c[1], c[0], shade(col, 0.6f * lt)); }
+            float ao0 = (float) (0.84 + 0.16 * Math.min(1, b[1] / 6.0)), ao1 = (float) (0.84 + 0.16 * Math.min(1, b[4] / 6.0)), lo = 0.8f * ao0 * lt, hi = ao1 * lt;
+            int[] k0 = {shade(col, lo * 0.98f), shade(col, lo * 0.8f), shade(col, lo * 0.88f)}, k1 = {shade(col, hi * 1.0f), shade(col, hi * 0.84f), shade(col, hi * 0.92f)};
+            quad4(r, c[6], c[7], c[5], c[4], k1[0], k1[0], k0[0], k0[0]); quad4(r, c[3], c[2], c[0], c[1], k1[1], k1[1], k0[1], k0[1]);   // front, back
+            quad4(r, c[2], c[6], c[4], c[0], k1[2], k1[2], k0[2], k0[2]); quad4(r, c[7], c[3], c[1], c[5], k1[2], k1[2], k0[2], k0[2]);   // sides
+            quad(r, c[2], c[3], c[7], c[6], shade(col, 1.08f * hi)); quad(r, c[4], c[5], c[1], c[0], shade(col, 0.55f * lo)); }
         r.end();
     }
     private static double[] rotX(double y, double z, double py, double pz, double a) { double dy = y - py, dz = z - pz; return new double[]{py + dy * Math.cos(a) - dz * Math.sin(a), pz + dy * Math.sin(a) + dz * Math.cos(a)}; }
     private static double[] rotY(double x, double z, double px, double pz, double a) { double dx = x - px, dz = z - pz; return new double[]{px + dx * Math.cos(a) + dz * Math.sin(a), pz - dx * Math.sin(a) + dz * Math.cos(a)}; }
+    private static void quad4(R3 r, double[] a, double[] b, double[] c, double[] d, int ca, int cb, int cc, int cd) { r.v(a[0], a[1], a[2], ca); r.v(b[0], b[1], b[2], cb); r.v(c[0], c[1], c[2], cc); r.v(d[0], d[1], d[2], cd); }
     private static void quad(R3 r, double[] a, double[] b, double[] c, double[] d, int col) { r.v(a[0], a[1], a[2], col); r.v(b[0], b[1], b[2], col); r.v(c[0], c[1], c[2], col); r.v(d[0], d[1], d[2], col); }
     static final int MINI = 9;
     private static long miniAt;
@@ -820,6 +932,7 @@ public final class Fx {
     /** third person camera distance */
     public static double camDist(double d) { return freeLook ? V.num("freelook", "distance") : V.on("camera") ? V.num("camera", "distance") : d; }
     /** a totem popped on us: our burst + sound; true = hide the vanilla totem animation */
+    public static long totemAt;
     public static boolean totem() {
         if (!V.on("totem")) return false;
         Object self = game == null ? null : game.self();
@@ -827,8 +940,9 @@ public final class Fx {
             for (int i = 0; i < 60; i++) { double a = Math.random() * Math.PI * 2, sp = 0.1 + Math.random() * 0.25;
                 KPARTS.add(new double[]{p[0], p[1] + 0.2 + Math.random() * 1.6, p[2], Math.cos(a) * sp, 0.05 + Math.random() * 0.3, Math.sin(a) * sp, now, 1200 + Math.random() * 900, Math.random()}); }
             SONAR.add(new double[]{p[0], p[1], p[2], now}); }
-        if (V.bool("totem", "sound")) sound("magic_pok", (float) V.num("sounds", "volume"));
-        return V.mode("totem", "style") == 1;
+        if (V.bool("totem", "sound")) sound("wv_totem1", Math.max(0.4f, (float) V.num("sounds", "volume")));
+        if (V.mode("totem", "style") == 2) totemAt = System.currentTimeMillis();
+        return V.mode("totem", "style") != 0;
     }
     /** the computer's clock as Minecraft time of day (6:00 = 0 ticks) */
     public static long realTime() { java.util.Calendar c = java.util.Calendar.getInstance(); return (((c.get(java.util.Calendar.HOUR_OF_DAY) - 6 + 24) % 24) * 1000L + c.get(java.util.Calendar.MINUTE) * 1000L / 60); }

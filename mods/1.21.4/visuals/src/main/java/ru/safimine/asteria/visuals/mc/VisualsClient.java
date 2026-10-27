@@ -24,7 +24,9 @@ public class VisualsClient implements ClientModInitializer {
     public static final KeyBinding ZOOM = new KeyBinding("key.asteria.zoom", InputUtil.Type.KEYSYM, 67, "category.asteria");
     public static final KeyBinding FREELOOK = new KeyBinding("key.asteria.freelook", InputUtil.Type.KEYSYM, 342, "category.asteria");
     public static final KeyBinding MARK = new KeyBinding("key.asteria.mark", InputUtil.Type.KEYSYM, 66, "category.asteria");
-    public static final KeyBinding[] KEYS = {MENU, ZOOM, FREELOOK, MARK};
+    public static final KeyBinding M_TOGGLE = new KeyBinding("key.asteria.music_toggle", InputUtil.Type.KEYSYM, -1, "category.asteria"), M_NEXT = new KeyBinding("key.asteria.music_next", InputUtil.Type.KEYSYM, -1, "category.asteria"),
+        M_PREV = new KeyBinding("key.asteria.music_prev", InputUtil.Type.KEYSYM, -1, "category.asteria"), M_UP = new KeyBinding("key.asteria.music_up", InputUtil.Type.KEYSYM, -1, "category.asteria"), M_DOWN = new KeyBinding("key.asteria.music_down", InputUtil.Type.KEYSYM, -1, "category.asteria");
+    public static final KeyBinding[] KEYS = {MENU, ZOOM, FREELOOK, MARK, M_TOGGLE, M_NEXT, M_PREV, M_UP, M_DOWN};
     private static final Map<String, Boolean> HELD = new HashMap<>();
     private static int appliedHit = 0;
 
@@ -38,6 +40,10 @@ public class VisualsClient implements ClientModInitializer {
             V.tick();
             while (MENU.wasPressed()) if (c.currentScreen == null) c.setScreen(new AsteriaScreen());
             Fx.zoomKey(ZOOM.isPressed() && c.currentScreen == null);
+            if (c.player != null && V.on("autosprint") && c.options.forwardKey.isPressed() && !c.player.isSneaking() && c.player.getHungerManager().getFoodLevel() > 6 && !c.player.isUsingItem()) c.player.setSprinting(true);
+            Fx.commandBinds(Game121.I, c.currentScreen != null);
+            while (M_TOGGLE.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("toggle"); while (M_NEXT.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("next"); while (M_PREV.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("prev");
+            while (M_UP.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("volup"); while (M_DOWN.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("voldown");
             while (MARK.wasPressed()) if (c.player != null && c.currentScreen == null) Fx.markKey(Game121.I, net.minecraft.client.gui.screen.Screen.hasShiftDown());
             if (c.player != null) Fx.freeLookKey(Game121.I, FREELOOK.isPressed() && c.currentScreen == null, c.player.getYaw(), c.player.getPitch());
             if (c.player != null) Fx.tick(Game121.I);
@@ -70,4 +76,5 @@ public class VisualsClient implements ClientModInitializer {
         int i = Math.min(15, V.font), k = Math.max(1, Math.min(6, (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor())));
         if (ALL[i][k] == null) ALL[i][k] = Identifier.of("asteria_visuals", "f" + i + "s" + k); return ALL[i][k];
     }
+    public static int category(Object stack) { return Game121.I.category(stack); }
 }

@@ -21,7 +21,7 @@ import java.util.Map;
 
 /** Asteria Visuals (PREMIUM) for Minecraft 1.16.5: wiring of the shared visuals code into the game. */
 public class VisualsClient implements ClientModInitializer {
-    public static KeyBinding MENU, ZOOM, FREELOOK, MARK;
+    public static KeyBinding MENU, ZOOM, FREELOOK, MARK, M_TOGGLE, M_NEXT, M_PREV, M_UP, M_DOWN;
     private static final Map<String, Boolean> HELD = new HashMap<>();
     private static int appliedHit = 0;
 
@@ -29,6 +29,11 @@ public class VisualsClient implements ClientModInitializer {
         V.init(MinecraftClient.getInstance().getSession().getUsername()); ru.safimine.asteria.visuals.Menu.tr = k -> net.minecraft.client.resource.language.I18n.translate(k);
         MENU = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.menu", InputUtil.Type.KEYSYM, 344, "category.asteria"));
         ZOOM = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.zoom", InputUtil.Type.KEYSYM, 67, "category.asteria"));
+        M_TOGGLE = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.music_toggle", InputUtil.Type.KEYSYM, -1, "category.asteria"));
+        M_NEXT = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.music_next", InputUtil.Type.KEYSYM, -1, "category.asteria"));
+        M_PREV = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.music_prev", InputUtil.Type.KEYSYM, -1, "category.asteria"));
+        M_UP = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.music_up", InputUtil.Type.KEYSYM, -1, "category.asteria"));
+        M_DOWN = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.music_down", InputUtil.Type.KEYSYM, -1, "category.asteria"));
         MARK = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.mark", InputUtil.Type.KEYSYM, 66, "category.asteria"));
         FREELOOK = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.freelook", InputUtil.Type.KEYSYM, 342, "category.asteria"));
         // the HUD is drawn by InGameHudMixin under the chat, Tab and scoreboard
@@ -41,6 +46,10 @@ public class VisualsClient implements ClientModInitializer {
             V.tick();
             while (MENU.wasPressed()) if (c.currentScreen == null) c.openScreen(new AsteriaScreen());
             Fx.zoomKey(ZOOM.isPressed() && c.currentScreen == null);
+            if (c.player != null && V.on("autosprint") && c.options.keyForward.isPressed() && !c.player.isSneaking() && c.player.getHungerManager().getFoodLevel() > 6 && !c.player.isUsingItem()) c.player.setSprinting(true);
+            Fx.commandBinds(Game116.I, c.currentScreen != null);
+            while (M_TOGGLE.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("toggle"); while (M_NEXT.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("next"); while (M_PREV.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("prev");
+            while (M_UP.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("volup"); while (M_DOWN.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("voldown");
             while (MARK.wasPressed()) if (c.player != null && c.currentScreen == null) Fx.markKey(Game116.I, net.minecraft.client.gui.screen.Screen.hasShiftDown());
             if (c.player != null) Fx.freeLookKey(Game116.I, FREELOOK.isPressed() && c.currentScreen == null, c.player.yaw, c.player.pitch);
             if (c.player != null) Fx.tick(Game116.I);
@@ -76,4 +85,5 @@ public class VisualsClient implements ClientModInitializer {
         int i = Math.min(15, V.font), k = Math.max(1, Math.min(6, (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor())));
         if (ALL[i][k] == null) ALL[i][k] = new Identifier("asteria_visuals", "f" + i + "s" + k); return ALL[i][k];
     }
+    public static int category(Object stack) { return Game116.I.category(stack); }
 }

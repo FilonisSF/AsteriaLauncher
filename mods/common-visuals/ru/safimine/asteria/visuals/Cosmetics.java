@@ -10,11 +10,15 @@ import java.util.List;
  */
 public final class Cosmetics {
     private Cosmetics() {}
-    public static final String[] WINGS = {"Нет", "Ангел", "Демон", "Фея", "Дракон"}, HATS = {"Нет", "Корона", "Цилиндр", "Кошачьи ушки", "Шляпа ведьмы", "Рога"}, BACK = {"Нет", "Коса", "Молот", "Катана"};
+    // the own model keeps its old place in every list (wings 5, hat 6, back 4); new pieces come after it, so older mods of other players stay correct
+    public static final String[] WINGS = {"Нет", "Ангел", "Демон", "Фея", "Дракон", "Своя модель", "Кристальные", "Бабочка"},
+        HATS = {"Нет", "Корона", "Цилиндр", "Кошачьи ушки", "Шляпа ведьмы", "Рога", "Своя модель", "Ледяная тиара", "Цветочный венок"},
+        BACK = {"Нет", "Коса", "Молот", "Катана", "Своя модель", "Небесный клинок", "Посох звёзд", "Лук ветра", "Нефритовое копьё"};
+    static final int OWN_W = 5, OWN_H = 6, OWN_B = 4;
 
     /** an oriented box: centre, length axis u, width axis v (thickness along u x v), sizes, colour at the u- end and at the u+ end, part (0 still, 1 left wing, 2 right wing) */
     static final class Ob { float cx, cy, cz, ux, uy, uz, vx, vy, vz, lu, lv, lw; int c0, c1, part; boolean tri; }
-    @SuppressWarnings("unchecked") private static final List<Ob>[] CACHE_W = new List[5], CACHE_H = new List[6], CACHE_B = new List[4];
+    @SuppressWarnings("unchecked") private static final List<Ob>[] CACHE_W = new List[WINGS.length], CACHE_H = new List[HATS.length], CACHE_B = new List[BACK.length];
 
     private static Ob ob(List<Ob> l, double cx, double cy, double cz, double ux, double uy, double uz, double vx, double vy, double vz, double lu, double lv, double lw, int c0, int c1, int part) {
         double n = Math.sqrt(ux * ux + uy * uy + uz * uz); ux /= n; uy /= n; uz /= n;
@@ -74,6 +78,25 @@ public final class Cosmetics {
                     tri(l, centre, q0, q1, (0x60 << 24) | 0xFEFE01, (0xC8 << 24) | 0xFEFE02, 0); }
                 for (int k = 0; k < 4; k++) { double a = Math.PI * 2 * k / 4 + 0.4; seg(l, centre, p(centre[0] + Math.cos(a) * rx * 0.85, centre[1] + Math.sin(a) * ry * 0.85, -0.35), 0.3, 0.2, side, 0xF0FFFFFF, 0x60FFFFFF, 0); }
                 tri(l, p(0, 0, -0.4), centre, p(centre[0] * 0.3, centre[1] + 1.5, -0.4), (0x90 << 24) | 0xFEFE01, (0x90 << 24) | 0xFEFE02, 0); }
+        } else if (kind == 6) { // crystal: a fan of faceted shards, each tapering to a point with a glowing core and a bright upper edge, plus small floating splinters
+            double[][] sh = {{18, 17, 2.6}, {4, 15, 2.4}, {-12, 14, 2.3}, {-28, 12, 2.1}, {-44, 10, 1.9}, {-60, 8, 1.6}, {34, 11, 1.9}, {50, 7, 1.4}};
+            for (int i = 0; i < sh.length; i++) { double a = Math.toRadians(sh[i][0]); double[] d = {-Math.cos(a), Math.sin(a), -0.04 * i}, root = p(-1.2, 1.5, -0.2 * i), tip = add(root, d, sh[i][1]), mid = add(root, d, sh[i][1] * 0.62);
+                double w = sh[i][2]; int c0 = (0xE8 << 24) | 0xFEFE01, c1 = (0xA0 << 24) | 0xFEFE02;
+                seg(l, root, mid, w, w * 0.55, side, c0, c1, 0); seg(l, mid, tip, w * 0.55, w * 0.3, side, c1, (0x70 << 24) | 0xFEFE02, 0);
+                seg(l, add(root, new double[]{0, 0, 0.35}, 1), add(tip, new double[]{0, 0, 0.35}, 1), 0.28, 0.12, side, GLOW, GLOW, 0);
+                double[] n = {-d[1], d[0], 0}; seg(l, add(root, n, w * 0.5), add(mid, n, w * 0.3), 0.18, 0.2, side, 0xE0FFFFFF, 0x80FFFFFF, 0);
+                for (int k = 0; k < 2; k++) { double[] sp = add(add(root, d, sh[i][1] * (0.35 + 0.3 * k)), n, -(w + 1.2 + k)); seg(l, sp, add(sp, d, 1.4), 0.7, 0.4, side, (0xC0 << 24) | 0xFEFE02, (0x60 << 24) | 0xFEFE01, 0); } }
+            seg(l, p(0.4, 0, 0), p(-2.2, 2.4, -0.4), 2.2, 1.4, side, 0xFFE8F4FF, (0xE0 << 24) | 0xFEFE01, 0);
+        } else if (kind == 7) { // butterfly: a big forewing and a rounded hindwing, a dark rim, veins and white spots; colour from the cosmetics colour
+            for (int w = 0; w < 2; w++) { double ry = w == 0 ? 15 : 9.5, rx = w == 0 ? 12 : 8; int n = w == 0 ? 18 : 14; double[] c = p(-rx * 0.62, w == 0 ? ry * 0.42 : -ry * 0.42, -0.35);
+                double[][] rim = new double[n + 1][];
+                for (int i = 0; i <= n; i++) { double a = (w == 0 ? -0.2 : Math.PI + 0.2) + (w == 0 ? 1 : -1) * Math.PI * 1.15 * i / n, rr = 1 + 0.12 * Math.sin(i * 1.7);
+                    rim[i] = p(c[0] + Math.cos(a + Math.PI * 0.5) * rx * rr * 0.62, c[1] + Math.sin(a + Math.PI * 0.5) * ry * rr * 0.55, -0.35); }
+                for (int i = 0; i < n; i++) { tri(l, p(0, 0, -0.3), rim[i], rim[i + 1], (0xF0 << 24) | 0xFEFE01, (0xD8 << 24) | 0xFEFE02, 0);
+                    seg(l, rim[i], rim[i + 1], 0.75, 0.25, side, 0xFF1C1626, 0xFF2A2236, 0); }
+                for (int i = 1; i < n; i += 3) { seg(l, p(0, 0, -0.25), add(rim[i], new double[]{-rim[i][0] * 0.12, -rim[i][1] * 0.12, 0}, 1), 0.18, 0.12, side, 0xD01C1626, 0x601C1626, 0);
+                    double[] sp = add(rim[i], new double[]{-rim[i][0] * 0.16, -rim[i][1] * 0.16, 0.1}, 1); ob(l, sp[0], sp[1], -0.2, 0, 1, 0, 1, 0, 0, 0.7, 0.7, 0.12, 0xFFFFFFFF, 0xFFF4F0FF, 0); } }
+            seg(l, p(0.3, -3, -0.2), p(0.3, 3, -0.2), 0.9, 0.9, side, 0xFF2A2236, 0xFF3A3048, 0);
         }
         return l;
     }
@@ -115,6 +138,21 @@ public final class Cosmetics {
             for (int s = -1; s <= 1; s += 2) { double[] pnt = p(s * 3.2, 7.2, 1.2); double ang = 0; double th = 1.9;
                 for (int k = 0; k < 10; k++) { ang += 0.28; double[] d = {s * 0.35 * Math.cos(ang * 0.5), Math.cos(ang), -Math.sin(ang)}; double len = 1.25;
                     double[] nx = add(pnt, d, len); seg(l, pnt, nx, th, th, new double[]{1, 0, 0}, mix(0xFF2B1B14, 0xFFE8DCC0, k / 10.0), mix(0xFF2B1B14, 0xFFF4ECD8, (k + 1) / 10.0), 0); pnt = nx; th *= 0.84; } }
+        } else if (kind == 7) { // ice tiara: a thin silver band, tall crystal spikes in the front getting smaller to the sides, a gem in the middle
+            for (int i = 0; i < 30; i++) { double a = Math.PI * 2 * i / 30; double[] t = {-Math.sin(a), 0, Math.cos(a)}; ob(l, Math.cos(a) * 4.4, 8.7, Math.sin(a) * 4.4, 0, 1, 0, t[0], 0, t[2], 0.7, 1.0, 0.35, 0xFFB8C6D8, 0xFFF2F8FF, 0); }
+            for (int i = -4; i <= 4; i++) { double a = Math.PI / 2 + i * 0.27, x = Math.cos(a) * 4.5, z = Math.sin(a) * 4.5, hgt = 5.2 - Math.abs(i) * 1.05; double[] t = {-Math.sin(a), 0, Math.cos(a)};
+                ob(l, x, 9 + hgt / 2, z, 0.0, 1, 0.12, t[0], 0, t[2], hgt, 1.1 - Math.abs(i) * 0.08, 0.5, 0xE0BFE8FF, 0xF0FFFFFF, 0);
+                ob(l, x * 1.01, 9 + hgt * 0.45, z * 1.01, 0.0, 1, 0.12, t[0], 0, t[2], hgt * 0.7, 0.3, 0.55, GLOW, GLOW, 0);
+                if (i % 2 == 0) ob(l, x, 9.3 + hgt, z, 0, 1, 0, t[0], 0, t[2], 0.6, 0.6, 0.6, 0xFFFFFFFF, 0xFFFFFFFF, 0); }
+            ob(l, 0, 9.5, 4.75, 0, 1, 0, 1, 0, 0, 1.6, 1.3, 0.5, ACC, ACC2, 0); ob(l, 0, 9.5, 4.95, 0, 1, 0, 1, 0, 0, 0.7, 0.6, 0.3, 0xFFFFFFFF, 0xFFFFFFFF, 0);
+        } else if (kind == 8) { // flower wreath: green leaves around the head with roses, daisies and violets
+            for (int i = 0; i < 36; i++) { double a = Math.PI * 2 * i / 36, r = 4.6; double[] t = {-Math.sin(a), 0, Math.cos(a)}; double tilt = i % 2 == 0 ? 0.5 : -0.5;
+                ob(l, Math.cos(a) * r, 8.9 + (i % 2) * 0.3, Math.sin(a) * r, t[0], tilt, t[2], 0, 1, 0, 2.2, 0.9, 0.3, 0xFF3C8A3E, 0xFF7CC95A, 0); }
+            int[][] fl = {{0xFFFF7AA2, 0xFFFFC2D4, 0xFFFFE066}, {0xFFFFFFFF, 0xFFF4F0FF, 0xFFFFC93C}, {0xFFB48CFF, 0xFFE2D4FF, 0xFFFFE066}, {0xFFFF9F43, 0xFFFFD29A, 0xFFFFF3B0}};
+            for (int i = 0; i < 9; i++) { double a = Math.PI * 2 * i / 9 + 0.2, r = 4.75, x = Math.cos(a) * r, z = Math.sin(a) * r; int[] c = fl[i % 4]; double[] o = {Math.cos(a), 0.25, Math.sin(a)}, t = {-Math.sin(a), 0, Math.cos(a)};
+                for (int k = 0; k < 5; k++) { double pa = Math.PI * 2 * k / 5 + i, dx = Math.cos(pa) * 0.75, dy = Math.sin(pa) * 0.75;
+                    ob(l, x + t[0] * dx, 9.4 + dy, z + t[2] * dx, o[0], o[1], o[2], t[0] * Math.cos(pa), Math.sin(pa), t[2] * Math.cos(pa), 0.3, 1.05, 0.8, c[0], c[1], 0); }
+                ob(l, x * 1.04, 9.4, z * 1.04, o[0], o[1], o[2], t[0], 0, t[2], 0.45, 0.6, 0.6, c[2], 0xFFFFFFFF, 0); }
         }
         return l;
     }
@@ -122,15 +160,21 @@ public final class Cosmetics {
     // ================================================================ back items (body space: origin at the middle of the back, up = +y, outward = -z)
     private static List<Ob> back(int kind) {
         List<Ob> l = new ArrayList<>(); double[] side = {1, 0, 0}, up = {0, 1, 0};
-        if (kind == 1) { // scythe: dark wood shaft with silver rings, a crescent blade with a glowing edge
-            seg(l, p(0, -14, 0), p(0, 14, 0), 1.0, 1.0, side, 0xFF3A2416, 0xFF5E3B22, 0);
-            for (int k = 0; k < 5; k++) ob(l, 0, -10 + k * 5.5, 0, 0, 1, 0, 1, 0, 0, 0.6, 1.25, 1.25, 0xFFB8C2CF, 0xFFE6ECF4, 0);
-            seg(l, p(0, -14, 0), p(0, -16.5, 0), 0.6, 0.6, side, 0xFFB8C2CF, 0xFFFFFFFF, 0);
+        if (kind == 1) { // scythe: dark shaft with leather wraps, gold collars and glowing runes; a long crescent blade with a gold spine, a bright edge and a back spike
+            seg(l, p(0, -14, 0), p(0, 14, 0), 1.0, 1.0, side, 0xFF1E1620, 0xFF3A2A3E, 0);
+            for (int k = 0; k < 10; k++) ob(l, 0, -12 + k * 1.1, 0, 0, 1, k % 2 == 0 ? 0.35 : -0.35, 1, 0, 0, 0.8, 1.2, 1.2, 0xFF3A2416, 0xFF5E3B22, 0);
+            for (double y : new double[]{-12.8, -0.8, 6.5, 12.6}) { ob(l, 0, y, 0, 0, 1, 0, 1, 0, 0, 0.7, 1.45, 1.45, 0xFFB8892A, 0xFFFFE08A, 0); ob(l, 0, y, 0, 0, 1, 0, 1, 0, 0, 0.25, 1.6, 1.6, 0xFFFFF2C0, 0xFFFFF2C0, 0); }
+            for (int k = 0; k < 4; k++) ob(l, 0, 1.2 + k * 1.3, -0.52, 0, 1, 0, 1, 0, 0, 0.7, 0.45, 0.12, GLOW, GLOW, 0);
+            seg(l, p(0, -14, 0), p(0, -16.5, 0), 0.7, 0.7, side, 0xFFB8892A, 0xFFFFE08A, 0); ob(l, 0, -17, 0, 0, 1, 0, 1, 0, 0, 1.1, 1.1, 1.1, ACC, ACC2, 0);
             double[] prev = p(0, 13.5, 0);
-            for (int k = 1; k <= 14; k++) { double f = k / 14.0, a = Math.PI * 0.5 * f; double[] nx = p(-Math.sin(a) * 10 - f * 2, 13.5 + Math.cos(a) * 2.5 - f * f * 6, 0);
-                double w = 3.0 * (1 - f) + 0.4; seg(l, prev, nx, w, 0.4, new double[]{0, 1, 0}, mix(0xFF8A96A8, 0xFFD8E0EA, f), mix(0xFFC8D2DE, 0xFFE6F6FF, f), 0);
-                seg(l, add(prev, new double[]{0, -w * 0.45, 0}, 1), add(nx, new double[]{0, -w * 0.45, 0}, 1), 0.35, 0.45, new double[]{0, 1, 0}, GLOW, GLOW, 0); prev = nx; }
-            ob(l, 0, 13.8, 0, 0, 1, 0, 1, 0, 0, 1.6, 1.8, 1.8, 0xFF6E7A8C, 0xFFB8C2CF, 0);
+            for (int k = 1; k <= 18; k++) { double f = k / 18.0, a = Math.PI * 0.55 * f; double[] nx = p(-Math.sin(a) * 11 - f * 2.5, 13.5 + Math.cos(a) * 3 - f * f * 7.5, 0);
+                double w = 3.6 * (1 - f) + 0.3; seg(l, prev, nx, w, 0.42, new double[]{0, 1, 0}, mix(0xFF5C6474, 0xFFC6CFDC, f), mix(0xFF8E98A8, 0xFFE6EEF8, f), 0);
+                seg(l, add(prev, new double[]{0, w * 0.48, 0}, 1), add(nx, new double[]{0, w * 0.48, 0}, 1), 0.45, 0.6, new double[]{0, 1, 0}, 0xFFB8892A, 0xFFFFE08A, 0);
+                seg(l, add(prev, new double[]{0, -w * 0.46, 0}, 1), add(nx, new double[]{0, -w * 0.46, 0}, 1), 0.3, 0.48, new double[]{0, 1, 0}, GLOW, GLOW, 0);
+                if (k % 4 == 2) ob(l, nx[0], nx[1] + w * 0.05, 0.25, 1, 0, 0, 0, 1, 0, 0.5, 0.5, 0.1, ACC2, ACC2, 0);
+                prev = nx; }
+            seg(l, p(0.2, 14.2, 0), p(3.8, 16.4, 0), 1.6, 0.45, new double[]{0, 1, 0}, 0xFF8E98A8, 0xFFE6EEF8, 0); seg(l, p(3.8, 16.4, 0), p(5, 17, 0), 0.6, 0.4, new double[]{0, 1, 0}, 0xFFE6EEF8, 0xFFFFFFFF, 0);
+            ob(l, 0, 13.9, 0, 0, 1, 0, 1, 0, 0, 2.2, 2.2, 2.2, 0xFF8A6418, 0xFFFFD86B, 0); ob(l, 0, 13.9, -1.15, 0, 1, 0, 1, 0, 0, 1.1, 1.1, 0.35, ACC, ACC2, 0); ob(l, 0, 13.9, 1.15, 0, 1, 0, 1, 0, 0, 1.1, 1.1, 0.35, ACC, ACC2, 0);
         } else if (kind == 2) { // war hammer: wrapped grip, heavy head with gold bands and a glowing rune
             seg(l, p(0, -12, 0), p(0, 8, 0), 1.1, 1.1, side, 0xFF4A3020, 0xFF6B4A30, 0);
             for (int k = 0; k < 8; k++) ob(l, 0, -11 + k * 1.2, 0, 0, 1, 0, 1, 0, 0, 0.9, 1.35, 1.35, k % 2 == 0 ? 0xFF2A1A10 : 0xFF5A3A22, k % 2 == 0 ? 0xFF3A2416 : 0xFF6E4A2C, 0);
@@ -146,13 +190,72 @@ public final class Cosmetics {
             for (int k = 0; k < 9; k++) { ob(l, 0, 7.4 + k * 0.85, 0, 0, 1, 0, 1, 0, 0, 0.8, 1.15, 0.95, 0xFF1A1A22, 0xFF2A2A36, 0);
                 ob(l, 0, 7.4 + k * 0.85, -0.5, 0, 1, (k % 2 == 0 ? 0.4 : -0.4), 1, 0, 0, 0.9, 0.95, 0.2, 0xFFE8E4D8, 0xFFFFFFFF, 0); }
             ob(l, 0, 15.2, 0, 0, 1, 0, 1, 0, 0, 0.9, 1.3, 1.1, 0xFFC9A030, 0xFFFFE08A, 0);
+        } else if (kind == 5) { // celestial blade: a long pale blade with a glowing fuller, swept golden guard wings, a wrapped grip, a gem pommel and a tassel
+            for (int k = 0; k < 12; k++) { double f = k / 12.0, f1 = (k + 1) / 12.0, y0 = 6.8 - f * 21, y1 = 6.8 - f1 * 21, w0 = 2.9 - f * 1.2, w1 = 2.9 - f1 * 1.2, hw = (w0 + w1) / 4 + 0.05;
+                seg(l, p(0, y0, 0), p(0, y1, 0), (w0 + w1) / 2, 0.55, side, mix(0xFFEAF2FF, 0xFFB6CBEA, f), mix(0xFFEAF2FF, 0xFFB6CBEA, f1), 0);
+                seg(l, p(-hw, y0, 0), p(-hw, y1, 0), 0.22, 0.3, side, 0xFFFFFFFF, 0xFFE6F0FF, 0); seg(l, p(hw, y0, 0), p(hw, y1, 0), 0.22, 0.3, side, 0xFFFFFFFF, 0xFFE6F0FF, 0);
+                seg(l, p(0, y0, 0), p(0, y1, 0), 0.45, 0.62, side, GLOW, GLOW, 0); }
+            tri(l, p(-1.75, -14.2, 0.05), p(1.75, -14.2, 0.05), p(0, -17.6, 0.05), 0xFFE0EBFF, 0xFFFFFFFF, 0); tri(l, p(1.75, -14.2, -0.05), p(-1.75, -14.2, -0.05), p(0, -17.6, -0.05), 0xFFE0EBFF, 0xFFFFFFFF, 0);
+            ob(l, 0, 7.4, 0, 0, 1, 0, 1, 0, 0, 1.4, 4.2, 1.6, 0xFF9A6C14, 0xFFFFD86B, 0); ob(l, 0, 7.4, -0.85, 0, 1, 0, 1, 0, 0, 1.2, 1.2, 0.3, ACC, ACC2, 0); ob(l, 0, 7.4, 0.85, 0, 1, 0, 1, 0, 0, 1.2, 1.2, 0.3, ACC, ACC2, 0);
+            for (int s2 = -1; s2 <= 1; s2 += 2) { double[] pr = p(s2 * 2, 7.4, 0);
+                for (int k = 1; k <= 5; k++) { double a = Math.toRadians(10 + k * 16); double[] nx = p(s2 * (2 + Math.cos(a) * k * 0.95), 7.4 + Math.sin(a) * k * 0.7, 0); seg(l, pr, nx, 1.1 - k * 0.14, 0.7, side, 0xFFC9A030, 0xFFFFE8A0, 0); pr = nx; }
+                for (int k = 0; k < 3; k++) seg(l, p(s2 * (2.4 + k * 0.9), 6.9, 0), p(s2 * (2.6 + k * 1.2), 5.6 - k * 0.3, 0), 0.4, 0.4, side, 0xFFC9A030, 0xFFFFE8A0, 0); }
+            for (int k = 0; k < 6; k++) ob(l, 0, 8.7 + k * 0.85, 0, 0, 1, k % 2 == 0 ? 0.4 : -0.4, 1, 0, 0, 0.8, 1.05, 1.0, 0xFF1C2A4A, 0xFF2E4270, 0);
+            ob(l, 0, 13.9, 0, 0, 1, 0, 1, 0, 0, 1.4, 1.5, 1.5, 0xFF9A6C14, 0xFFFFD86B, 0); ob(l, 0, 15, 0, 0, 1, 0, 1, 0, 0, 1.3, 1.3, 1.3, ACC, ACC2, 0);
+            double[] tq = p(0, 15.4, 0); for (int k = 1; k <= 4; k++) { double[] nx = p(-0.6 * k, 15.4 - k * 1.3, -0.4 * k); seg(l, tq, nx, 0.5, 0.5, side, ACC, ACC2, 0); tq = nx; }
+            ob(l, tq[0], tq[1] - 0.6, tq[2], 0, 1, 0, 1, 0, 0, 1.4, 0.8, 0.8, ACC2, 0xFFFFFFFF, 0);
+        } else if (kind == 6) { // star staff: a pale shaft with a gold spiral, a ring at the top holding a glowing star and four small gems around it
+            seg(l, p(0, -16, 0), p(0, 9, 0), 0.9, 0.9, side, 0xFFF2EEE6, 0xFFFFFFFF, 0);
+            for (int k = 0; k < 20; k++) { double a = k * 0.9, y = -14 + k * 1.15; ob(l, Math.cos(a) * 0.5, y, Math.sin(a) * 0.5, 0, 1, 0, -Math.sin(a), 0, Math.cos(a), 1.0, 0.35, 0.35, 0xFFC9A030, 0xFFFFE08A, 0); }
+            ob(l, 0, -16.6, 0, 0, 1, 0, 1, 0, 0, 1.2, 1.2, 1.2, 0xFFC9A030, 0xFFFFE08A, 0);
+            int n = 22; double rr = 3.6, cy = 13;
+            for (int i = 0; i < n; i++) { double a0 = Math.PI * 2 * i / n, a1 = Math.PI * 2 * (i + 1) / n; seg(l, p(Math.cos(a0) * rr, cy + Math.sin(a0) * rr, 0), p(Math.cos(a1) * rr, cy + Math.sin(a1) * rr, 0), 0.7, 0.7, new double[]{0, 0, 1}, 0xFFC9A030, 0xFFFFE8A0, 0); }
+            seg(l, p(0, 9, 0), p(0, cy - rr, 0), 1.1, 1.1, side, 0xFFC9A030, 0xFFFFE08A, 0);
+            for (int k = 0; k < 5; k++) { double a = Math.PI / 2 + Math.PI * 2 * k / 5, a2 = a + Math.PI / 5, a3 = a - Math.PI / 5; double[] tip = p(Math.cos(a) * 2.6, cy + Math.sin(a) * 2.6, 0);
+                double[] l2 = p(Math.cos(a2) * 1.1, cy + Math.sin(a2) * 1.1, 0), l3 = p(Math.cos(a3) * 1.1, cy + Math.sin(a3) * 1.1, 0);
+                tri(l, p(0, cy, 0.7), l3, tip, ACC2, GLOW, 0); tri(l, p(0, cy, 0.7), tip, l2, ACC2, GLOW, 0); tri(l, p(0, cy, -0.7), tip, l3, ACC2, GLOW, 0); tri(l, p(0, cy, -0.7), l2, tip, ACC2, GLOW, 0); }
+            ob(l, 0, cy, 0, 0, 1, 0, 1, 0, 0, 1.2, 1.2, 1.2, 0xFFFFFFFF, 0xFFFFFFFF, 0);
+            for (int k = 0; k < 4; k++) { double a = Math.PI * 2 * k / 4 + 0.6; ob(l, Math.cos(a) * 5, cy + Math.sin(a) * 5, 0, 0, 1, 0, 1, 0, 0, 0.8, 0.8, 0.8, ACC, 0xFFFFFFFF, 0); }
+        } else if (kind == 7) { // wind bow: two curved limbs with gold bands and tips, feather ornaments, a wrapped grip and a glowing string
+            double[] prevU = p(0, 2, 0), prevD = p(0, -2, 0);
+            for (int k = 1; k <= 10; k++) { double f = k / 10.0; double[] u = p(-Math.sin(f * 1.2) * 4.2 + f * f * 1.2, 2 + f * 13, 0), d = p(u[0], -2 - f * 13, 0); double w = 1.5 - f * 0.8;
+                int c0 = mix(0xFF2E7D6B, 0xFFE8F6F0, f * 0.6), c1 = mix(0xFF2E7D6B, 0xFFE8F6F0, f * 0.6 + 0.06); seg(l, prevU, u, w, w * 0.7, new double[]{1, 0, 0}, c0, c1, 0); seg(l, prevD, d, w, w * 0.7, new double[]{1, 0, 0}, c0, c1, 0);
+                if (k == 5) { ob(l, u[0], u[1], 0, 0, 1, 0, 1, 0, 0, 0.6, 1.8, 1.4, 0xFFC9A030, 0xFFFFE08A, 0); ob(l, d[0], d[1], 0, 0, 1, 0, 1, 0, 0, 0.6, 1.8, 1.4, 0xFFC9A030, 0xFFFFE08A, 0); }
+                prevU = u; prevD = d; }
+            for (double[] tip : new double[][]{prevU, prevD}) { double sg = Math.signum(tip[1]); seg(l, tip, add(tip, new double[]{-1.2, sg, 0}, 1.4), 0.6, 0.6, side, 0xFFC9A030, 0xFFFFE8A0, 0);
+                for (int k = 0; k < 3; k++) seg(l, add(tip, new double[]{0, -sg * 2.5, 0}, 1), add(tip, new double[]{1.6 + k * 0.6, -sg * (3 + k * 1.3), 0.3 * k}, 1), 0.9, 0.12, new double[]{0, 0, 1}, 0xFFE8F6F0, mix(0xFF7FD6B8, 0xFFFFFFFF, k * 0.3), 0); }
+            seg(l, prevU, prevD, 0.18, 0.18, side, GLOW, GLOW, 0);
+            for (int k = 0; k < 5; k++) ob(l, -0.05, -2 + k, 0, 0, 1, k % 2 == 0 ? 0.4 : -0.4, 1, 0, 0, 0.9, 1.6, 1.4, 0xFF3A2416, 0xFF6B4A30, 0);
+            ob(l, -0.6, 0.4, 0, 0, 1, 0, 1, 0, 0, 1.0, 0.8, 1.6, ACC, ACC2, 0);
+        } else if (kind == 8) { // jade spear: a long dark shaft with gold bands, a gold collar with side hooks, a faceted jade head and a red tassel
+            seg(l, p(0, -17, 0), p(0, 10, 0), 0.85, 0.85, side, 0xFF2A1E1A, 0xFF4A3428, 0);
+            for (double y : new double[]{-16.5, -6, 4}) ob(l, 0, y, 0, 0, 1, 0, 1, 0, 0, 0.8, 1.15, 1.15, 0xFFC9A030, 0xFFFFE08A, 0);
+            ob(l, 0, 10.8, 0, 0, 1, 0, 1, 0, 0, 1.8, 1.8, 1.8, 0xFF9A6C14, 0xFFFFD86B, 0);
+            for (int s2 = -1; s2 <= 1; s2 += 2) { seg(l, p(s2 * 0.9, 11.5, 0), p(s2 * 3.2, 12.6, 0), 0.6, 0.5, side, 0xFFC9A030, 0xFFFFE8A0, 0); seg(l, p(s2 * 3.2, 12.6, 0), p(s2 * 3.6, 14.4, 0), 0.5, 0.45, side, 0xFFFFE8A0, 0xFFFFFFFF, 0); }
+            double[] b0 = p(0, 11.6, 0), tip = p(0, 21, 0); double[][] rim = {p(-1.8, 14.5, 0), p(0, 14.5, 1.0), p(1.8, 14.5, 0), p(0, 14.5, -1.0)};
+            for (int i = 0; i < 4; i++) { double[] a = rim[i], b = rim[(i + 1) % 4]; tri(l, b0, a, b, 0xFF1F8A62, 0xFF3FD69A, 0); tri(l, tip, b, a, 0xFFB8FFE0, 0xFF3FD69A, 0); }
+            seg(l, p(0, 12, 0), p(0, 20, 0), 0.3, 2.1, side, GLOW, GLOW, 0);
+            double[] tq = p(0, 10, 0); for (int k = 1; k <= 5; k++) { double[] nx = p(-0.4 * k, 10 - k * 1.1, -0.5 * k); seg(l, tq, nx, 1.1 - k * 0.1, 1.1 - k * 0.1, side, 0xFFD02436, 0xFFFF5A6A, 0); tq = nx; }
         }
         return l;
     }
 
     // ================================================================ drawing
     /** wings / hat / back item of a player. pos = feet, bodyYaw / headYaw in degrees, h = player height, colour tint (-1 = theme), air = flying or jumping */
+    /** whose cosmetics are drawn ("" = yours): own models come from that player */
+    public static String who = "";
+    private static java.io.File custom(String slot) { return who.isEmpty() ? Model.own(slot) : Model.other(who, slot); }
     public static void draw(Fx.R3 r, double[] pos, float bodyYaw, float headYaw, float h, int wing, int hatK, int backK, int tint, boolean air, float light, long now) {
+        double yb = Math.toRadians(bodyYaw), cyb = Math.cos(yb), syb = Math.sin(yb), sc = h / 1.8;
+        // own models: wings on the upper back, hat on the head (turns with it), item diagonally on the back
+        if (wing == OWN_W) { double fl = Math.sin(now / 1000.0 * (air ? 9 : 1.8)) * (air ? 0.25 : 0.06);
+            Model.draw(r, custom("wings"), (x, y, z) -> { double zz = z - 0.28 - Math.abs(x) * fl; return new double[]{pos[0] + (x * cyb - zz * syb) * sc, pos[1] + (0.55 + y) * sc, pos[2] + (x * syb + zz * cyb) * sc}; }, light); wing = 0; }
+        if (hatK == OWN_H) { double yh = Math.toRadians(headYaw), ch = Math.cos(yh), shh = Math.sin(yh), top = (h < 1.7 ? 1.55 : 1.84) * sc;
+            Model.draw(r, custom("hat"), (x, y, z) -> new double[]{pos[0] + (x * ch - z * shh) * sc, pos[1] + top + y * sc, pos[2] + (x * shh + z * ch) * sc}, light); hatK = 0; }
+        if (backK == OWN_B) { double a = Math.toRadians(35), ca = Math.cos(a), sa = Math.sin(a);
+            Model.draw(r, custom("back"), (x, y, z) -> { double yy = y - 0.85, xx = x * ca - yy * sa, y2 = x * sa + yy * ca, zz = z - 0.26; return new double[]{pos[0] + (xx * cyb - zz * syb) * sc, pos[1] + (1.1 + y2) * sc, pos[2] + (xx * syb + zz * cyb) * sc}; }, light); backK = 0; }
+        if (wing == OWN_W) wing = 0; if (hatK == OWN_H) hatK = 0; if (backK == OWN_B) backK = 0; // the own model was not loaded (yet)
+        if (wing == 0 && hatK == 0 && backK == 0) return;
         double k = 0.9375 / 16 * (h / 1.8), sneak = h < 1.7 ? 0.22 : 0; float t = now / 1000f;
         int acc = tint == -1 ? V.a1() : tint, acc2 = tint == -1 ? V.a2() : tint;
         r.beginSolid();

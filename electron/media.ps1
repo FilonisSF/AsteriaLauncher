@@ -16,7 +16,10 @@ function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($nu
 $asStream = [System.IO.WindowsRuntimeStreamExtensions].GetMethod('AsStreamForRead', [Type[]]@([Windows.Storage.Streams.IInputStream]))
 $mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
 
+Add-Type -Namespace AsteriaKeys -Name K -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte b, byte s, uint f, UIntPtr e);'
+function VolKey([byte]$vk, [int]$n) { for ($i = 0; $i -lt $n; $i++) { [AsteriaKeys.K]::keybd_event($vk, 0, 0, [UIntPtr]::Zero); [AsteriaKeys.K]::keybd_event($vk, 0, 2, [UIntPtr]::Zero) } }
 function RunCmd($c) {
+  if ($c -eq 'volup') { VolKey 0xAF 2; return } elseif ($c -eq 'voldown') { VolKey 0xAE 2; return } elseif ($c -eq 'mute') { VolKey 0xAD 1; return }
   $s = $mgr.GetCurrentSession(); if (-not $s) { return }
   if ($c -eq 'next') { Await ($s.TrySkipNextAsync()) ([bool]) | Out-Null }
   elseif ($c -eq 'prev') { Await ($s.TrySkipPreviousAsync()) ([bool]) | Out-Null }
@@ -42,9 +45,9 @@ function Cover($p) {
   } catch { return $null }
 }
 
-$lastKey = ''
+$lastKey = ''; $fast = 0
 while ($true) {
-  if ($cmdFile -and (Test-Path $cmdFile)) { $c = (Get-Content $cmdFile -Raw).Trim(); Remove-Item $cmdFile -Force; RunCmd $c; Start-Sleep -Milliseconds 250 } # give the player a moment to switch
+  if ($cmdFile -and (Test-Path $cmdFile)) { $c = (Get-Content $cmdFile -Raw).Trim(); Remove-Item $cmdFile -Force; RunCmd $c; $fast = 25 } # then poll every 80 ms for ~2 s: the new track shows the moment the player switches
   $o = @{ playing = $false; title = ''; artist = '' }
   $s = $mgr.GetCurrentSession()
   if ($s) {
@@ -58,5 +61,6 @@ while ($true) {
     if ($key -ne $lastKey) { $lastKey = $key; $c = Cover $p; $o.cover = if ($c) { $c } else { '' } }
   }
   [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress)); [Console]::Out.Flush()
-  Start-Sleep -Milliseconds 400
+  if ($fast -gt 0) { $fast--; Start-Sleep -Milliseconds 80 }
+  else { for ($i = 0; $i -lt 8; $i++) { Start-Sleep -Milliseconds 50; if ($cmdFile -and (Test-Path $cmdFile)) { break } } } # a command is picked up within 50 ms
 }

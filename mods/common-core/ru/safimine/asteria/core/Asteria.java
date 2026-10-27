@@ -59,7 +59,7 @@ public final class Asteria {
         EX.scheduleWithFixedDelay(safe(Asteria::localTextures), 3, 2, TimeUnit.SECONDS);
         EX.scheduleWithFixedDelay(safe(Asteria::liveOptions), 3, 1, TimeUnit.SECONDS);
         EX.scheduleWithFixedDelay(safe(Asteria::writeStatus), 5, 3, TimeUnit.SECONDS);
-        if (API != null && !API.isEmpty()) EX.scheduleWithFixedDelay(safe(Asteria::poll), 2, 10, TimeUnit.SECONDS); // others see a new skin / cape / icon within ~30 s
+        if (API != null && !API.isEmpty()) EX.scheduleWithFixedDelay(safe(Asteria::poll), 2, 3, TimeUnit.SECONDS); // others see a new skin / cape within ~3 s (change stamps)
     }
 
     private static Runnable safe(Runnable r) { return () -> { try { r.run(); } catch (Throwable ignored) {} }; }
@@ -98,7 +98,16 @@ public final class Asteria {
     }
 
     // ---------------------------------------------------------------- other launcher players (backend)
+    private static final Map<String, Long> REV = new ConcurrentHashMap<>();
+    private static boolean revsOk = true; private static long onlineAt;
     private static void poll() {
+        long t0 = System.currentTimeMillis();
+        if (revsOk) try { // {"nick": stamp, ...} of everyone online: re-download those whose stamp changed
+            String s = new String(get(API + "/revs"), StandardCharsets.UTF_8).replaceAll("[{}\" ]", "");
+            if (!s.isEmpty()) for (String kv : s.split(",")) { int i = kv.lastIndexOf(':'); if (i <= 0) continue; String n = kv.substring(0, i).toLowerCase(); long r; try { r = Long.parseLong(kv.substring(i + 1)); } catch (Exception e) { continue; }
+                SEEN.put(n, t0); Long old = REV.put(n, r); if (old != null && old != r) LAST.remove(n); }
+        } catch (Exception e) { revsOk = false; } // an old backend without /revs: the plain 10 s / 30 s polling
+        if (!revsOk && t0 - onlineAt < 10_000) return; onlineAt = t0;
         try {
             String s = new String(get(API + "/online"), StandardCharsets.UTF_8).replaceAll("[\\[\\]\" ]", "");
             long now = System.currentTimeMillis();
@@ -112,7 +121,7 @@ public final class Asteria {
     private static void refresh(String key) {
         long now = System.currentTimeMillis();
         Long last = LAST.get(key);
-        if (last != null && now - last < 30_000) return;
+        if (last != null && now - last < (revsOk ? 300_000 : 30_000)) return;
         LAST.put(key, now);
         for (String kind : new String[]{"skin", "cape"}) {
             try {

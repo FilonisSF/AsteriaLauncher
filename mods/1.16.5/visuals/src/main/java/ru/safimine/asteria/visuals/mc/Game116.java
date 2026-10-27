@@ -150,6 +150,20 @@ final class Game116 implements Game {
     }
     @Override public float light(double x, double y, double z) { if (c.world == null) return 1; try { return c.world.getLightLevel(new net.minecraft.util.math.BlockPos(x, y, z)) / 15f; } catch (Throwable t) { return 1; } }
     @Override public int food() { return c.player == null ? -1 : c.player.getHungerManager().getFoodLevel(); }
+    @Override public String dimension() { return c.world == null ? "" : c.world.getRegistryKey().getValue().toString(); }
+    @Override public void command(String cmd) { if (c.player == null) return; String s = cmd.startsWith("/") ? cmd.substring(1) : cmd; c.player.sendChatMessage("/" + s); }
+    @Override public java.util.List<Object> living(double range) { java.util.List<Object> o = new ArrayList<>(); if (c.world == null || c.player == null) return o;
+        for (Entity e : c.world.getEntities()) if (e instanceof LivingEntity && e != c.player && !(e instanceof net.minecraft.entity.decoration.ArmorStandEntity) && e.squaredDistanceTo(c.player) < range * range) o.add(e); return o; }
+    @Override public double[] aim() { if (c.player == null) return null; ItemStack s = c.player.getMainHandStack(); String id = itemId(s); int kind = 0; double power = 1;
+        if (id.endsWith(":bow")) { kind = 1; if (!c.player.isUsingItem()) return null; float t = c.player.getItemUseTime() / 20f; power = Math.min(1, (t * t + t * 2) / 3); }
+        else if (id.endsWith(":crossbow")) kind = 2; else if (id.endsWith("ender_pearl") || id.endsWith("snowball") || id.endsWith(":egg")) kind = 3; else if (id.endsWith("trident")) { if (!c.player.isUsingItem()) return null; kind = 4; }
+        else if (id.endsWith("splash_potion") || id.endsWith("lingering_potion")) kind = 5;
+        if (kind == 0) return null; double[] p = pos(c.player, 1); return new double[]{kind, power, p[0], p[1] + c.player.getStandingEyeHeight(), p[2], c.player.yaw, c.player.pitch}; }
+    @Override public boolean solid(double x, double y, double z) { if (c.world == null) return false; BlockPos p = new BlockPos(x, y, z); return !c.world.getBlockState(p).getCollisionShape(c.world, p).isEmpty(); }
+    @Override public int category(Object o) { ItemStack s = (ItemStack) o; if (s == null || s.isEmpty()) return 4; Object it = s.getItem();
+        if (it instanceof net.minecraft.item.SwordItem || it instanceof net.minecraft.item.AxeItem || it instanceof net.minecraft.item.TridentItem || it instanceof net.minecraft.item.BowItem || it instanceof net.minecraft.item.CrossbowItem) return 0;
+        if (it instanceof net.minecraft.item.MiningToolItem || it instanceof net.minecraft.item.ShearsItem || it instanceof net.minecraft.item.FishingRodItem) return 1;
+        if (it instanceof net.minecraft.item.BlockItem) return 2; if (s.getItem().isFood()) return 3; return 4; }
     @Override public void openMenu() { c.openScreen(new AsteriaScreen()); }
     @Override public void closeMenu() { c.openScreen(null); }
 }

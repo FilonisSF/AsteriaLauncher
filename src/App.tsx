@@ -10,6 +10,7 @@ import Skin3D from './Skin3D'
 import SkinStudio, { CapeMaker, GifCapeMaker } from './SkinStudio'
 import GameSettings from './GameSettings'
 import VisualsTab, { visDefaults, petPic } from './VisualsTab'
+import { Worlds } from './Worlds'
 import { EventsBlock } from './Clans'
 import Versions, { ALL_VERSIONS, ASTERIA, fabricFor } from './Versions'
 import { VINFO } from './versionInfo'
@@ -29,8 +30,8 @@ const OVR: Record<string, string> = Object.fromEntries(Object.entries({ ...(impo
 /** news without an uploaded picture get official Minecraft key art that fits the topic */
 const NEWSART: Record<string, string[]> = { wipe: ['26.1', '1.21.11', '1.21.4'], news: ['1.20.1', '1.20.4'], ender: ['1.19.4', '1.19'], spawners: ['1.21.4', '1.21'], apiary: ['1.15.2', '1.15'], about: ['1.18.2', '1.18'] }
 const CAPES = glob(cos, 'cape-'), SKINS = glob(cos, 'skin-'), POSTERS = Object.fromEntries(glob(pos, 'v-'))
-const NAV: [string, string][] = [['home', 'home'], ['versions', 'versions'], ['mods', 'mods'], ['visuals', 'sparkles'], ['skins', 'skins'], ['profile', 'user'], ['servers', 'servers'], ['screenshots', 'image'], ['settings', 'settings']]
-const SHORT: Record<string, string> = { home: 'Главная', versions: 'Версии', mods: 'Моды', visuals: 'Визуалы', skins: 'Скины', profile: 'Профиль', servers: 'Серверы', screenshots: 'Скрины', settings: 'Настройки' }
+const NAV: [string, string][] = [['home', 'home'], ['versions', 'versions'], ['mods', 'mods'], ['visuals', 'sparkles'], ['skins', 'skins'], ['worlds', 'cube'], ['profile', 'user'], ['servers', 'servers'], ['screenshots', 'image'], ['settings', 'settings']]
+const SHORT: Record<string, string> = { home: 'Главная', versions: 'Версии', mods: 'Моды', visuals: 'Визуалы', skins: 'Скины', worlds: 'Миры', profile: 'Профиль', servers: 'Серверы', screenshots: 'Скрины', settings: 'Настройки' }
 const ACCENTS: Record<string, [string, string]> = { aqua: ['#0ea5e9', '#22d3ee'], blue: ['#2563eb', '#60a5fa'], violet: ['#7c3aed', '#c084fc'], pink: ['#db2777', '#f9a8d4'], rose: ['#e11d48', '#fb7185'],
   red: ['#dc2626', '#f87171'], orange: ['#ea580c', '#fdba74'], amber: ['#d97706', '#fcd34d'], lime: ['#65a30d', '#bef264'], emerald: ['#059669', '#34d399'], teal: ['#0d9488', '#5eead4'], slate: ['#475569', '#cbd5e1'] }
 const CATS = ['optimization', 'utility', 'decoration', 'adventure', 'worldgen', 'technology', 'library']
@@ -66,31 +67,57 @@ function NumInput({ v, on }: { v: number; on: (n: number) => void }) { // free t
   const [txt, setTxt] = useState(String(v)); useEffect(() => { if (+txt !== v) setTxt(String(v)) }, [v])
   return <input inputMode="numeric" className="w-24 text-center" value={txt} onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 5); setTxt(d); if (d) on(+d) }} onBlur={() => { if (!txt || +txt < 320) setTxt(String(v)) }} />
 }
+/** your own 3D models (Blockbench / resource pack): pet, hat, item on the back, wings — everyone with AsteriaLauncher sees them */
+function ModelsCard({ say }: { say: (m: string, k?: any) => void }) {
+  const [list, setList] = useState<any>({}), [busy, setBusy] = useState('')
+  useEffect(() => { window.api.modelList?.().then((l: any) => setList(l || {})) }, [])
+  const slots: [string, string, string][] = [['pet', 'Питомец', 'Ходит за вами'], ['hat', 'На голову', 'Шляпа, корона, ушки'], ['back', 'За спину', 'Коса, меч, молот'], ['wings', 'Крылья', 'На спине']]
+  const use = async (slot: string) => { const v = await window.api.visGet(); if (!v) return; v.modules = v.modules || {}
+    if (slot === 'pet') await window.api.visPatch('pet', { on: true, s: { kind: 16 } })
+    else await window.api.visPatch('cosmetics', { on: true, s: { [slot]: ({ wings: 5, hat: 6, back: 4 } as any)[slot] } }) }
+  return <div className="card rounded-3xl p-5 flex flex-col gap-3">
+    <div><b className="text-lg">Свои 3D-модели</b><div className="muted text-xs">Файл Blockbench (.bbmodel) или ресурспак с моделью (.zip). Видят все игроки Asteria. Загружайте только свои модели или те, на которые у вас есть права</div></div>
+    <div className="grid grid-cols-2 gap-2">{slots.map(([id, title, hint]) => <div key={id} className="rounded-2xl p-3 flex flex-col gap-2" style={{ background: 'var(--chip)' }}>
+      <div><b className="text-sm">{title}</b><div className="muted text-[11px]">{list[id] ? list[id].name : hint}</div></div>
+      <div className="flex gap-1.5"><button className="btn !py-1.5 text-sm flex-1 flex items-center justify-center gap-1.5" disabled={!!busy} onClick={async () => { setBusy(id); const r = await window.api.modelImport(id); setBusy('')
+          if (!r) return; if (r.error) return say(r.error, 'err'); setList({ ...list, [id]: { name: r.name } }); await use(id); say(r.uploaded ? 'Модель «' + r.name + '» надета — её видят игроки Asteria' : 'Модель надета (другие увидят её, когда сервер Asteria обновится)') }}>
+        {busy === id ? <span className="dlspin" /> : <Icon n="upload" s={14} />}{list[id] ? 'Заменить' : 'Загрузить'}</button>
+        {list[id] && <button className="btn !py-1.5" title="Убрать" onClick={async () => { await window.api.modelRemove(id); const n = { ...list }; delete n[id]; setList(n) }}><Icon n="trash" s={14} /></button>}</div></div>)}</div></div>
+}
 /** 3D cosmetics on the Skins page: wings, hat, item on the back (pictures are rendered from the same models the game draws) */
 const COSM_PIC: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob('./assets/cosm/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>).map(([k, v]) => [k.split('/').pop()!.replace('.png', ''), v]))
+/** a visuals module shown outside the Visuals page: kept in sync with the game and the other pages, saved as a merge of only this module */
+function useVisModule(id: string) {
+  const [v, setV] = useState<any>(null), own = useRef(0)
+  const load = () => window.api.visGet().then((x: any) => { const d = visDefaults() as any; const m = x || d; m.modules = m.modules || {}; m.modules[id] = { ...d.modules[id], ...(m.modules[id] || {}), s: { ...d.modules[id]?.s, ...(m.modules[id]?.s || {}) } }; setV(m) })
+  useEffect(() => { load(); return window.api.onFiles?.((f: any) => { if (f.kind === 'vis' && Date.now() - own.current > 1200) load() }) }, [])
+  const put = (patch: any) => { own.current = Date.now(); setV((cur: any) => { const o = cur.modules[id]; return { ...cur, modules: { ...cur.modules, [id]: { ...o, ...patch, s: { ...o.s, ...(patch.s || {}) } } } } }); window.api.visPatch(id, patch) }
+  return [v, put] as const
+}
 function CosmCard() {
-  const [v, setV] = useState<any>(null)
-  useEffect(() => { window.api.visGet().then((x: any) => { const d = visDefaults() as any; const m = x || d; m.modules = m.modules || {}; m.modules.cosmetics = { ...d.modules.cosmetics, ...(m.modules.cosmetics || {}), s: { ...d.modules.cosmetics?.s, ...(m.modules.cosmetics?.s || {}) } }; setV(m) }) }, [])
+  const [v, put] = useVisModule('cosmetics')
   if (!v || !v.modules.cosmetics) return null
-  const c = v.modules.cosmetics, put = (patch: any) => { const n = { ...v, modules: { ...v.modules, cosmetics: { ...c, ...patch, s: { ...c.s, ...(patch.s || {}) } } } }; setV(n); window.api.visSet(n) }
-  const rows: [string, string, string, string[]][] = [['wings', 'w', 'Крылья', ['Ангел', 'Демон', 'Фея', 'Дракон']], ['hat', 'h', 'Головной убор', ['Корона', 'Цилиндр', 'Кошачьи ушки', 'Шляпа ведьмы', 'Рога']], ['back', 'b', 'За спиной', ['Коса', 'Молот', 'Катана']]]
+  const c = v.modules.cosmetics
+  // [index in the mod, name]: the own model keeps its old index (wings 5, hat 6, back 4), new pieces come after it
+  const rows: [string, string, string, [number, string][]][] = [['wings', 'w', 'Крылья', [[1, 'Ангел'], [2, 'Демон'], [3, 'Фея'], [4, 'Дракон'], [6, 'Кристальные'], [7, 'Бабочка']]],
+    ['hat', 'h', 'Головной убор', [[1, 'Корона'], [2, 'Цилиндр'], [3, 'Кошачьи ушки'], [4, 'Шляпа ведьмы'], [5, 'Рога'], [7, 'Ледяная тиара'], [8, 'Цветочный венок']]],
+    ['back', 'b', 'За спиной', [[1, 'Коса'], [2, 'Молот'], [3, 'Катана'], [5, 'Небесный клинок'], [6, 'Посох звёзд'], [7, 'Лук ветра'], [8, 'Нефритовое копьё']]]]
   return <div className="card rounded-3xl p-5 flex flex-col gap-3">
     <div className="flex items-center justify-between"><div><b className="text-lg">Косметика 3D</b><div className="muted text-xs">Детализированные крылья, головные уборы и оружие за спиной. Видят все игроки Asteria</div></div><Switch on={!!c.on} set={(on) => put({ on })} /></div>
     {rows.map(([id, pre, title, names]) => <div key={id}><div className="text-sm mb-1.5 font-semibold">{title}</div>
-      <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', opacity: c.on ? 1 : 0.55 }}>
+      <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', opacity: c.on ? 1 : 0.55 }}>
         <button onClick={() => put({ s: { [id]: 0 } })} className="rounded-xl flex flex-col items-center justify-center gap-1 p-1.5 muted text-[10.5px]" style={{ background: +c.s[id] === 0 ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: +c.s[id] === 0 ? '#fff' : undefined, minHeight: 66 }}><Icon n="close" s={16} />Нет</button>
-        {names.map((n, i) => { const sel = +c.s[id] === i + 1; return <button key={n} title={n} onClick={() => put({ on: true, s: { [id]: i + 1 } })} className="rounded-xl flex flex-col items-center gap-1 p-1.5 transition hover:-translate-y-0.5" style={{ background: sel ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: sel ? '#fff' : undefined }}>
-          <img src={COSM_PIC[pre + '-' + (i + 1)]} className="w-11 h-11 object-contain" draggable={false} /><span className="text-[10.5px] font-semibold truncate w-full text-center">{n}</span></button> })}</div></div>)}
+        {names.map(([i, n]) => { const sel = +c.s[id] === i; return <button key={n} title={n} onClick={() => put({ on: true, s: { [id]: i } })} className="rounded-xl flex flex-col items-center gap-1 p-1.5 transition hover:-translate-y-0.5" style={{ background: sel ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: sel ? '#fff' : undefined }}>
+          <img src={COSM_PIC[pre + '-' + i]} className="w-11 h-11 object-contain" draggable={false} /><span className="text-[10.5px] font-semibold truncate w-full text-center">{n}</span></button> })}</div></div>)}
     <div className="flex items-center justify-between gap-3"><Switch on={c.s.tint !== false} set={(x) => put({ s: { tint: x } })} label="Цвет темы визуалов" />{c.s.tint === false && <ColorPick value={c.s.color || '#ffb36b'} set={(x) => put({ s: { color: x } })} size="sm" />}</div>
   </div>
 }
 /** the pet right on the Skins page: who, size, on / off (same settings as Visuals -> Pet) */
 function PetCard({ face }: { face: string }) {
-  const [v, setV] = useState<any>(null)
-  useEffect(() => { window.api.visGet().then((x: any) => { const d = visDefaults() as any; const m = x || d; m.modules = m.modules || {}; m.modules.pet = { ...d.modules.pet, ...(m.modules.pet || {}), s: { ...d.modules.pet.s, ...(m.modules.pet?.s || {}) } }; setV(m) }) }, [])
+  const [v, put] = useVisModule('pet')
   if (!v) return null
-  const p = v.modules.pet, put = (patch: any) => { const n = { ...v, modules: { ...v.modules, pet: { ...p, ...patch, s: { ...p.s, ...(patch.s || {}) } } } }; setV(n); window.api.visSet(n) }
-  const names = ['Котик', 'Призрак', 'Огонёк', 'Кристалл', 'Атом', 'Цветок', 'Пончик', 'Мячик', 'Банан', 'Мини-я', 'Котёнок', 'Лисёнок', 'Зайчик', 'Слайм', 'Пчёлка', 'Аксолотль'], order = [10, 11, 12, 13, 14, 15, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8]
+  const p = v.modules.pet
+  const names = ['Котик', 'Призрак', 'Огонёк', 'Кристалл', 'Атом', 'Цветок', 'Пончик', 'Мячик', 'Банан', 'Мини-я', 'Котёнок', 'Лисёнок', 'Зайчик', 'Слайм', 'Пчёлка', 'Аксолотль', 'Своя модель', 'Дракончик', 'Пингвин'], order = [10, 11, 12, 17, 18, 13, 14, 15, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8]
   return <div className="card rounded-3xl p-5 flex flex-col gap-3">
     <div className="flex items-center justify-between"><div><b className="text-lg">Питомец</b><div className="muted text-xs">Бегает рядом с вами в игре. Его видят все игроки Asteria</div></div><Switch on={!!p.on} set={(on) => put({ on })} /></div>
     <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', opacity: p.on ? 1 : 0.5 }}>{order.map((i) => { const n = names[i], pic = petPic(i), sel = +p.s.kind === i
@@ -157,10 +184,13 @@ function MiniPlayer() {
       {m.cover ? <img src={m.cover} className="mp-cover" /> : <span className="mp-cover flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--a1),var(--a2))', color: '#fff' }}><Icon n="music" s={18} /></span>}
       <div className="lbl min-w-0 flex-1"><b className="block truncate text-[12.5px] leading-tight">{m.title}</b><span className="block truncate text-[11px] muted">{m.artist || (m.playing ? 'Играет' : 'Пауза')}</span></div></div>
     <div className="lbl mt-2"><div className="mp-bar"><div style={{ width: f * 100 + '%' }} /></div>
-      {m.dur > 0 && <div className="flex justify-between text-[10px] muted mt-1 tabular-nums"><span>{t(pos)}</span><span>-{t(Math.max(0, m.dur - pos))}</span></div>}
+      {m.dur > 0 && <div className="flex justify-between text-[10px] muted mt-1 tabular-nums"><span>{t(pos)} / {t(m.dur)}</span><span>-{t(Math.max(0, m.dur - pos))}</span></div>}
       <div className="flex items-center justify-center gap-1.5 mt-1"><button className="mp-btn" title="Назад" onClick={() => cmd('prev')}><Icon n="prev" s={13} /></button>
         <button className="mp-btn big" title={m.playing ? 'Пауза' : 'Играть'} onClick={() => cmd('toggle')}><Icon n={m.playing ? 'pause' : 'play'} s={14} fill={!m.playing} /></button>
-        <button className="mp-btn" title="Дальше" onClick={() => cmd('next')}><Icon n="next" s={13} /></button></div></div>
+        <button className="mp-btn" title="Дальше" onClick={() => cmd('next')}><Icon n="next" s={13} /></button></div>
+      <div className="flex items-center justify-center gap-1 mt-1"><button className="mp-btn" title="Тише" onClick={() => cmd('voldown')}><b className="text-[12px]">−</b></button>
+        <button className="mp-btn" title="Без звука / со звуком" onClick={() => cmd('mute')}><Icon n="volume" s={12} /></button>
+        <button className="mp-btn" title="Громче" onClick={() => cmd('volup')}><b className="text-[12px]">+</b></button></div></div>
   </div>
 }
 
@@ -196,7 +226,7 @@ export default function App() {
     const paths = [...e.dataTransfer.files].map((f) => api.filePath(f)).filter(Boolean); if (paths.length) upload(paths) }
   const reqId = useRef(0), search = async () => { const id = ++reqId.current; setBusy('s'); const r = kind === 'mod' ? await api.modsSearch({ q, ver, sort, cat, pvp }) : await api.pkSearch({ q, ver, sort, kind, pvp }); if (id !== reqId.current) return; setHits(r); setBusy('') }
   useEffect(() => { (async () => { const st1 = (pct: number, k: string) => setBoot({ pct, msg: tr(localStorage.getItem('lang') ?? 'ru', k) })
-    st1(10, 'boot1'); api.onStatus((d: any) => { setSt(d); setHist((h) => [...h.slice(-29), d.players]) }); api.onProgress(setProg); api.onGame(setRunning); api.onUpdate(setUpd); addEventListener('focus', () => api.checkUpdate?.()); api.onApi?.(setApiSt)
+    st1(10, 'boot1'); api.onStatus((d: any) => { setSt(d); setHist((h) => [...h.slice(-29), d.players]) }); api.onProgress(setProg); api.onGame(setRunning); api.onUpdate(setUpd); api.onFriendNotes?.((l: any[]) => { for (const x of l) say(x.k === 'request' ? x.who + ' хочет добавить вас в друзья — «Миры» → «Друзья»' : x.k === 'accepted' ? x.who + ' принял(а) вашу заявку в друзья' : x.who + ' отклонил(а) заявку в друзья', x.k === 'declined' ? 'err' : 'info') }); addEventListener('focus', () => api.checkUpdate?.()); api.onApi?.(setApiSt)
     setCfg(await api.getSettings()); api.config().then((c: any) => c && setConf({ ...defConf, ...c })); api.tgFeed('safimine_grief').then(setFeed); api.versionArt().then((a: any) => { ART = a || {}; setArtTick((x) => x + 1) }).catch(() => {}); api.profList().then(setProfiles); api.apiInfo?.().then(setApiSt)
     st1(40, 'accounts'); await refresh(); st1(65, 'boot2'); setSys(await api.sysInfo()); setStats(await api.stats())
     st1(85, 'boot3'); await new Promise((r) => setTimeout(r, 600)); st1(100, 'boot4') })() }, [])
@@ -268,7 +298,7 @@ export default function App() {
   const addCape = async (data: string) => { const it = { id: 'my' + Date.now().toString(36), data }; setMyCapes([it, ...myCapes]); setCape(it.id); const r = await api.saveTexture({ data: await withElytra(data), kind: 'cape' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
   const addSkin = (data: string) => { setPresetSkin(''); if (!mySkins.some((x) => x.data === data)) setMySkins([{ id: 'my' + Date.now().toString(36), data }, ...mySkins]) }
   const useSkin = async (data: string) => { setSkin(data); const r = await api.saveTexture({ data, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
-  const play = async (v: string, join = false, server?: any) => { if (!me) { setAddOpen(true); return say('Сначала добавьте аккаунт', 'info') } let r: any; try { r = await api.launch({ version: v, join, lang, server }) } catch (e: any) { r = { error: 'Не удалось запустить: ' + (e?.message || e) } } if (r?.warn) say(r.warn, 'info'); if (r?.error) say(r.error, 'err') }
+  const play = async (v: string, join = false, server?: any, extra?: { world?: string; together?: boolean }) => { if (!me) { setAddOpen(true); return say('Сначала добавьте аккаунт', 'info') } let r: any; try { r = await api.launch({ version: v, join, lang, server, ...(extra || {}) }) } catch (e: any) { r = { error: 'Не удалось запустить: ' + (e?.message || e) } } if (r?.warn) say(r.warn, 'info'); if (r?.error) say(r.error, 'err') }
   const install = async (slug: string) => { setBusy(slug)
     if (kind === 'mod') { const list = targets.filter((x) => tsel.includes(x.key)); const tg = list.length ? list : [{ key: instKeyNow, version: ver }]
       const r = await api.modsInstallTo(slug, tg); const ok = r.filter((x: any) => x.ok).length; say(ok === r.length ? `Установлено: ${slug}${r.length > 1 ? ' · сборок: ' + ok : ''}` : `Установлено в ${ok} из ${r.length} — для части версий мода нет`) }
@@ -446,6 +476,7 @@ export default function App() {
             <div className="flex flex-col gap-4">
               <PetCard face={miniSkin || skinUrl} />
               <CosmCard />
+              <ModelsCard say={say} />
               <div className="card rounded-3xl p-5 flex gap-4 items-center"><div className="w-16 h-16 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center" style={{ background: 'var(--chip)' }}>{miniSkin ? <div className="w-full h-full" style={{ backgroundImage: `url(${miniSkin})`, backgroundSize: '512px 512px', backgroundPosition: '-64px -64px', imageRendering: 'pixelated' }} /> : <Icon n="user" s={26} />}</div>
                 <div className="flex-1 min-w-0"><b>Питомец «Мини-я»</b><div className="muted text-sm">Маленькая копия вас бегает следом. Включите в Визуалы → Питомец → «Мини-я»; скин — ваш или отдельный отсюда. Его видят все игроки Asteria</div>
                   <div className="flex gap-2 mt-2 flex-wrap"><button className="btn !py-1.5 text-sm flex items-center gap-2" onClick={async () => { const d = await api.pickSkin(); if (d) { setMiniSkin(d); const r = await api.saveTexture({ data: d, kind: 'mini' }); say(r?.uploaded ? 'Скин «Мини-я» сохранён' : 'Скин сохранён на этом компьютере', r?.uploaded ? 'ok' : 'info') } }}><Icon n="upload" s={15} />Свой скин для «Мини-я»</button>
@@ -526,6 +557,7 @@ export default function App() {
                 <div className="flex gap-4 flex-wrap text-sm mb-3">{storage.items.map((x: any, i: number) => <span key={x.key}><span className="inline-block w-2.5 h-2.5 rounded-full mr-1.5" style={{ background: ['#22d3ee', '#a855f7', '#f59e0b', '#f43f5e'][i] }} />{t(['profiles', 'gameFiles', 'java', 'cache'][i])} — {(x.bytes / 1048576).toFixed(0)} MB</span>)}</div>
                 {storage.profiles.map((p: any) => <div key={p.name} className="row !cursor-default"><span className="flex-1">Minecraft {p.name}</span><span className="muted text-sm">{(p.bytes / 1048576).toFixed(0)} MB</span></div>)}</>}</div>
           </div>}
+          {tab === 'worlds' && <Worlds ver={ver} versions={verOpts} play={play} say={say} running={running} />}
           {tab === 'visuals' && <VisualsTab plan="PREMIUM" bg={visBg} say={say} ver={ASTERIA[ver] === 'full' ? ver : rec} onBuy={shop} />}
         </main>
       </div>

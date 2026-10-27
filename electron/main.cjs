@@ -1,5 +1,5 @@
 const zlib = require('zlib')
-const { app, BrowserWindow, ipcMain, shell, dialog, net, nativeImage, clipboard, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, dialog, net, nativeImage, clipboard, screen, Notification } = require('electron')
 const { spawnSync, execFileSync } = require('child_process')
 app.commandLine.appendSwitch('proxy-bypass-list', '<local>')
 const os = require('os'), crypto = require('crypto')
@@ -118,11 +118,16 @@ async function visualsMod(version) { // Asteria Visuals: free for everyone, ship
 }
 const instanceDirs = () => { try { const b = path.join(settings().dir, 'instances'); return fs.readdirSync(b).map((n) => path.join(b, n)) } catch { return [] } }
 function writeVisuals(dir, v = store.get('visuals')) { if (!v) return; try { const c = path.join(dir, 'config'); fs.mkdirSync(c, { recursive: true }); fs.writeFileSync(path.join(c, 'asteria-visuals.json'), JSON.stringify(v, null, 1)) } catch {} }
-ipcMain.handle('vis:get', () => { let best = store.get('visuals', null), t = store.get('visualsAt', 0)
+const visLatest = () => { let best = store.get('visuals', null), t = store.get('visualsAt', 0)
   for (const d of instanceDirs()) { const f = path.join(d, 'config', 'asteria-visuals.json'); try { const m = fs.statSync(f).mtimeMs; if (m > t + 1500) { best = JSON.parse(fs.readFileSync(f, 'utf8')); t = m } } catch {} }
   if (best !== store.get('visuals', null)) { store.set('visuals', best); store.set('visualsAt', t) }
-  return best })
-ipcMain.handle('vis:set', (_, v) => { store.set('visuals', v); store.set('visualsAt', Date.now()); for (const d of instanceDirs()) writeVisuals(d, v); return { live: !!game } }) // the mod re-reads the file every second
+  return best }
+ipcMain.handle('vis:get', () => visLatest())
+const visSave = (v) => { store.set('visuals', v); store.set('visualsAt', Date.now()); for (const d of instanceDirs()) writeVisuals(d, v); setTimeout(() => beatNow?.(), 50); return { live: !!game } } // the mod re-reads the file every second
+ipcMain.handle('vis:set', (_, v) => visSave(v))
+/** one module changed (Skins page cards): merged into the freshest config, so cards and the Visuals page never overwrite each other with an old copy */
+ipcMain.handle('vis:patch', (_, id, patch) => { const v = visLatest() || { modules: {} }; v.modules = v.modules || {}; const o = v.modules[id] || {}
+  v.modules[id] = { ...o, ...patch, s: { ...(o.s || {}), ...((patch && patch.s) || {}) } }; return visSave(v) })
 // visuals presets: the list lives in the launcher store and is mirrored to config/asteria-visuals-presets.json, so the in-game menu can switch them
 function writePresets(dir, p = store.get('visPresets')) { if (!p) return; try { const c = path.join(dir, 'config'); fs.mkdirSync(c, { recursive: true }); fs.writeFileSync(path.join(c, 'asteria-visuals-presets.json'), JSON.stringify(p)) } catch {} }
 ipcMain.handle('visp:get', () => { const p = store.get('visPresets', null); if (!p) return null; let t = store.get('visPresetsAt', 0)
@@ -154,6 +159,27 @@ ipcMain.handle('share:get', async (_, code) => { const raw = String(code || '').
 ipcMain.handle('pack:export', (_, ver) => { const d = inst(settings(), ver), ls = (sub, re) => { try { return fs.readdirSync(path.join(d, sub)).map((f) => (f.match(re) || [])[1]).filter(Boolean) } catch { return [] } }
   return { ver, mods: ls('mods', /^mod-(.+)\.jar$/).filter((x) => !DEFAULTS.includes(x) && x !== 'fabric-api'), packs: ls('resourcepacks', /^(.+)\.zip$/), shaders: ls('shaderpacks', /^(.+)\.zip$/) } })
 // ---------- markers (instances/<v>/config/asteria-marks.json, the mod reads it every couple of seconds) and the own crosshair picture
+// ---------- own 3D models (pet / hat / back / wings): Blockbench .bbmodel or a resource pack .zip with an item model
+const MODEL_SLOTS = ['pet', 'hat', 'back', 'wings']
+ipcMain.handle('model:import', async (_, slot) => { if (!MODEL_SLOTS.includes(slot)) return { error: 'bad slot' }
+  const r = await dialog.showOpenDialog(win, { filters: [{ name: 'Модель Blockbench или ресурспак', extensions: ['bbmodel', 'zip', 'json'] }] }); const f = r.filePaths[0]; if (!f) return null
+  let m; try { m = require('./models.cjs').convert(fs.readFileSync(f), f, slot) } catch (e) { return { error: 'Не удалось прочитать модель: ' + (e?.message || e) } }
+  const json = JSON.stringify(m); if (json.length > 1_800_000) return { error: 'Модель слишком большая (больше 1.8 МБ)' }
+  const d = path.join(settings().dir, 'skins', 'models'); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, slot + '.json'), json)
+  const meta = store.get('models', {}); meta[slot] = { name: path.basename(f).replace(/\.\w+$/, ''), polys: m.polys.length }; store.set('models', meta)
+  for (const dir of instanceDirs()) { try { fs.mkdirSync(path.join(dir, 'config'), { recursive: true }); fs.writeFileSync(path.join(dir, 'config', 'asteria-model-' + slot + '.json'), json) } catch {} }
+  let uploaded = false; try { const acc = store.get('accounts', []).find((a) => a.id === store.get('active')); await resolveApi()
+    const tok = acc ? await getToken(acc.name).catch(() => null) : null; const res = acc && await fetch(apiBase() + '/model', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, slot, data: json }), signal: AbortSignal.timeout(20000) }).then((x) => x.json()).catch(() => null); uploaded = !!res?.ok } catch {}
+  return { ok: true, name: meta[slot].name, polys: m.polys.length, uploaded } })
+ipcMain.handle('model:list', () => store.get('models', {}))
+ipcMain.handle('model:remove', (_, slot) => { const meta = store.get('models', {}); delete meta[slot]; store.set('models', meta); fs.rmSync(path.join(settings().dir, 'skins', 'models', slot + '.json'), { force: true })
+  for (const dir of instanceDirs()) fs.rmSync(path.join(dir, 'config', 'asteria-model-' + slot + '.json'), { force: true }); return true })
+ipcMain.handle('bg:set', (_, orig, blur) => { const dec = (d) => d ? Buffer.from(String(d).split(',')[1], 'base64') : null, a = dec(orig), b = dec(blur)
+  for (const dir of instanceDirs()) { const c = path.join(dir, 'config'); try { fs.mkdirSync(c, { recursive: true }); for (const [n, buf] of [['asteria-bg.png', a], ['asteria-bg-blur.png', b]]) buf ? fs.writeFileSync(path.join(c, n), buf) : fs.rmSync(path.join(c, n), { force: true }) } catch {} }
+  orig ? store.set('menuBg', orig) : store.delete('menuBg'); return true })
+ipcMain.handle('bg:get', () => store.get('menuBg', null))
+ipcMain.handle('binds:get', () => store.get('cmdBinds', []))
+ipcMain.handle('binds:set', (_, list) => { store.set('cmdBinds', list); for (const d of instanceDirs()) { try { fs.mkdirSync(path.join(d, 'config'), { recursive: true }); fs.writeFileSync(path.join(d, 'config', 'asteria-binds.json'), JSON.stringify(list)) } catch {} } return true })
 ipcMain.handle('marks:get', (_, ver) => { try { return JSON.parse(fs.readFileSync(path.join(inst(settings(), ver), 'config', 'asteria-marks.json'), 'utf8')) } catch { return {} } })
 ipcMain.handle('marks:set', (_, ver, data) => { const d = path.join(inst(settings(), ver), 'config'); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'asteria-marks.json'), JSON.stringify(data)); return true })
 ipcMain.handle('xh:set', (_, data) => { const png = data ? Buffer.from(String(data).split(',')[1], 'base64') : null
@@ -181,6 +207,11 @@ const relayStart = () => relayPort ? Promise.resolve(relayPort) : new Promise((o
   const srv = require('http').createServer(async (req, res) => {
     const m = /^\/(session|services)(\/.*)$/.exec(req.url || ''); if (!m) { res.writeHead(404); return res.end() }
     const body = await new Promise((r) => { const c = []; req.on('data', (d) => c.push(d)); req.on('end', () => r(Buffer.concat(c))) })
+    // "is multiplayer allowed / is chat allowed": answered here, so an offline account (or Mojang being unreachable) never
+    // makes Minecraft hide Multiplayer or refuse the "Join SafiMine" quick play
+    if (m[1] === 'services' && /^\/(privileges|player\/attributes|privacy\/blocklist)/.test(m[2])) {
+      const ok = m[2].startsWith('/privacy') ? { blockedProfiles: [] } : { privileges: { onlineChat: { enabled: true }, multiplayerServer: { enabled: true }, multiplayerRealms: { enabled: false }, telemetry: { enabled: false } }, profanityFilterPreferences: { profanityFilterOn: false } }
+      res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(ok)) }
     const keys = m[1] === 'services' && m[2].startsWith('/publickeys')
     if (keys && keysCache) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(keysCache) }
     try {
@@ -320,7 +351,7 @@ ipcMain.handle('mods:list', async (_, ver) => {
 ipcMain.handle('mods:toggle', (_, file, ver) => { const d = path.join(inst(settings(), ver), 'mods'), f = path.join(d, path.basename(file))
   fs.renameSync(f, f.endsWith('.disabled') ? f.slice(0, -9) : f + '.disabled') })
 ipcMain.handle('mods:remove', (_, file, ver) => fs.rmSync(path.join(inst(settings(), ver), 'mods', path.basename(file)), { force: true }))
-ipcMain.handle('cosm:set', (_, c) => store.set('cosmetics', c))
+ipcMain.handle('cosm:set', (_, c) => { store.set('cosmetics', c); beatNow?.() })
 app.whenReady().then(() => { create(); poll().then(() => !lastSt?.online && setTimeout(poll, 4000)); setInterval(poll, 20000) })
 ipcMain.on('win', (_, a) => { if (a === 'min') win.minimize(); else if (a === 'max') win.isMaximized() ? win.unmaximize() : win.maximize(); else win.close() })
 ipcMain.handle('link', (_, u) => LINKS.test(u) && shell.openExternal(u))
@@ -408,13 +439,14 @@ function mediaLine(o) {
   try { const cfg = path.join(dir, 'config'); fs.mkdirSync(cfg, { recursive: true })
     if (coverWritten[dir] !== mediaCoverKey) { coverWritten[dir] = mediaCoverKey; const cf = path.join(cfg, 'asteria-media-cover.png'); if (mediaCover) fs.writeFileSync(cf, mediaCover); else fs.rmSync(cf, { force: true }) }
     fs.writeFileSync(path.join(cfg, 'asteria-media.json'), JSON.stringify({ ...o, cover: mediaCover ? mediaCoverKey : '' }))
-    const cmdF = path.join(cfg, 'asteria-media-cmd.txt') // buttons in the in-game Asteria menu
-    if (fs.existsSync(cmdF)) { const c = fs.readFileSync(cmdF, 'utf8').trim(); fs.rmSync(cmdF, { force: true }); mediaCmd(c) }
   } catch {} }
+// buttons / keys in the game: config/asteria-media-cmd.txt is checked every 100 ms (not only when the track info arrives)
+setInterval(() => { const dir = liveGameDir(); if (!dir) return; const cmdF = path.join(dir, 'config', 'asteria-media-cmd.txt')
+  try { if (fs.existsSync(cmdF)) { const c = fs.readFileSync(cmdF, 'utf8').trim(); fs.rmSync(cmdF, { force: true }); mediaCmd(c) } } catch {} }, 100)
 const mediaCmdFile = () => path.join(app.getPath('userData'), 'media-cmd.txt')
 /** play/pause/skip: the running reader picks the file up within 0.4 s and answers with the new track */
 function mediaCmd(c) {
-  if (process.platform !== 'win32' || !['toggle', 'next', 'prev'].includes(c)) return
+  if (process.platform !== 'win32' || !['toggle', 'next', 'prev', 'volup', 'voldown', 'mute'].includes(c)) return
   try { fs.writeFileSync(mediaCmdFile(), c) } catch {} if (!mediaProc) mediaStart() }
 ipcMain.handle('vis:enabled', (_, v) => { if (typeof v === 'boolean') store.set('visualsOn', v); return store.get('visualsOn', true) !== false })
 ipcMain.handle('media:get', () => ({ ...media, cover: mediaCover ? 'data:image/png;base64,' + mediaCover.toString('base64') : '' }))
@@ -516,7 +548,56 @@ function aliveFile() {
       if (Date.now() - at < 15000 && pid && alive(pid)) { const v = /^\d+\.\d+(\.\d+)?$/.test(id) ? id : (store.get('profiles', []).find((p) => p.id === id)?.version || null); return { pid, version: v, dir: path.join(root, id) } } } } catch {}
   return null
 }
-ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
+// ------------------------------------------------------------------ worlds: every instance's saves, import / export / copy, maps from the catalog
+const savesOf = (ver) => { const d = path.join(inst(settings(), ver), 'saves'); fs.mkdirSync(d, { recursive: true }); return d }
+const inInstances = (p) => { const b = path.resolve(settings().dir, 'instances') + path.sep, r = path.resolve(String(p || '')); return r.startsWith(b) && r.split(path.sep).includes('saves') ? r : null }
+const worldSize = (d, cap = 4000) => { let n = 0, s = 0; const walk = (x) => { for (const e of fs.readdirSync(x, { withFileTypes: true })) { if (++n > cap) return; const f = path.join(x, e.name); if (e.isDirectory()) walk(f); else try { s += fs.statSync(f).size } catch {} } }; try { walk(d) } catch {} return s }
+ipcMain.handle('worlds:list', () => { const out = [], base = path.join(settings().dir, 'instances')
+  try { for (const v of fs.readdirSync(base)) { const sd = path.join(base, v, 'saves'); let names = []; try { names = fs.readdirSync(sd) } catch {}
+    for (const n of names) { const p = path.join(sd, n), lvl = path.join(p, 'level.dat'); if (!fs.existsSync(lvl)) continue; let icon = null
+      try { const ic = path.join(p, 'icon.png'); if (fs.existsSync(ic)) icon = 'data:image/png;base64,' + fs.readFileSync(ic).toString('base64') } catch {}
+      const pr = /^\d+\.\d+(\.\d+)?$/.test(v) ? null : store.get('profiles', []).find((x) => x.id === v); if (!pr && !/^\d/.test(v)) continue
+      out.push({ path: p, name: n, version: pr ? pr.version : v, profile: pr ? pr.name : '', mtime: fs.statSync(lvl).mtimeMs, size: worldSize(p), icon }) } } } catch {}
+  return out.sort((a, b) => b.mtime - a.mtime) })
+ipcMain.handle('worlds:openSaves', (_, ver) => shell.openPath(savesOf(ver)))
+ipcMain.handle('worlds:open', (_, p) => { const r = inInstances(p); return r ? shell.openPath(r) : null })
+ipcMain.handle('worlds:remove', async (_, p) => { const r = inInstances(p); if (!r) return false; await shell.trashItem(r); return true }) // to the recycle bin: can be restored
+ipcMain.handle('worlds:copy', (_, p, ver) => { const r = inInstances(p); if (!r) return false; let to = path.join(savesOf(ver), path.basename(r)), i = 2; while (fs.existsSync(to)) to = path.join(savesOf(ver), path.basename(r) + ' (' + i++ + ')'); fs.cpSync(r, to, { recursive: true }); return true })
+/** a world zip (level.dat at the root or one folder deep) -> saves/<name> of the version; entries leaving the folder are skipped */
+function unpackWorld(zipFile, ver, name) { const AdmZip = require('adm-zip'), z = new AdmZip(zipFile), es = z.getEntries()
+  const lvl = es.filter((e) => /(^|\/)level\.dat$/.test(e.entryName)).sort((a, b) => a.entryName.length - b.entryName.length)[0]; if (!lvl) throw new Error('В архиве нет мира (level.dat)')
+  const pre = lvl.entryName.slice(0, -'level.dat'.length), base = (name || pre.replace(/\/$/, '').split('/').pop() || path.basename(zipFile, '.zip')).replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'Мир'
+  let to = path.join(savesOf(ver), base), i = 2; while (fs.existsSync(to)) to = path.join(savesOf(ver), base + ' (' + i++ + ')')
+  for (const e of es) { if (e.isDirectory || !e.entryName.startsWith(pre)) continue; const f = path.resolve(to, e.entryName.slice(pre.length)); if (!f.startsWith(path.resolve(to) + path.sep)) continue
+    fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, e.getData()) }
+  return path.basename(to) }
+ipcMain.handle('worlds:import', async (_, ver) => { const r = await dialog.showOpenDialog(win, { title: 'Импорт мира', properties: ['openFile', 'openDirectory'], filters: [{ name: 'Мир (.zip или папка)', extensions: ['zip'] }] }); const f = r.filePaths[0]; if (!f) return null
+  try { if (fs.statSync(f).isDirectory()) { if (!fs.existsSync(path.join(f, 'level.dat'))) return { error: 'В папке нет level.dat — это не мир' }; let to = path.join(savesOf(ver), path.basename(f)), i = 2; while (fs.existsSync(to)) to = path.join(savesOf(ver), path.basename(f) + ' (' + i++ + ')'); fs.cpSync(f, to, { recursive: true }); return { name: path.basename(to) } }
+    return { name: unpackWorld(f, ver) } } catch (e) { return { error: e.message } } })
+ipcMain.handle('worlds:export', async (_, p) => { const r = inInstances(p); if (!r) return null; const s = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('downloads'), path.basename(r) + '.zip'), filters: [{ name: 'ZIP', extensions: ['zip'] }] }); if (!s.filePath) return null
+  const AdmZip = require('adm-zip'), z = new AdmZip(); z.addLocalFolder(r, path.basename(r)); z.writeZip(s.filePath); shell.showItemInFolder(s.filePath); return s.filePath })
+/** maps catalog: filled on the backend (launcher config "maps": [{ name, desc, img, url, ver }]) — only those links are downloaded */
+ipcMain.handle('maps:list', () => ((store.get('remoteConf') || {}).maps || []).filter((m) => m && /^https:\/\//.test(m.url || '')))
+ipcMain.handle('maps:get', async (_, url, ver, name) => { const m = ((store.get('remoteConf') || {}).maps || []).find((x) => x.url === url); if (!m) return { error: 'Карты нет в каталоге' }
+  const tmp = path.join(app.getPath('temp'), 'asteria-map-' + Date.now() + '.zip')
+  try { const res = await net.fetch(url); if (!res.ok) throw new Error('HTTP ' + res.status); fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer())); return { name: unpackWorld(tmp, ver, name || m.name) } }
+  catch (e) { return { error: 'Не скачалось: ' + e.message } } finally { fs.rmSync(tmp, { force: true }) } })
+// ------------------------------------------------------------------ friends: a local list, presence (in game, version, e4mc address) from the Asteria server
+let hostNow = '', beatNow = null // beatNow: send the heartbeat at once (cosmetics changed in the launcher) // the e4mc address of the world this player opened to friends
+// requests go through the Asteria server under the active account; new notices (request / accepted / declined) are pushed to the window
+let friendsLast = null
+async function friendsCall(act = 'get', who = '', accept = false) { const acc = store.get('accounts', []).find((a) => a.id === store.get('active')); if (!acc) return { error: 'Нет аккаунта' }
+  await resolveApi().catch(() => {}); const token = await getToken(acc.name).catch(() => null); if (!token) return { error: 'Нет связи с сервером Asteria' }
+  const seenK = 'friendNotes:' + acc.name.toLowerCase(), since = store.get(seenK, Date.now() - 86400000)
+  try { const r = await net.fetch(apiBase() + '/friends', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token, act, who, accept, since }) })
+    const j = await r.json(); if (!r.ok) return { error: j.error === 'already' ? 'Уже в друзьях' : j.error === 'owned' ? 'Ник занят другим лаунчером' : 'Сервер: ' + (j.error || r.status) }
+    if (j.notes?.length) { store.set(seenK, Math.max(...j.notes.map((x) => x.t))); try { win?.webContents.send('friendNotes', j.notes) } catch {}
+      if (!win?.isFocused()) for (const x of j.notes) try { new Notification({ title: 'AsteriaLauncher', body: x.k === 'request' ? x.who + ' хочет добавить вас в друзья' : x.k === 'accepted' ? x.who + ' принял(а) вашу заявку в друзья' : x.who + ' отклонил(а) заявку в друзья' }).show() } catch {} }
+    friendsLast = { ...j, host: hostNow }; return friendsLast } catch (e) { return { error: 'Сервер Asteria недоступен' } } }
+ipcMain.handle('friends:get', () => friendsCall('get'))
+ipcMain.handle('friends:act', (_, act, who, accept) => friendsCall(act, String(who || '').trim(), !!accept))
+setInterval(() => { if (store.get('accounts', []).length) friendsCall('get').catch(() => {}) }, 30000) // notices arrive even when the Friends page is closed
+ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, together }) => {
   const srv = server && server.host ? { host: String(server.host), port: +server.port || 25565 } : { host: HOST, port: PORT }
   if (game) return { error: 'Игра уже запущена' }
   const ext = await externalGame(true); if (ext) { try { win?.webContents.send('game', true) } catch {} return { error: `Minecraft ${ext.version || ''} уже запущен — закройте его или нажмите «Остановить»` } }
@@ -541,22 +622,27 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
       if (modern || core) { send('Fabric', 5, '', 2); custom = await prepareFabric(s, version, (st, p) => send('Fabric', p, st, 2), legacy).catch(() => null) } }
     if (custom && core) fs.copyFileSync(core, path.join(md, 'asteria-core.jar'))
     if (custom && vis && store.get('visualsOn', true) !== false) fs.copyFileSync(vis, path.join(md, 'asteria-visuals.jar')) // 'Visuals off' = play without the mod
-    const warn = wantFabric && modern && !custom ? 'Fabric не установился (нет связи с meta.fabricmc.net?) — игра запущена без модов: без звезды, визуалов и FPS-буста' : ''
+    let togetherWarn = ''; hostNow = ''
+    if (together) { if (!custom) togetherWarn = 'Игра вместе работает через Fabric-мод e4mc — Fabric не установился'; else { send('e4mc', 8, '', 2); await installSlug('e4mc', version, md).catch(() => { togetherWarn = 'Мод e4mc для ' + version + ' не найден — для игры вместе выберите 1.20.1 или 1.21.4' }) } }
+    const warn = (wantFabric && modern && !custom ? 'Fabric не установился (нет связи с meta.fabricmc.net?) — игра запущена без модов: без звезды, визуалов и FPS-буста' : '') || togetherWarn
     writeVisuals(dir); writePresets(dir); const relay = await relayStart()
     const opts = { root: s.dir, overrides: { gameDirectory: dir }, authorization: acc.type === 'offline' ? offlineAuth(acc.name) : acc.auth, version: { number: version, type: 'release', ...(custom ? { custom } : {}) },
       memory: { max: s.ramMb + 'M', min: Math.min(s.ramMb, 2048) + 'M' }, customLaunchArgs: ['--width', String(winW), '--height', String(winH), ...(s.fullscreen ? ['--fullscreen'] : [])], javaPath,
       customArgs: [...s.jvm.split(/\s+/).filter(Boolean), '-Djava.net.useSystemProxies=true' /* skins, Mojang keys and our API go through the Windows proxy, like in the browser */, '-Dasteria.launcher=1', '-Dasteria.api=' + apiBase(), '-Dasteria.user=' + acc.name, '-Dasteria.gamedir=' + dir, '-Dasteria.root=' + s.dir,
         ...(acc.type === 'offline' ? OFFLINE : LICENSED), ...relayArgs(relay)],
       // 'Join SafiMine': MCLC ignores the old server option, quickPlay works (1.20+ understands --quickPlayMultiplayer, older versions --server/--port)
-      ...(join ? { quickPlay: { type: /^(1\.2\d|2\d\.)/.test(version) ? 'multiplayer' : 'legacy', identifier: srv.host + ':' + srv.port } } : {}) }
+      ...(join ? { quickPlay: { type: /^(1\.2\d|2\d\.)/.test(version) ? 'multiplayer' : 'legacy', identifier: srv.host + ':' + srv.port } } : {}),
+      // straight into a world (1.20+ understands --quickPlaySingleplayer; older versions open the title screen)
+      ...(!join && world && /^(1\.2\d|2\d\.)/.test(version) ? { quickPlay: { type: 'singleplayer', identifier: path.basename(String(world)) } } : {}) }
     l.on('progress', (e) => send('Загрузка файлов', e.total ? Math.round((e.task / e.total) * 100) : 0, e.type || '', 3))
     l.on('download-status', (e) => send('Загрузка библиотек', e.total ? Math.round((e.current / e.total) * 100) : 0, e.name || '', 3))
     l.on('package-extract', () => send('Распаковка', 100, '', 4))
     l.on('debug', (m) => { logBuf.push(String(m)); if (logBuf.length > 1000) logBuf.splice(0, 300) })
     l.on('data', (m) => { // NOTE: no per-line IPC — joining a world prints thousands of lines
       logBuf.push(String(m).trimEnd()); if (logBuf.length > 1000) logBuf.splice(0, 300)
+      const e4 = /([a-z0-9-]+\.)+e4mc\.link/i.exec(String(m)); if (e4 && e4[0] !== hostNow) { hostNow = e4[0].toLowerCase(); try { win?.webContents.send('together', hostNow) } catch {} } // the world is open to friends
       if (!started) { started = true; t0 = Date.now(); gameDirNow = dir; coverWritten = {}; rpcGame(version, dir, join ? srv.host : null); send('', 0); try { win?.webContents.send('game', true) } catch {}; if (s.hideOnLaunch !== false) win?.minimize() } })
-    l.on('close', () => { if (hb) clearInterval(hb); game = null; gameVer = null; gameDirNow = null
+    l.on('close', () => { if (hb) clearInterval(hb); beatNow = null; game = null; gameVer = null; gameDirNow = null; hostNow = ''
       fs.rmSync(path.join(dir, 'asteria-live.flag'), { force: true })
       if (Object.keys(pendingOpts).length) { setOpts(dir, pendingOpts); pendingOpts = {} } // the game may rewrite options.txt on exit: keep what was changed in the launcher
       if (t0) { const el = Date.now() - t0, pv = store.get('perVer', {}); store.set('playMs', store.get('playMs', 0) + el); pv[version] = (pv[version] || 0) + el; store.set('perVer', pv); store.set('launches', store.get('launches', 0) + 1) }
@@ -569,7 +655,8 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server }) => {
       return `${+p.s?.kind || 0}:${(+p.s?.size || 1).toFixed(2)}${mini ? ':m' : ''}` }
     const fxOf = () => { const m = visNow()?.modules || {}; const c = m.cosmetics; const cos = c?.on ? `c:${+c.s?.wings || 0}.${+c.s?.hat || 0}.${+c.s?.back || 0}${c.s?.tint === false && c.s?.color ? '.' + String(c.s.color).replace('#', 'ff') : ''}` : ''
       return [m.halo?.on && 'halo', m.chinahat?.on && 'hat', m.trails?.on && 'trail', cos].filter(Boolean).join(',') }
-    const beat = () => fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf() }) }).catch(() => {}); beat(); hb = setInterval(beat, 20000) // registers right away, so other launcher players see the icon at once
+    const beat = () => fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf(), ver: version, host: hostNow, srv: join ? srv.host : '' }) }).catch(() => {}); beat(); beatNow = beat; let cfgM = 0; const cfgF = path.join(dir, 'config', 'asteria-visuals.json')
+    hb = setInterval(() => { let m = 0; try { m = fs.statSync(cfgF).mtimeMs } catch {} if (m !== cfgM && cfgM) beat(); cfgM = m || cfgM; if (++hbN % 20 === 0) beat() }, 1000); let hbN = 0 // registers right away, so other launcher players see the icon at once
     await addServer(dir).catch(() => {}); for (const x of (store.get('remoteConf') || {}).servers || []) if (x.ip && x.ip !== HOST) await addServerEntry(dir, x.name || x.ip, x.port && +x.port !== 25565 ? x.ip + ':' + x.port : x.ip).catch(() => {})
     game = await l.launch(opts); gameVer = version
     if (!game) { clearInterval(hb); send('', 0); return { error: 'Не удалось запустить игру' } }
@@ -588,9 +675,10 @@ function setupUpdates() { // forced updates via electron-updater (generic provid
   autoUpdater.on('update-downloaded', (i) => emit({ state: 'ready', version: i.version }))
   autoUpdater.on('error', () => {})
   let lastCheck = 0, ready = false
-  const check = () => { if (ready || Date.now() - lastCheck < 60000) return; lastCheck = Date.now(); autoUpdater.checkForUpdates().catch(() => {}) }
+  const check = () => { if (ready || Date.now() - lastCheck < 20000) return; lastCheck = Date.now(); autoUpdater.checkForUpdates().catch(() => {}) }
   autoUpdater.on('update-downloaded', () => { ready = true })
-  check(); setInterval(check, 3 * 60 * 1000) // an open launcher notices a new release within minutes
+  check(); setInterval(check, 60 * 1000) // an open launcher notices a new release within a minute
+  autoUpdater.on('update-not-available', () => {}); app.on('browser-window-focus', check)
   ipcMain.handle('update:check', () => check()) // also every time the window comes back to the front
 }
 ipcMain.handle('update:install', () => autoUpdater?.quitAndInstall(true, true)) // silent: no installer window, launcher restarts by itself

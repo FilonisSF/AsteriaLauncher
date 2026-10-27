@@ -100,6 +100,18 @@ public interface Game {
     default float light(double x, double y, double z) { return 1; }
     /** food level 0..20 (-1 unknown) */
     default int food() { return -1; }
+    /** the world (dimension) id, e.g. minecraft:the_nether */
+    default String dimension() { return ""; }
+    /** runs a command ("/spawn" or "spawn") */
+    default void command(String cmd) {}
+    /** living entities around (not you), for hitboxes */
+    default java.util.List<Object> living(double range) { return java.util.Collections.emptyList(); }
+    /** what the player aims with: {kind (0 none, 1 bow, 2 crossbow, 3 pearl/snowball/egg, 4 trident, 5 potion), power 0..1}, eye x y z, yaw, pitch */
+    default double[] aim() { return null; }
+    /** is there a solid block at this point */
+    default boolean solid(double x, double y, double z) { return false; }
+    /** category of an item: 0 weapon, 1 tool, 2 block, 3 food, 4 other */
+    default int category(Object stack) { return 4; }
     /** opens / closes the Asteria menu screen */
     void openMenu();
     void closeMenu();

@@ -32,6 +32,7 @@ public class HeldItemRendererMixin {
     private void asteria$turn(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swing, ItemStack item, float equip, MatrixStack m, VertexConsumerProvider vcp, int light, CallbackInfo ci) {
         if (hand == Hand.MAIN_HAND) { float[] p = Fx.swingPose(swing); if (p != null) { float side = player.getMainArm() == Arm.RIGHT ? 1 : -1;
             m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(p[3])); m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * p[4])); m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(side * p[5])); } }
+        float mini = Fx.miniScale(ru.safimine.asteria.visuals.mc.VisualsClient.category(item)); if (mini != 1) m.scale(mini, mini, mini);
         if (!V.on("viewmodel")) return;
         Arm arm = hand == Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
         float side = arm == Arm.RIGHT ? 1 : -1; float[] hd = Fx.hand(hand == Hand.MAIN_HAND ? 0 : 1); float s = hd[6];
