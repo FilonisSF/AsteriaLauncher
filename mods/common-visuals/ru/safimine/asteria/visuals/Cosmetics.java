@@ -245,18 +245,25 @@ public final class Cosmetics {
     /** whose cosmetics are drawn ("" = yours): own models come from that player */
     public static String who = "";
     private static java.io.File custom(String slot) { return who.isEmpty() ? Model.own(slot) : Model.other(who, slot); }
-    public static void draw(Fx.R3 r, double[] pos, float bodyYaw, float headYaw, float h, int wing, int hatK, int backK, int tint, boolean air, float light, long now) {
-        double yb = Math.toRadians(bodyYaw), cyb = Math.cos(yb), syb = Math.sin(yb), sc = h / 1.8;
+    public static void draw(Fx.R3 r, double[] pos, float bodyYaw, float headYaw, float h, int wing, int hatK, int backK, int tint, boolean air, float light, long now) { draw(r, pos, bodyYaw, headYaw, 0, h < 1.7f, h, wing, hatK, backK, tint, air, light, now); }
+    /** lean of the body when sneaking (radians, like the player model), applied around the hips (12 px) */
+    private static final double LEAN = 0.5;
+    /** sneaking like the player model: the head drops 4.2 px and the body 3.2 px, the whole model 0.125 blocks (2.13 px) more; the body leans around its top (the neck) */
+    private static final double HEAD_DROP = 6.33, BODY_DROP = 5.33;
+    private static double[] lean(double x, double y, double z, double a, double pivot) { if (a == 0) return new double[]{x, y, z}; double dy = y - pivot, c = Math.cos(a), s = Math.sin(a); return new double[]{x, pivot + dy * c - z * s, z * c + dy * s}; }
+    public static void draw(Fx.R3 r, double[] pos, float bodyYaw, float headYaw, float pitch, boolean sneaking, float h, int wing, int hatK, int backK, int tint, boolean air, float light, long now) {
+        if (sneaking && h > 1.7f) h = 1.5f; final double ln = sneaking ? LEAN : 0, pr = Math.toRadians(Math.max(-90, Math.min(90, pitch))), cp = Math.cos(pr), sp = Math.sin(pr);
+        double yb = Math.toRadians(bodyYaw), cyb = Math.cos(yb), syb = Math.sin(yb), sc = (sneaking ? 1.8 : h) / 1.8;
         // own models: wings on the upper back, hat on the head (turns with it), item diagonally on the back
         if (wing == OWN_W) { double fl = Math.sin(now / 1000.0 * (air ? 9 : 1.8)) * (air ? 0.25 : 0.06);
             Model.draw(r, custom("wings"), (x, y, z) -> { double zz = z - 0.28 - Math.abs(x) * fl; return new double[]{pos[0] + (x * cyb - zz * syb) * sc, pos[1] + (0.55 + y) * sc, pos[2] + (x * syb + zz * cyb) * sc}; }, light); wing = 0; }
-        if (hatK == OWN_H) { double yh = Math.toRadians(headYaw), ch = Math.cos(yh), shh = Math.sin(yh), top = (h < 1.7 ? 1.55 : 1.84) * sc;
-            Model.draw(r, custom("hat"), (x, y, z) -> new double[]{pos[0] + (x * ch - z * shh) * sc, pos[1] + top + y * sc, pos[2] + (x * shh + z * ch) * sc}, light); hatK = 0; }
+        if (hatK == OWN_H) { double yh = Math.toRadians(headYaw), ch = Math.cos(yh), shh = Math.sin(yh), top = (sneaking ? 1.84 - HEAD_DROP * 0.0586 : h < 1.7 ? 1.55 : 1.84) * sc;
+            final double neck = 0.47; Model.draw(r, custom("hat"), (x, y, z) -> { double yy = y + neck, y2 = yy * cp - z * sp, z2 = z * cp + yy * sp; return new double[]{pos[0] + (x * ch - z2 * shh) * sc, pos[1] + top - neck * sc + y2 * sc, pos[2] + (x * shh + z2 * ch) * sc}; }, light); hatK = 0; }
         if (backK == OWN_B) { double a = Math.toRadians(35), ca = Math.cos(a), sa = Math.sin(a);
             Model.draw(r, custom("back"), (x, y, z) -> { double yy = y - 0.85, xx = x * ca - yy * sa, y2 = x * sa + yy * ca, zz = z - 0.26; return new double[]{pos[0] + (xx * cyb - zz * syb) * sc, pos[1] + (1.1 + y2) * sc, pos[2] + (xx * syb + zz * cyb) * sc}; }, light); backK = 0; }
         if (wing == OWN_W) wing = 0; if (hatK == OWN_H) hatK = 0; if (backK == OWN_B) backK = 0; // the own model was not loaded (yet)
         if (wing == 0 && hatK == 0 && backK == 0) return;
-        double k = 0.9375 / 16 * (h / 1.8), sneak = h < 1.7 ? 0.22 : 0; float t = now / 1000f;
+        double k = 0.9375 / 16 * (sneaking ? 1 : h / 1.8), sneak = 0; final double hDrop = sneaking ? HEAD_DROP : 0, bDrop = sneaking ? BODY_DROP : 0, neck = 24 - bDrop; float t = now / 1000f;
         int acc = tint == -1 ? V.a1() : tint, acc2 = tint == -1 ? V.a2() : tint;
         r.beginSolid();
         if (wing > 0 && wing < WINGS.length) { List<Ob> w = CACHE_W[wing] != null ? CACHE_W[wing] : (CACHE_W[wing] = wings(wing));
@@ -264,12 +271,12 @@ public final class Cosmetics {
             for (int s = -1; s <= 1; s += 2) { final int sd = s;
                 // wing space (outward = -x) -> body space: spread backwards by ph, beat up and down by be, attached to the upper back; +x is the player's left
                 emit(r, w, pos, bodyYaw, k, light, acc, acc2, (x, y, z) -> { double o = Math.max(0, -x), oo = o * Math.cos(be);
-                    return new double[]{sd * (1.6 + oo * Math.cos(ph)), 21.5 + y + o * Math.sin(be) - sn * 16, -2.3 - oo * Math.sin(ph) + z}; }); } }
+                    return lean(sd * (1.6 + oo * Math.cos(ph)), 21.5 + y + o * Math.sin(be) - bDrop, -2.3 - oo * Math.sin(ph) + z, ln, neck); }); } }
         if (hatK > 0 && hatK < HATS.length) { List<Ob> hl = CACHE_H[hatK] != null ? CACHE_H[hatK] : (CACHE_H[hatK] = hat(hatK));
             float rel = headYaw - bodyYaw;
-            final double sn = sneak; emit(r, hl, pos, bodyYaw, k, light, acc, acc2, (x, y, z) -> { double a = Math.toRadians(rel), cx = x * Math.cos(a) - z * Math.sin(a), cz = x * Math.sin(a) + z * Math.cos(a); return new double[]{cx, 24 + y - sn * 16, cz}; }); }
+            final double sn = sneak; emit(r, hl, pos, bodyYaw, k, light, acc, acc2, (x, y, z) -> { double y2 = y * cp - z * sp, z2 = z * cp + y * sp, a = Math.toRadians(rel), cx = x * Math.cos(a) - z2 * Math.sin(a), cz = x * Math.sin(a) + z2 * Math.cos(a); return new double[]{cx, 24 + y2 - hDrop, cz}; }); }
         if (backK > 0 && backK < BACK.length) { List<Ob> bl = CACHE_B[backK] != null ? CACHE_B[backK] : (CACHE_B[backK] = back(backK));
-            final double sn = sneak; emit(r, bl, pos, bodyYaw, k, light, acc, acc2, (x, y, z) -> { double a = Math.toRadians(38); double cx = x * Math.cos(a) - y * Math.sin(a), cy = x * Math.sin(a) + y * Math.cos(a); return new double[]{cx, 18 + cy - sn * 16, -3.4 + z}; }); }
+            final double sn = sneak; emit(r, bl, pos, bodyYaw, k, light, acc, acc2, (x, y, z) -> { double a = Math.toRadians(38); double cx = x * Math.cos(a) - y * Math.sin(a), cy = x * Math.sin(a) + y * Math.cos(a); return lean(cx, 18 + cy - bDrop, -3.4 + z, ln, neck); }); }
         r.end();
     }
     interface Tf { double[] at(double x, double y, double z); }

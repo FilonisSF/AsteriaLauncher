@@ -27,7 +27,7 @@ public final class Hud {
         BOXES.clear();
         if (!V.licensed()) { if (now - START < 25000 && !game.hudHidden()) locked(game); return; }
         if (game.hudHidden() && !editing) return;
-        if (game.screenOpen() && !game.chatOpen() && !editing) return;
+        if (game.screenOpen() && !game.chatOpen() && !editing && !Gui.open) return; // the Asteria menu shows the HUD behind it: changes are seen at once
         // clicks per second
         boolean lmb = game.key(6) && !game.screenOpen(), rmb = game.key(7) && !game.screenOpen();
         if (lmb && !lmbWas) LMB.add(now); if (rmb && !rmbWas) RMB.add(now); lmbWas = lmb; rmbWas = rmb;
@@ -37,7 +37,8 @@ public final class Hud {
 
         int W = game.width(), H = game.height(); bossBars = game.bossBars();
         if (V.on("frame") && !game.screenOpen()) frame(W, H);
-        if (V.on("crosshair") && !game.screenOpen()) crosshair(W, H, game);
+        if (V.on("crosshair") && !game.screenOpen()) { float turn = (float) V.num("crosshair", "rotate"); // every style turns, the own picture too
+            if (turn != 0) { D.g.pushRot(W / 2f, H / 2f, turn); try { crosshair(W, H, game); } finally { D.g.pop(); } } else crosshair(W, H, game); }
         if (V.on("dash") && !game.thirdPerson()) { float t = (now - Fx.dashAt) / 520f; if (t >= 0 && t < 1) { float a = (1 - t) * 0.55f; java.util.Random rn = new java.util.Random(Fx.dashAt);
             for (int i = 0; i < 26; i++) { double an = rn.nextDouble() * Math.PI * 2; float r0 = (float) (Math.min(W, H) * (0.36 + rn.nextDouble() * 0.1) + t * 40), len = 30 + rn.nextInt(50);
                 float cx = W / 2f, cy = H / 2f, cs = (float) Math.cos(an), sn = (float) Math.sin(an); D.line(cx + cs * r0, cy + sn * r0, cx + cs * (r0 + len), cy + sn * (r0 + len), 1.2f, D.a(V.grad(i / 26f), a)); } } }
@@ -514,7 +515,7 @@ public final class Hud {
     private static void crosshair(int W, int H, Game game) {
         int st = V.mode("crosshair", "style"); if (st == 7) return; // vanilla: the game draws its own
         if (V.bool("crosshair", "hidef5") && game.thirdPerson()) return;
-        float cx = W / 2f, cy = H / 2f, al = (float) V.num("crosshair", "alpha"); xrot = (float) V.num("crosshair", "rotate"); xcx = cx; xcy = cy; int c = D.a(V.color("crosshair", "color"), al), o = D.a(0xFF000000, al * 0.85f);
+        float cx = W / 2f, cy = H / 2f, al = (float) V.num("crosshair", "alpha"); xrot = 0; xcx = cx; xcy = cy; int c = D.a(V.color("crosshair", "color"), al), o = D.a(0xFF000000, al * 0.85f);
         float size = (float) V.num("crosshair", "size"), gap = (float) V.num("crosshair", "gap"), th = (float) V.num("crosshair", "thick"), ot = V.bool("crosshair", "outline") ? (float) V.num("crosshair", "othick") : 0;
         if (V.bool("crosshair", "dynamic")) gap += (1 - game.cooldown()) * 4;
         if (st == 8) { java.io.File f = new java.io.File(V.dir(), "asteria-crosshair.png"); float s = size * 4 + 8;

@@ -10,6 +10,7 @@ import net.minecraft.util.Hand;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import net.minecraft.util.math.Vec3f;
 import ru.safimine.asteria.visuals.Fx;
@@ -39,4 +40,7 @@ public class HeldItemRendererMixin {
         m.multiply(net.minecraft.util.math.Vec3f.POSITIVE_X.getDegreesQuaternion(hd[3])); m.multiply(net.minecraft.util.math.Vec3f.POSITIVE_Y.getDegreesQuaternion(side * hd[4])); m.multiply(net.minecraft.util.math.Vec3f.POSITIVE_Z.getDegreesQuaternion(side * hd[5]));
         m.scale(s, s, s);
     }
+    /** our swing styles replace the vanilla swing movement (otherwise it hides them) */
+    @ModifyVariable(method = "renderFirstPersonItem", at = @At("HEAD"), argsOnly = true, ordinal = 2, require = 0)
+    private float asteria$vanillaSwing(float swing) { return Fx.vanillaSwing(swing); }
 }

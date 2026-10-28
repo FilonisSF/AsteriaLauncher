@@ -62,6 +62,8 @@ final class R3_116 implements Fx.R3 {
     }
     @Override public void beginSolid() { begin(QUADS, true); RenderSystem.depthMask(true); }
     @Override public Object asset(String path) { return new Identifier("asteria_visuals", "textures/fx/" + path + ".png"); }
+    @Override public float[] viewProj() { java.nio.FloatBuffer pb = org.lwjgl.BufferUtils.createFloatBuffer(16), mb = org.lwjgl.BufferUtils.createFloatBuffer(16);
+        org.lwjgl.opengl.GL11.glGetFloatv(org.lwjgl.opengl.GL11.GL_PROJECTION_MATRIX, pb); mat.writeRowFirst(mb); float[] p = new float[16], rw = new float[16], m = new float[16]; pb.get(p); mb.rewind(); mb.get(rw); for (int r0 = 0; r0 < 4; r0++) for (int c0 = 0; c0 < 4; c0++) m[c0 * 4 + r0] = rw[r0 * 4 + c0]; return Fx.mulPub(p, m); }
     @Override public double[] cam() { return new double[]{cam.x, cam.y, cam.z}; }
     @Override public float camYaw() { return camera.getYaw(); }
     @Override public float camPitch() { return camera.getPitch(); }

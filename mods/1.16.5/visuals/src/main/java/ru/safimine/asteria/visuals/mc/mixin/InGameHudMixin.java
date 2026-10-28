@@ -15,7 +15,12 @@ public class InGameHudMixin {
     @Inject(method = "renderHotbar", at = @At("HEAD"), cancellable = true, require = 0)
     private void asteria$hotbar(CallbackInfo ci) { if (V.on("hotbar")) ci.cancel(); }
     @Inject(method = "renderCrosshair", at = @At("HEAD"), cancellable = true)
-    private void asteria$crosshair(MatrixStack m, CallbackInfo ci) { if (V.on("crosshair") && V.mode("crosshair", "style") != 7) ci.cancel(); } // style 7 = vanilla
+    private void asteria$crosshair(MatrixStack m, CallbackInfo ci) { if (V.on("crosshair") && V.mode("crosshair", "style") != 7) { ci.cancel(); return; } // style 7 = vanilla
+        xhRot = V.on("crosshair") && V.num("crosshair", "rotate") != 0; if (xhRot) { net.minecraft.client.MinecraftClient c = net.minecraft.client.MinecraftClient.getInstance(); float cx = c.getWindow().getScaledWidth() / 2f, cy = c.getWindow().getScaledHeight() / 2f;
+            m.push(); m.translate(cx, cy, 0); m.multiply(net.minecraft.util.math.Vec3f.POSITIVE_Z.getDegreesQuaternion((float) V.num("crosshair", "rotate"))); m.translate(-cx, -cy, 0); } }
+    private boolean xhRot;
+    @Inject(method = "renderCrosshair", at = @At("RETURN"), require = 0) // every return: vanilla leaves early in third person
+    private void asteria$crosshairEnd(MatrixStack m, CallbackInfo ci) { if (xhRot) { xhRot = false; m.pop(); } }
 
     /** our HUD goes under the scoreboard, chat and Tab (drawn before them); at the end of the frame only if that spot was not reached */
     private static boolean hudDrawn;

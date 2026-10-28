@@ -74,6 +74,18 @@ public interface Game {
     default String playerName(Object e) { return ""; }
     /** where an entity looks (degrees) */
     default float yawOf(Object e) { return 0; }
+    /** head pitch (down = +), body yaw, head yaw and the sneaking pose of any player */
+    default float pitchOf(Object e) { return 0; }
+    default float bodyYawOf(Object e) { return yawOf(e); }
+    default float headYawOf(Object e) { return yawOf(e); }
+    default boolean sneakingOf(Object e) { return false; }
+    /** the same, smoothed between ticks */
+    default float headYawOf(Object e, float pt) { return headYawOf(e); }
+    default float bodyYawOf(Object e, float pt) { return bodyYawOf(e); }
+    default float pitchOf(Object e, float pt) { return pitchOf(e); }
+    default boolean onGroundOf(Object e) { return true; }
+    /** F3+B: entity hitboxes are shown */
+    default boolean hitboxDebug() { return false; }
     /** chat is open (the HUD stays visible there, unlike under menus) */
     default boolean chatOpen() { return false; }
     /** a totem of undying stack, for the totem counter icon */

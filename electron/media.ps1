@@ -45,7 +45,7 @@ function Cover($p) {
   } catch { return $null }
 }
 
-$lastKey = ''; $fast = 0
+$lastKey = ''; $fast = 0; $coverTries = 0; $coverNext = [DateTime]::Now; $lastCover = ''
 while ($true) {
   if ($cmdFile -and (Test-Path $cmdFile)) { $c = (Get-Content $cmdFile -Raw).Trim(); Remove-Item $cmdFile -Force; RunCmd $c; $fast = 25 } # then poll every 80 ms for ~2 s: the new track shows the moment the player switches
   $o = @{ playing = $false; title = ''; artist = '' }
@@ -58,7 +58,10 @@ while ($true) {
     if ($playing -and $tl.LastUpdatedTime.Year -gt 2000) { $pos += ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalSeconds } # players report the position rarely
     if ($dur -gt 0) { $pos = [math]::Max(0, [math]::Min($dur, $pos)) }
     $o = @{ title = $p.Title; artist = $p.Artist; playing = $playing; pos = [math]::Round($pos, 1); dur = [math]::Round($dur, 1); app = $s.SourceAppUserModelId; key = $key }
-    if ($key -ne $lastKey) { $lastKey = $key; $c = Cover $p; $o.cover = if ($c) { $c } else { '' } }
+    # players change the title first and the picture a moment later: read the cover again a few times after a new track and send it when it changes
+    if ($key -ne $lastKey) { $lastKey = $key; $coverTries = 4; $coverNext = [DateTime]::Now }
+    if ($coverTries -gt 0 -and [DateTime]::Now -ge $coverNext) { $coverTries--; $coverNext = [DateTime]::Now.AddMilliseconds(700); $c = Cover $p; if (-not $c) { $c = '' }
+      if ($c -ne $lastCover) { $lastCover = $c; $o.cover = $c; $o.key = "$key#" + $c.Length } }
   }
   [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress)); [Console]::Out.Flush()
   if ($fast -gt 0) { $fast--; Start-Sleep -Milliseconds 80 }

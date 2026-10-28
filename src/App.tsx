@@ -11,6 +11,7 @@ import SkinStudio, { CapeMaker, GifCapeMaker } from './SkinStudio'
 import GameSettings from './GameSettings'
 import VisualsTab, { visDefaults, petPic } from './VisualsTab'
 import { Worlds } from './Worlds'
+import { LookPreview } from './LookPreview'
 import { EventsBlock } from './Clans'
 import Versions, { ALL_VERSIONS, ASTERIA, fabricFor } from './Versions'
 import { VINFO } from './versionInfo'
@@ -198,7 +199,7 @@ export default function App() {
   const [tab, setTab] = useState('home'), [menu, setMenu] = useState(''), [addOpen, setAddOpen] = useState(false), [st, setSt] = useState({ online: false, ping: 0, players: 0, max: 500 })
   const [lang, setLang] = usePref('lang', 'ru'); useEffect(() => { setUiLang(lang) }, [lang]) // every Russian text left on screen follows the language too
   const [theme, setTheme] = usePref('theme', 'dark'), [accent, setAccent] = usePref('accent', 'aqua'), [fx, setFx] = usePref('fx', 'stars'), [custom, setCustom] = usePref('customAccent', '#22d3ee')
-  const [skinSpin, setSkinSpin] = usePref('skinSpin', '1'), [ver, setVer] = usePref('ver', '1.16.5'), [capeId, setCapeS] = useState(''), [badgeId] = usePref('badge', 'crystal')
+  const [look, setLook] = usePref('lookPreview', '1'), [skinSpin, setSkinSpin] = usePref('skinSpin', '1'), [ver, setVer] = usePref('ver', '1.16.5'), [capeId, setCapeS] = useState(''), [badgeId] = usePref('badge', 'crystal')
   const [acc, setAcc] = useState<{ list: any[]; active?: string }>({ list: [] }), [cfg, setCfg] = useState<any>(null), [sys, setSys] = useState({ totalMb: 16384 })
   const [prog, setProg] = useState<any>({ stage: '', pct: 0, detail: '', step: 0 }), [toast, setToast] = useState(''), [skin, setSkin] = useState(''), [variant, setVariant] = usePref('variant', 'classic')
   const [q, setQ] = useState(''), [sort, setSort] = useState('downloads'), [cat, setCat] = useState(''), [hits, setHits] = useState<any[]>([]), [mods, setMods] = useState<any[]>([]), [busy, setBusy] = useState(''), [lq, setLq] = useState(''), [offNick, setOffNick] = useState('')
@@ -237,9 +238,13 @@ export default function App() {
   // each account has its own skin, cape and mini-me skin
   const setCape = (v: string) => { setCapeS(v); try { localStorage.setItem('cape:' + (acc.active || ''), v) } catch {} }
   useEffect(() => { if (!acc.active) return; (async () => { await api.accTextures?.()
-    try { setCapeS(localStorage.getItem('cape:' + acc.active) ?? localStorage.getItem('cape') ?? '') } catch {}
+    try { setCapeS(localStorage.getItem('cape:' + acc.active) ?? '') } catch {}
     setSkin((await api.skinCurrent?.().catch(() => null)) || ''); setMiniSkin((await api.miniGet?.().catch(() => null)) || null) })() }, [acc.active])
   const refreshVst = () => api.verStatus?.(ver).then(setVst).catch(() => {})
+  const [alts, setAlts] = useState<string[]>([]); useEffect(() => { api.alts?.().then((l: string[]) => setAlts(l || [])); return api.onAlts?.((l: string[]) => setAlts(l || [])) }, [])
+  const [shotAsk, setShotAsk] = useState(false), [worldsView, setWorldsView] = useState('mine')
+  const [verAsk, setVerAsk] = useState<'' | 'reinstall' | 'remove'>('')
+  const verDo = async (a: string, withData = false) => { setVerAsk(''); const r = await api.verRemove(ver, withData); if (r?.error) return say(r.error, 'err'); await refreshVst(); if (a === 'reinstall') download(); else say('Minecraft ' + ver + ' удалён' + (withData ? ' вместе с мирами и модами (в корзине)' : '')) }
   useEffect(() => { refreshVst() }, [ver, running])
   // newer mods / visuals for an installed version are fetched quietly — nothing to press
   useEffect(() => { if (vst.installed && vst.update && !running && !dling && !vst.busy) download(true) }, [vst.installed, vst.update, running])
@@ -253,6 +258,9 @@ export default function App() {
   useEffect(() => { const f = () => api.zoom(Math.max(0.72, Math.min(1, outerWidth / 1440, outerHeight / 880)) * (+uiscale / 100)); f(); addEventListener('resize', f); return () => removeEventListener('resize', f) }, [uiscale])
   useEffect(() => { if (!cfg) return; if (!cfgReady.current) { cfgReady.current = true; return } const id = setTimeout(() => { api.saveSettings(cfg) }, 500); return () => clearTimeout(id) }, [cfg])
   useEffect(() => api.onFiles?.((d: any) => { if (d.kind === 'shots') api.shots().then(setShots) }), []) // F2 in the game: the picture shows up at once
+  // what is on screen follows the folders: screenshots, mods, packs changed by the game or by hand show up at once
+  useEffect(() => api.onFiles?.((d: any) => { if (d.kind === 'shots' && tab === 'screenshots') api.shots().then(setShots); if ((d.kind === 'mods' || d.kind === 'packs') && tab === 'mods') loadMods() }), [tab, kind, ver])
+  useEffect(() => { if (tab !== 'worlds') setWorldsView('mine') }, [tab])
   useEffect(() => { if (tab === 'screenshots') api.shots().then(setShots); if (tab === 'settings') { api.storage().then(setStorage); api.apiInfo?.(true).then(setApiSt) } }, [tab])
   useEffect(() => { if (tab !== 'servers') return; for (const s of servers) api.srvStatus(s.ip, s.port).then((r: any) => setSrvSt((o) => ({ ...o, [s.ip]: r }))) }, [tab, servers])
   useEffect(() => { if (cfg && !cfg.ramSet && sys.totalMb) { const c = { ...cfg, ramMb: ramOpt }; setCfg(c); api.saveSettings(c) } }, [!!cfg, cfg?.ramSet, sys.totalMb])
@@ -408,13 +416,13 @@ export default function App() {
           </div>}
 
           {/* =============================== VERSIONS */}
-          {tab === 'versions' && <Versions ver={ver} setVer={setVer} cfg={cfg} setCfg={setCfg} running={running} play={mainBtn} label={needDl || dling ? mainLabel + ' ' + ver : undefined} VImg={VImg} profiles={profilesBar} recommended={rec} />}
+          {tab === 'versions' && <Versions manage={(a) => setVerAsk(a)} ver={ver} setVer={setVer} cfg={cfg} setCfg={setCfg} running={running} play={mainBtn} label={needDl || dling ? mainLabel + ' ' + ver : undefined} VImg={VImg} profiles={profilesBar} recommended={rec} />}
 
           {/* =============================== MODS */}
           {tab === 'mods' && <div onDragOver={(e) => { if (kind === 'mod' && fabricOk && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropOn(true) } }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDropOn(false) }} onDrop={onDrop} className="relative">
             {dropOn && <div className="dropzone-full"><Icon n="upload" s={34} /><b className="text-lg mt-2">Отпустите, чтобы добавить моды</b><span className="text-sm opacity-80">Они попадут в «Мои моды» и в выбранные сборки</span></div>}
             <PageHead title={t(kind === 'mod' ? 'mods' : kind === 'shader' ? 'shaders' : 'packs')} sub={`Для Minecraft ${ver}${profiles.active?.version === ver ? ' · профиль «' + profiles.active.name + '»' : ''}`}
-              right={<div className="flex gap-2 items-center"><Dropdown value={ver} set={setVer} options={verOpts} w={260} /><div className="seg">{[['mod', t('mods')], ['resourcepack', t('packs')], ['shader', t('shaders')]].map(([k, n]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => { setKind(k); setHits([]); setMods([]) }}>{n}</button>)}</div></div>} />
+              right={<div className="flex gap-2 items-center"><Dropdown value={ver} set={setVer} options={verOpts} w={260} /><div className="seg">{[['mod', t('mods')], ['resourcepack', t('packs')], ['shader', t('shaders')]].map(([k, n]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => { setKind(k); setHits([]); setMods([]) }}>{n}</button>)}<button onClick={() => { setWorldsView('maps'); setTab('worlds') }}>Карты</button></div></div>} />
             {kind === 'shader' && <p className="muted text-sm mb-3">{t('shadersHint')}</p>}
             {kind === 'mod' && !fabricOk ? <div className="hero !min-h-[260px]"><VImg v={ver} cls="bg" /><div className="relative p-8 text-white min-h-[260px] flex flex-col justify-end">
               <h2 className="text-3xl font-black">Моды для {ver} пока недоступны</h2><p className="text-white/80 text-sm mt-2 mb-5 max-w-xl">Для этой версии лаунчер запускает чистую игру. Моды из каталога, FPS-буст и Asteria работают на версиях с Fabric — переключитесь в один клик:</p>
@@ -460,7 +468,8 @@ export default function App() {
             <div className="card rounded-2xl p-3 mb-4 flex items-center gap-3 text-sm"><span className="cmd-ic !w-9 !h-9 shrink-0"><Icon n="eye" s={17} /></span>
               <div><b>Скин и плащ отсюда видят только игроки с AsteriaLauncher.</b> <span className="muted">Остальные видят ваш обычный скин на сервере.{me?.type === 'microsoft' ? ' Чтобы скин видели все — нажмите «' + t('apply') + '».' : ''}</span></div></div>
             <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)' }}>
-            <div className="card rounded-3xl p-4"><Skin3D skin={skinUrl} slim={variant === 'slim'} cape={capeUrl} height={470} spin={skinSpin === '1'} />
+            <div className="card rounded-3xl p-4 relative"><div className="seg absolute right-4 top-4 z-10"><button className={look ? '' : 'on'} onClick={() => setLook('')}>Скин</button><button className={look ? 'on' : ''} onClick={() => setLook('1')}>С косметикой</button></div>
+              {look ? <LookPreview skin={skinUrl} slim={variant === 'slim'} height={470} /> : <Skin3D skin={skinUrl} slim={variant === 'slim'} cape={capeUrl} height={470} spin={skinSpin === '1'} />}
               <div className="mt-2"><Check on={skinSpin === '1'} set={(v) => setSkinSpin(v ? '1' : '0')} label="Вращать модель" /></div>
               <div className="flex gap-2 items-center flex-wrap mt-3"><button className="btn btn-primary flex items-center gap-2" onClick={() => setEdit('skin')}><Icon n="pencil" s={16} />Редактировать на модели</button>
                 <button className="btn flex items-center gap-2" onClick={async () => { const d = await api.pickSkin(); if (d) { setSkin(d); addSkin(d); const r = await api.saveTexture({ data: d, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) } }}><Icon n="upload" s={16} />{t('pickPng')}</button>
@@ -506,13 +515,15 @@ export default function App() {
               <div className="card rounded-3xl p-5"><div className="font-bold mb-3">Аккаунты</div><div className="flex flex-col gap-2">{acc.list.map((a) => <div key={a.id} className={'mcard !p-2.5 ' + (a.id === acc.active ? 'ring-2 ring-[var(--a2)]' : '')}>
                 <Avatar name={sm ? 'Steve' : a.name} s={36} skin={!sm && a.id === acc.active ? skin || undefined : undefined} /><div className="flex-1 min-w-0"><b className="block truncate">{nick(a.name)}</b><span className="muted text-xs">{a.type === 'microsoft' ? 'Microsoft' : 'Offline'}</span></div>
                 {a.id !== acc.active && <button className="btn !py-1.5 text-sm" onClick={async () => { await api.selectAccount(a.id); refresh() }}>Выбрать</button>}
+                {a.id !== acc.active && (alts.includes(a.id) ? <button className="pill !text-xs" title="Закрыть это окно игры" onClick={() => api.altStop(a.id)}><Icon n="close" s={11} />Окно</button>
+                  : <button className="pill !text-xs" title={'Открыть ещё одно окно Minecraft ' + ver + ' под этим аккаунтом и зайти на SafiMine'} onClick={async () => { const r = await api.altLaunch({ accountId: a.id, version: ver, join: true }); if (r?.error) say(r.error, 'err'); else say(nick(a.name) + ': второе окно запускается') }}><Icon n="play" s={11} />Ещё окно</button>)}
                 <button className="iconbtn" title={t('logout')} onClick={async () => { await api.removeAccount(a.id); refresh() }}><Icon n="trash" s={15} /></button></div>)}
                 {!acc.list.length && <p className="muted text-sm">Аккаунтов пока нет — добавьте offline-ник или войдите через Microsoft.</p>}</div></div>
               <div className="card rounded-3xl p-5"><div className="font-bold mb-3">{t('localStats')}</div><div className="grid grid-cols-3 gap-3 mb-4"><Stat l={t('playtime')} v={hrs + ' ' + t('hours')} /><Stat l={t('launches')} v={String(stats.launches ?? 0)} /><Stat l={t('mods')} v={String(mods.length)} /></div>
                 {Object.entries(stats.perVer ?? {}).map(([v, ms]: any) => <div key={v} className="flex items-center gap-3 mb-2 text-sm"><span className="w-16">{v}</span><div className="flex-1 h-2 rounded-full" style={{ background: 'var(--chip)' }}><div className="h-2 rounded-full" style={{ width: Math.min(100, ms / Math.max(1, stats.playMs) * 100) + '%', background: 'linear-gradient(90deg,var(--a1),var(--a2))' }} /></div><span className="muted w-14 text-right">{(ms / 3600000).toFixed(1)} {t('hours')}</span></div>)}</div></div></div></div>}
 
           {/* =============================== SCREENSHOTS */}
-          {tab === 'screenshots' && <div><PageHead title={t('screenshots')} sub={shots.length + ' скриншотов из всех версий'} right={<div className="relative w-72"><input className="w-full !pl-10" placeholder={t('search')} value={shotQ} onChange={(e) => setShotQ(e.target.value)} /><span className="absolute left-3 top-2.5 muted"><Icon n="search" s={18} /></span></div>} />
+          {tab === 'screenshots' && <div><PageHead title={t('screenshots')} sub={shots.length + ' скриншотов из всех версий'} right={<div className="flex items-center gap-2">{shots.length > 0 && <button className="pill" onClick={() => setShotAsk(true)}><Icon n="trash" s={13} />Удалить все</button>}<div className="relative w-72"><input className="w-full !pl-10" placeholder={t('search')} value={shotQ} onChange={(e) => setShotQ(e.target.value)} /><span className="absolute left-3 top-2.5 muted"><Icon n="search" s={18} /></span></div></div>} />
             {shots.length === 0 ? <p className="muted">{t('noShots')}</p> : <div className="grid grid-cols-3 gap-4 stagger">{shots.filter((x) => x.name.toLowerCase().includes(shotQ.toLowerCase())).slice(0, 60).map((x) => <Tilt key={x.file} className="card rounded-2xl overflow-hidden cursor-pointer" onClick={() => setShotView(x)} max={4}><ShotImg file={x.file} w={420} cls="w-full h-36 object-cover" />
               <div className="p-2.5"><div className="text-sm font-semibold truncate">{x.name}</div><div className="muted text-xs">Minecraft {x.version} · {new Date(x.mtime).toLocaleString()}</div></div></Tilt>)}</div>}</div>}
 
@@ -557,7 +568,7 @@ export default function App() {
                 <div className="flex gap-4 flex-wrap text-sm mb-3">{storage.items.map((x: any, i: number) => <span key={x.key}><span className="inline-block w-2.5 h-2.5 rounded-full mr-1.5" style={{ background: ['#22d3ee', '#a855f7', '#f59e0b', '#f43f5e'][i] }} />{t(['profiles', 'gameFiles', 'java', 'cache'][i])} — {(x.bytes / 1048576).toFixed(0)} MB</span>)}</div>
                 {storage.profiles.map((p: any) => <div key={p.name} className="row !cursor-default"><span className="flex-1">Minecraft {p.name}</span><span className="muted text-sm">{(p.bytes / 1048576).toFixed(0)} MB</span></div>)}</>}</div>
           </div>}
-          {tab === 'worlds' && <Worlds ver={ver} versions={verOpts} play={play} say={say} running={running} />}
+          {tab === 'worlds' && <Worlds key={worldsView} initial={worldsView as any} ver={ver} versions={verOpts} play={play} say={say} running={running} />}
           {tab === 'visuals' && <VisualsTab plan="PREMIUM" bg={visBg} say={say} ver={ASTERIA[ver] === 'full' ? ver : rec} onBuy={shop} />}
         </main>
       </div>
@@ -597,7 +608,13 @@ export default function App() {
           : <button className="btn btn-primary" onClick={() => applyFriend(friend.got)}>Установить</button>}</div></Modal>}
       {capeSrc && <CapeMaker src={capeSrc} onCancel={() => setCapeSrc('')} onDone={(png) => { setCapeSrc(''); addCape(png) }} />}
       {gifSrc && <GifCapeMaker src={gifSrc} onCancel={() => setGifSrc('')} onDone={(png, n) => { setGifSrc(''); addCape(png); say('Анимированный плащ: ' + n + ' кадров') }} onError={(m) => { setGifSrc(''); say(m, 'err') }} />}
-      <LaunchOverlay prog={prog} img={hero} t={t} /><LogModal open={logOpen} onClose={() => setLogOpen(false)} t={t} /><UpdateModal upd={upd} t={t} compact={running} /><Splash pct={boot.pct} msg={boot.msg} />
+      <LaunchOverlay prog={prog} img={hero} t={t} /><LogModal open={logOpen} onClose={() => setLogOpen(false)} t={t} /><UpdateModal upd={upd} t={t} compact={running} />{shotAsk && <div className='ask-bg' onClick={() => setShotAsk(false)}><div className='ask' onClick={(e) => e.stopPropagation()}><b className='block text-lg'>Удалить все скриншоты?</b>
+        <p className='muted text-sm mt-2'>{shots.length} скриншотов из всех версий переместятся в корзину Windows.</p>
+        <div className='flex gap-2 mt-4 justify-end'><button className='btn' onClick={() => setShotAsk(false)}>Отмена</button><button className='btn-danger' onClick={async () => { setShotAsk(false); const n = await api.shotsClear(); setShots([]); say('В корзине: ' + n + ' скриншотов') }}><Icon n='trash' s={14} />Удалить все</button></div></div></div>}
+      {verAsk && <div className='ask-bg' onClick={() => setVerAsk('')}><div className='ask' onClick={(e) => e.stopPropagation()}><b className='block text-lg'>{verAsk === 'reinstall' ? 'Переустановить Minecraft ' + ver + '?' : 'Удалить Minecraft ' + ver + '?'}</b>
+        <p className='muted text-sm mt-2'>{verAsk === 'reinstall' ? 'Файлы игры скачаются заново. Миры, моды и настройки останутся.' : 'Файлы игры уйдут в корзину. Миры, моды и настройки можно оставить или удалить тоже.'}</p>
+        <div className='flex gap-2 mt-4 justify-end flex-wrap'><button className='btn' onClick={() => setVerAsk('')}>Отмена</button>{verAsk === 'reinstall' ? <button className='btn-add' onClick={() => verDo('reinstall')}><span className='ic'><Icon n='reset' s={13} /></span>Переустановить</button>
+          : <><button className='btn' onClick={() => verDo('remove')}>Только файлы игры</button><button className='btn-danger' onClick={() => verDo('remove', true)}><Icon n='trash' s={14} />Вместе с мирами</button></>}</div></div></div>}<Splash pct={boot.pct} msg={boot.msg} />
       {toast && <div className="toastx pop-in"><span className={'ic ' + toastKind}>{toastKind === 'err' ? <Icon n="close" s={18} /> : toastKind === 'info' ? <Icon n="eye" s={18} /> : <Gem s={20} glow={false} />}</span><div className="min-w-0"><b className="block text-sm">{toastKind === 'err' ? 'Ошибка' : toastKind === 'info' ? 'Внимание' : 'Готово'}</b><span className="muted text-xs block">{toast}</span></div><button className="iconbtn !w-7 !h-7" onClick={() => setToast('')}><Icon n="close" s={12} /></button></div>}
     </div>
   )

@@ -32,8 +32,8 @@ public class VisualsClient implements ClientModInitializer {
 
     @Override public void onInitializeClient() { V.init(MinecraftClient.getInstance().getSession().getUsername()); ru.safimine.asteria.visuals.Menu.tr = k -> net.minecraft.client.resource.language.I18n.translate(k); }
 
-    public static void hud(DrawContext ctx) { Gfx120 g = new Gfx120(ctx, true); try { Hud.render(g, Game120.I); } catch (Throwable ignored) {} finally { try { g.flush(); } catch (Throwable ignored) {} } }
-    public static void world(MatrixStack ms, Camera cam, float pt) { try { Fx.render(new R3_120(ms, cam, pt), Game120.I); } catch (Throwable ignored) {} }
+    public static void hud(DrawContext ctx) { Gfx120 g = new Gfx120(ctx, true); try { Hud.render(g, Game120.I); } catch (Throwable t) { Fx.err("hud", t); } finally { try { g.flush(); } catch (Throwable ignored) {} } }
+    public static void world(MatrixStack ms, Camera cam, float pt) { try { Fx.render(new R3_120(ms, cam, pt), Game120.I); } catch (Throwable t) { Fx.err("world", t); } }
 
     public static void tick(MinecraftClient c) {
         try {

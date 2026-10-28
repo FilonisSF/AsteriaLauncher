@@ -38,7 +38,8 @@ async function flushQueue() {
   timer = 0; const list = [...queue].slice(0, 120); list.forEach((s) => queue.delete(s)); if (!list.length) return
   const res: string[] | null = await (window as any).api?.trBatch?.(list, lang).catch(() => null) || null
   if (!res) { window.setTimeout(() => { list.forEach((s) => queue.add(s)); schedule() }, 10000); return } // no answer: try again later, never remember Russian as the translation
-  list.forEach((s, i) => { if (res[i] && res[i] !== s) cache[s] = res[i] })
+  const again: string[] = []; list.forEach((s, i) => { if (res[i] && res[i] !== s) cache[s] = res[i]; else again.push(s) })
+  if (again.length) window.setTimeout(() => { again.forEach((s) => queue.add(s)); schedule() }, 8000) // a service did not answer: ask again, never keep Russian
   try { localStorage.setItem('tr:' + lang, JSON.stringify(cache)) } catch {}
   walk(document.body); if (queue.size) schedule()
 }

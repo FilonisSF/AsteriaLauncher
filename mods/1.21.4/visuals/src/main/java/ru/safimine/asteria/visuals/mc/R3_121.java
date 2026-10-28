@@ -72,6 +72,7 @@ final class R3_121 implements Fx.R3 {
     }
     @Override public void beginSolid() { begin(QUADS, true); RenderSystem.depthMask(true); }
     @Override public Object asset(String path) { return Identifier.of("asteria_visuals", "textures/fx/" + path + ".png"); }
+    @Override public float[] viewProj() { float[] o = new float[16]; new Matrix4f(RenderSystem.getProjectionMatrix()).mul(mat).get(o); return o; }
     @Override public double[] cam() { return new double[]{cam.x, cam.y, cam.z}; }
     @Override public float camYaw() { return camera.getYaw(); }
     @Override public float camPitch() { return camera.getPitch(); }

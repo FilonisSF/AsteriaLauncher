@@ -70,16 +70,29 @@ public final class D {
         round(x1 + r * 0.6f, y1 + 0.5f, x2 - r * 0.6f, y1 + 1.3f, 0.4f, alpha(0xFFFFFF, 0), alpha(0xFFFFFF, 140));          // highlight line
         if (V.glare && !V.lite) glare(x1, y1, x2, y2);
     }
-    /** "Glass" (like iOS): light frosted panel, thin white border, soft shadow */
+    /** "Liquid Glass" (like iOS 26): a nearly clear body, a light rim that is bright at the top-left and fades to the bottom-right, a soft shadow */
     static void glass(float x1, float y1, float x2, float y2, float r) {
-        r = Math.max(r, 6);
-        if (V.shadow) for (int i = 3; i >= 1; i--) round(x1 - i * 0.5f, y1 + i * 0.6f, x2 + i * 0.5f, y2 + i, r + i, alpha(0x000000, 18 / i));
-        int a = (int) (40 + 70 * V.bg);
-        round(x1, y1, x2, y2, r, alpha(0xFFFFFF, Math.min(255, a + 40)));                                                  // border
-        round(x1 + 0.7f, y1 + 0.7f, x2 - 0.7f, y2 - 0.7f, Math.max(0, r - 0.7f), alpha(0x9AA8BC, a), alpha(0x6A7890, a));      // frosted body
-        round(x1 + 0.7f, y1 + 0.7f, x2 - 0.7f, y1 + (y2 - y1) * 0.45f, Math.max(0, r - 0.7f), alpha(0xFFFFFF, 26));           // top light
-        round(x1 + 1, y1 + 1, x2 - 1, y2 - 1, Math.max(0, r - 1), D.a(V.a1(), 0.06f), D.a(V.a2(), 0.05f));
+        r = Math.max(r, Math.min(9, (y2 - y1) / 2));
+        if (V.shadow) for (int i = 4; i >= 1; i--) round(x1 - i * 0.4f, y1 + i * 0.7f, x2 + i * 0.4f, y2 + i * 1.1f, r + i, alpha(0x000000, 14 / i));
+        round(x1, y1, x2, y2, r, alpha(0x0B1320, (int) (38 + 60 * V.bg)), alpha(0x0B1320, (int) (52 + 70 * V.bg)));       // a light veil: text stays readable on any background
+        round(x1, y1, x2, y2, r, alpha(0xFFFFFF, 30), alpha(0xFFFFFF, 10));                                              // clear glass body
+        round(x1 + 1.2f, y1 + 1.2f, x2 - 1.2f, y1 + Math.min((y2 - y1) * 0.5f, 14), Math.max(0, r - 1.2f), alpha(0xFFFFFF, 22), alpha(0xFFFFFF, 0)); // top light
+        rim(x1, y1, x2, y2, r, 0.9f, 190, 45);                                                                          // specular rim
+        rim(x1 + 1.1f, y1 + 1.1f, x2 - 1.1f, y2 - 1.1f, Math.max(0, r - 1.1f), 0.8f, 40, 12);                           // inner refraction line
         if (V.glare) glare(x1, y1, x2, y2);
+    }
+    /** a rounded outline w thick, its white alpha going from aTop (top-left) to aBottom (bottom-right) */
+    static void rim(float x1, float y1, float x2, float y2, float r, float w, int aTop, int aBottom) {
+        r = Math.min(r, Math.min((x2 - x1) / 2, (y2 - y1) / 2)); int n = 6; float[] px = new float[4 * (n + 1)], py = new float[px.length]; int k = 0;
+        float[][] cs = {{x2 - r, y1 + r, -90}, {x2 - r, y2 - r, 0}, {x1 + r, y2 - r, 90}, {x1 + r, y1 + r, 180}};
+        for (float[] c : cs) for (int i = 0; i <= n; i++) { double a = Math.toRadians(c[2] + 90.0 * i / n); px[k] = c[0] + (float) Math.cos(a) * r; py[k] = c[1] + (float) Math.sin(a) * r; k++; }
+        float cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, span = (x2 - x1) + (y2 - y1);
+        for (int i = 0; i < k; i++) { int j = (i + 1) % k; float[] o = {px[i], py[i], px[j], py[j]}, in = new float[4];
+            for (int q = 0; q < 2; q++) { float dx = cx - o[q * 2], dy = cy - o[q * 2 + 1], l = (float) Math.max(1e-3, Math.sqrt(dx * dx + dy * dy)), rr = Math.max(r, 0.01f);
+                float nx = r > 0 ? (cs[Math.min(3, (q == 0 ? i : j) / (n + 1))][0] - o[q * 2]) / rr : dx / l, ny = r > 0 ? (cs[Math.min(3, (q == 0 ? i : j) / (n + 1))][1] - o[q * 2 + 1]) / rr : dy / l;
+                in[q * 2] = o[q * 2] + nx * w; in[q * 2 + 1] = o[q * 2 + 1] + ny * w; }
+            int ca = alpha(0xFFFFFF, (int) (aTop + (aBottom - aTop) * Math.min(1, Math.max(0, ((o[0] - x1) + (o[1] - y1)) / span)))), cb = alpha(0xFFFFFF, (int) (aTop + (aBottom - aTop) * Math.min(1, Math.max(0, ((o[2] - x1) + (o[3] - y1)) / span))));
+            g.poly(new float[]{o[0], o[1], o[2], o[3], in[2], in[3], in[0], in[1]}, new int[]{ca, cb, cb, ca}); }
     }
     /** a soft vertical sheen sliding across the panel every few seconds (all panels in sync by screen x) */
     static void glare(float x1, float y1, float x2, float y2) {

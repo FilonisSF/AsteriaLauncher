@@ -181,7 +181,7 @@ ipcMain.handle('bg:get', () => store.get('menuBg', null))
 ipcMain.handle('binds:get', () => store.get('cmdBinds', []))
 ipcMain.handle('binds:set', (_, list) => { store.set('cmdBinds', list); for (const d of instanceDirs()) { try { fs.mkdirSync(path.join(d, 'config'), { recursive: true }); fs.writeFileSync(path.join(d, 'config', 'asteria-binds.json'), JSON.stringify(list)) } catch {} } return true })
 ipcMain.handle('marks:get', (_, ver) => { try { return JSON.parse(fs.readFileSync(path.join(inst(settings(), ver), 'config', 'asteria-marks.json'), 'utf8')) } catch { return {} } })
-ipcMain.handle('marks:set', (_, ver, data) => { const d = path.join(inst(settings(), ver), 'config'); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'asteria-marks.json'), JSON.stringify(data)); return true })
+ipcMain.handle('marks:set', (_, ver, data) => { for (const dir of [inst(settings(), ver), ...instanceDirs()]) { const d = path.join(dir, 'config'); try { fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'asteria-marks.json'), JSON.stringify(data)) } catch {} } return true }) // the same marks in every version
 ipcMain.handle('xh:set', (_, data) => { const png = data ? Buffer.from(String(data).split(',')[1], 'base64') : null
   for (const d of instanceDirs()) { const f = path.join(d, 'config', 'asteria-crosshair.png'); try { fs.mkdirSync(path.dirname(f), { recursive: true }); png ? fs.writeFileSync(f, png) : fs.rmSync(f, { force: true }) } catch {} }
   png ? store.set('crosshairPng', data) : store.delete('crosshairPng'); return true })
@@ -283,9 +283,17 @@ async function translate(text, lang) { if (!text || !lang || lang === 'en') retu
   try { const r = await net.fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${ENC(lang)}&dt=t&q=${ENC(text.slice(0, 4500))}`, { signal: AbortSignal.timeout(8000) }).then((x) => x.json())
     const out = (r[0] || []).map((p) => p[0]).join(''); trCache.set(k, out); return out } catch { return text } }
 /** interface texts: Russian -> lang, many at once, remembered between launches */
+// several services: one of them may be blocked or slow for the player; null = nothing answered (the window asks again later)
+const TR_SERVICES = [
+  async (t, l) => { const r = await net.fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ru&tl=${ENC(l)}&dt=t&q=${ENC(t)}`, { signal: AbortSignal.timeout(7000) }).then((x) => x.json()); return (r[0] || []).map((p) => p[0]).join('') },
+  async (t, l) => { const r = await net.fetch(`https://lingva.ml/api/v1/ru/${ENC(l)}/${ENC(t)}`, { signal: AbortSignal.timeout(7000) }).then((x) => x.json()); return r.translation || '' },
+  async (t, l) => { const r = await net.fetch(`https://api.mymemory.translated.net/get?q=${ENC(t)}&langpair=ru|${ENC(l)}`, { signal: AbortSignal.timeout(7000) }).then((x) => x.json()); return r.responseStatus === 200 ? r.responseData?.translatedText || '' : '' },
+]
+let trBest = 0
 async function trUi(text, lang) { const mem = store.get('trui:' + lang, {}); if (mem[text]) return mem[text]
-  try { const r = await net.fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ru&tl=${ENC(lang)}&dt=t&q=${ENC(text)}`, { signal: AbortSignal.timeout(10000) }).then((x) => x.json())
-    const out = (r[0] || []).map((p) => p[0]).join(''); if (out) { mem[text] = out; store.set('trui:' + lang, mem) } return out || text } catch { return text } }
+  for (let k = 0; k < TR_SERVICES.length; k++) { const i = (trBest + k) % TR_SERVICES.length
+    try { const out = String(await TR_SERVICES[i](text, lang) || '').trim(); if (out && out !== text) { trBest = i; const m2 = store.get('trui:' + lang, {}); m2[text] = out; store.set('trui:' + lang, m2); return out } } catch {} }
+  return null }
 ipcMain.handle('tr:batch', async (_, list, lang) => { const out = new Array(list.length); let i = 0
   const worker = async () => { while (i < list.length) { const k = i++; out[k] = await trUi(String(list[k]), String(lang)) } }
   await Promise.all(Array.from({ length: 6 }, worker)); return out })
@@ -378,7 +386,9 @@ const accTexDir = (name) => path.join(settings().dir, 'skins', 'accounts', Strin
 /** puts the textures of the active account where the game and the launcher read them */
 function useAccountTextures() { try { const acc = store.get('accounts', []).find((a) => a.id === store.get('active')); if (!acc) return
   const src = accTexDir(acc.name), dst = path.join(settings().dir, 'skins'); fs.mkdirSync(dst, { recursive: true })
-  if (!fs.existsSync(src)) { fs.mkdirSync(src, { recursive: true }); for (const f of TEX_FILES) if (fs.existsSync(path.join(dst, f))) fs.copyFileSync(path.join(dst, f), path.join(src, f)); return } // first time: the current files belong to this account
+  if (!fs.existsSync(src)) { const others = fs.readdirSync(path.dirname(src)).length; fs.mkdirSync(src, { recursive: true })
+    if (!others) { for (const f of TEX_FILES) if (fs.existsSync(path.join(dst, f))) fs.copyFileSync(path.join(dst, f), path.join(src, f)); return } // the very first account keeps the files it already had
+    for (const f of TEX_FILES) fs.rmSync(path.join(dst, f), { force: true }); return } // a new account starts clean: it never gets the skin / cape of another one
   for (const f of TEX_FILES) { const a = path.join(src, f), b = path.join(dst, f); if (fs.existsSync(a)) fs.copyFileSync(a, b); else fs.rmSync(b, { force: true }) } } catch {} }
 ipcMain.handle('acc:select', (_, id) => { store.set('active', id); useAccountTextures(); return true })
 ipcMain.handle('acc:textures', () => useAccountTextures())
@@ -445,8 +455,10 @@ setInterval(() => { const dir = liveGameDir(); if (!dir) return; const cmdF = pa
   try { if (fs.existsSync(cmdF)) { const c = fs.readFileSync(cmdF, 'utf8').trim(); fs.rmSync(cmdF, { force: true }); mediaCmd(c) } } catch {} }, 100)
 const mediaCmdFile = () => path.join(app.getPath('userData'), 'media-cmd.txt')
 /** play/pause/skip: the running reader picks the file up within 0.4 s and answers with the new track */
+let mediaLast = { c: '', t: 0 }
 function mediaCmd(c) {
   if (process.platform !== 'win32' || !['toggle', 'next', 'prev', 'volup', 'voldown', 'mute'].includes(c)) return
+  const now = Date.now(); if (c === mediaLast.c && now - mediaLast.t < 400 && c !== 'volup' && c !== 'voldown') return; mediaLast = { c, t: now } // one press = one track, even if two buttons or keys fire at once
   try { fs.writeFileSync(mediaCmdFile(), c) } catch {} if (!mediaProc) mediaStart() }
 ipcMain.handle('vis:enabled', (_, v) => { if (typeof v === 'boolean') store.set('visualsOn', v); return store.get('visualsOn', true) !== false })
 ipcMain.handle('media:get', () => ({ ...media, cover: mediaCover ? 'data:image/png;base64,' + mediaCover.toString('base64') : '' }))
@@ -507,14 +519,46 @@ async function installGame(version, send) {
   if (failed) return { error: `Не скачалось файлов: ${failed}. Проверьте интернет и нажмите «Скачать» ещё раз` }
   markInstalled(version); send('', 0); return { ok: true }
 }
+// ------------------------------------------------------------------ more windows: the same version with another account at the same time (an AFK farm on one, playing on the other)
+const alts = new Map() // account id -> game process
+ipcMain.handle('game:alt', async (_, { accountId, version, join }) => {
+  const s = settings(), acc = store.get('accounts', []).find((a) => a.id === accountId); if (!acc) return { error: 'Нет такого аккаунта' }
+  if (alts.has(accountId)) return { error: acc.name + ' уже играет в другом окне' }
+  if (!versionFilesOk(s, version)) return { error: 'Сначала один раз запустите ' + version + ' обычной кнопкой «Играть»' }
+  const dir = inst(s, version), fab = fs.readdirSync(path.join(s.dir, 'versions')).find((n) => n.startsWith('fabric-loader-') && n.endsWith('-' + version))
+  const wantFabric = (s.loaders || {})[version] ? s.loaders[version] === 'fabric' : s.fabric !== false
+  const javaPath = await ensureJava(s, version, () => {}), relay = await relayStart(), tex = accTexDir(acc.name)
+  const l = new Client()
+  const opts = { root: s.dir, overrides: { gameDirectory: dir }, authorization: acc.type === 'offline' ? offlineAuth(acc.name) : acc.auth, version: { number: version, type: 'release', ...(wantFabric && fab ? { custom: fab } : {}) },
+    memory: { max: Math.max(2048, Math.round(s.ramMb * 0.75)) + 'M', min: '1024M' }, customLaunchArgs: ['--width', '1100', '--height', '640'], javaPath,
+    customArgs: [...s.jvm.split(/\s+/).filter(Boolean), '-Djava.net.useSystemProxies=true', '-Dasteria.launcher=1', '-Dasteria.api=' + apiBase(), '-Dasteria.user=' + acc.name, '-Dasteria.gamedir=' + dir, '-Dasteria.root=' + s.dir,
+      '-Dasteria.skin=' + path.join(tex, 'current.png'), '-Dasteria.cape=' + path.join(tex, 'cape.png'), ...(acc.type === 'offline' ? OFFLINE : LICENSED), ...relayArgs(relay)],
+    ...(join ? { quickPlay: { type: /^(1\.2\d|2\d\.)/.test(version) ? 'multiplayer' : 'legacy', identifier: HOST + ':' + PORT } } : {}) }
+  try { const p = await l.launch(opts); if (!p) return { error: 'Не удалось запустить' }
+    alts.set(accountId, p); p.on('close', () => { alts.delete(accountId); try { win?.webContents.send('alts', [...alts.keys()]) } catch {} }); try { win?.webContents.send('alts', [...alts.keys()]) } catch {}
+    return { ok: true } } catch (e) { return { error: 'Не удалось запустить: ' + (e?.message || e) } } })
+ipcMain.handle('game:alts', () => [...alts.keys()])
+ipcMain.handle('game:altStop', (_, id) => { try { alts.get(id)?.kill() } catch {} return true })
+/** delete a version: its game files (and, if asked, its folder with worlds, mods and settings) go to the recycle bin */
+ipcMain.handle('ver:remove', async (_, ver, withData) => { if (game || pf.job || !/^[\w.\-]+$/.test(String(ver))) return { error: 'Подождите — идёт загрузка или игра запущена' }
+  const s = settings(), vd = path.join(s.dir, 'versions'), m = store.get('installed', {}); delete m[ver]; store.set('installed', m)
+  try { for (const n of fs.readdirSync(vd)) if (n === ver || (n.startsWith('fabric-loader-') && n.endsWith('-' + ver))) await shell.trashItem(path.join(vd, n)).catch(() => fs.rmSync(path.join(vd, n), { recursive: true, force: true })) } catch {}
+  if (withData) { const d = inst(s, ver); if (fs.existsSync(d)) await shell.trashItem(d).catch(() => {}) }
+  return { ok: true } })
 ipcMain.handle('game:install', async (_, ver) => {
   if (game || pf.job || !/^[\w.\-]+$/.test(String(ver))) return { error: 'Подождите — идёт загрузка или игра запущена' }
   const send = (stage, pct, detail = '', step = 0) => { try { win?.webContents.send('progress', { stage, pct: Math.max(0, Math.min(100, Math.round(+pct || 0))), detail, step }) } catch {} }
   pf.job = installGame(ver, send).catch((e) => ({ error: 'Не удалось скачать: ' + String(e?.message || e) })).finally(() => { pf.job = null; send('', 0) })
   return pf.job
 })
+/** the files a version needs are really there (the player may have deleted folders by hand): the game jar and json, the Fabric profile when Fabric is on */
+function versionFilesOk(s, ver) { const vd = path.join(s.dir, 'versions', String(ver)); if (!fs.existsSync(path.join(vd, ver + '.jar')) || !fs.existsSync(path.join(vd, ver + '.json'))) return false
+  const wantFabric = (s.loaders || {})[ver] ? s.loaders[ver] === 'fabric' : s.fabric !== false
+  if (wantFabric && /^(1\.(1[6-9]|2\d)|26\.)/.test(ver)) { try { if (!fs.readdirSync(path.join(s.dir, 'versions')).some((n) => n.startsWith('fabric-loader-') && n.endsWith('-' + ver) && fs.existsSync(path.join(s.dir, 'versions', n, n + '.json')))) return false } catch { return false } }
+  return true }
 ipcMain.handle('game:status', (_, ver) => { const s = settings(), rec = store.get('installed', {})[ver]
-  const has = fs.existsSync(path.join(s.dir, 'versions', String(ver), ver + '.jar')) && (!!rec || fs.existsSync(path.join(inst(s, ver), 'mods')))
+  const has = versionFilesOk(s, ver) && (!!rec || fs.existsSync(path.join(inst(s, ver), 'mods')))
+  if (!has && rec) { const m = store.get('installed', {}); delete m[ver]; store.set('installed', m) } // deleted by hand: "Download" again instead of a "Play" that fails
   return { installed: has, update: has && !!rec && rec !== pkgSig(ver), busy: !!pf.job } })
 async function cacheVanillaJson(s, ver) {
   const f = path.join(s.dir, 'versions', ver, ver + '.json'); if (fs.existsSync(f)) return
@@ -590,7 +634,7 @@ async function friendsCall(act = 'get', who = '', accept = false) { const acc = 
   await resolveApi().catch(() => {}); const token = await getToken(acc.name).catch(() => null); if (!token) return { error: 'Нет связи с сервером Asteria' }
   const seenK = 'friendNotes:' + acc.name.toLowerCase(), since = store.get(seenK, Date.now() - 86400000)
   try { const r = await net.fetch(apiBase() + '/friends', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token, act, who, accept, since }) })
-    const j = await r.json(); if (!r.ok) return { error: j.error === 'already' ? 'Уже в друзьях' : j.error === 'owned' ? 'Ник занят другим лаунчером' : 'Сервер: ' + (j.error || r.status) }
+    const j = await r.json(); if (!r.ok) return { error: j.error === 'already' ? 'Уже в друзьях' : j.error === 'owned' ? 'Ник занят другим лаунчером' : r.status === 404 || j.error === 'not found' ? 'Друзья заработают после обновления сервера Asteria (он ещё старой версии)' : 'Сервер: ' + (j.error || r.status) }
     if (j.notes?.length) { store.set(seenK, Math.max(...j.notes.map((x) => x.t))); try { win?.webContents.send('friendNotes', j.notes) } catch {}
       if (!win?.isFocused()) for (const x of j.notes) try { new Notification({ title: 'AsteriaLauncher', body: x.k === 'request' ? x.who + ' хочет добавить вас в друзья' : x.k === 'accepted' ? x.who + ' принял(а) вашу заявку в друзья' : x.who + ' отклонил(а) заявку в друзья' }).show() } catch {} }
     friendsLast = { ...j, host: hostNow }; return friendsLast } catch (e) { return { error: 'Сервер Asteria недоступен' } } }
@@ -736,6 +780,9 @@ ipcMain.handle('shots:list', () => { const s = settings(), out = [], base = path
   try { for (const v of fs.readdirSync(base)) scan(path.join(base, v, 'screenshots'), v) } catch {}
   return out.sort((a, b) => b.mtime - a.mtime) })
 ipcMain.handle('shots:thumb', (_, f, w) => { if (!inGame(f)) return null; try { return nativeImage.createFromPath(f).resize({ width: w || 360 }).toDataURL() } catch { return null } })
+ipcMain.handle('shots:clear', async () => { let n = 0; const base = path.join(settings().dir, 'instances') // every screenshot of every version to the recycle bin
+  try { for (const v of fs.readdirSync(base)) { const d = path.join(base, v, 'screenshots'); let l = []; try { l = fs.readdirSync(d) } catch {} for (const f of l) if (/\.png$/i.test(f)) { await shell.trashItem(path.join(d, f)).catch(() => {}); n++ } } } catch {}
+  return n })
 ipcMain.handle('shots:act', (_, f, a) => { if (!inGame(f)) return; if (a === 'copy') clipboard.writeImage(nativeImage.createFromPath(f)); else if (a === 'open') shell.showItemInFolder(f); else if (a === 'delete') return shell.trashItem(f) })
 // ---------- storage overview
 function dirSize(d) { let t = 0; try { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); t += e.isDirectory() ? dirSize(p) : fs.statSync(p).size } } catch {} return t }
@@ -832,7 +879,7 @@ ipcMain.handle('prof:del', (_, id) => { store.set('profiles', store.get('profile
 // changes made inside the game (options menu, F11, Asteria menu) reach the launcher at once: options.txt / visuals config are watched
 const seenM = new Map()
 setInterval(() => { if (!win) return; const s = settings()
-  for (const d of instanceDirs()) for (const [kind, f] of [['opts', path.join(d, 'options.txt')], ['vis', path.join(d, 'config', 'asteria-visuals.json')], ['shots', path.join(d, 'screenshots')]]) {
+  for (const d of instanceDirs()) for (const [kind, f] of [['opts', path.join(d, 'options.txt')], ['vis', path.join(d, 'config', 'asteria-visuals.json')], ['shots', path.join(d, 'screenshots')], ['saves', path.join(d, 'saves')], ['mods', path.join(d, 'mods')], ['packs', path.join(d, 'resourcepacks')], ['packs', path.join(d, 'shaderpacks')]]) {
     let m = 0; try { m = fs.statSync(f).mtimeMs } catch { continue }
     const k = f, old = seenM.get(k); seenM.set(k, m)
     if (old !== undefined && m !== old) try { win.webContents.send('files', { kind, dir: d, ver: path.basename(d) }) } catch {} } }, 1000)

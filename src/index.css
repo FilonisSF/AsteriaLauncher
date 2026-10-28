@@ -349,3 +349,15 @@ button.pill:hover{background:color-mix(in srgb,var(--a2) 14%,var(--pill-bg));col
 @keyframes launchbar{to{background-position:-200% 0}}
 .launch-glow{background:radial-gradient(circle at 20% 0%,color-mix(in srgb,var(--a2) 30%,transparent),transparent 55%);animation:launchglow 4s ease-in-out infinite alternate}
 @keyframes launchglow{to{transform:translateX(30%)}}
+
+/* main action buttons with an icon ("Add", "Send request"): gradient pill, icon in a soft circle */
+.btn-add{display:inline-flex;align-items:center;justify-content:center;gap:.55rem;padding:.5rem 1.05rem .5rem .55rem;border-radius:999px;font-weight:700;font-size:.9rem;white-space:nowrap;color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2));border:1px solid rgba(255,255,255,.18);box-shadow:0 10px 24px color-mix(in srgb,var(--a1) 35%,transparent),inset 0 1px 0 rgba(255,255,255,.25);transition:transform .15s,box-shadow .15s,filter .15s}
+.btn-add:hover{transform:translateY(-1px);filter:brightness(1.06);box-shadow:0 14px 30px color-mix(in srgb,var(--a1) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.3)}
+.btn-add:active{transform:translateY(0) scale(.98)}
+.btn-add:disabled{opacity:.55;transform:none}
+.btn-add .ic{width:24px;height:24px;border-radius:999px;display:grid;place-items:center;background:rgba(255,255,255,.22);flex:none}
+/* confirm dialog of the launcher (instead of the system one) */
+.ask-bg{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;background:rgba(2,8,14,.55);backdrop-filter:blur(8px);animation:fadeIn .15s}
+.ask{width:380px;border-radius:1.4rem;padding:1.4rem;background:var(--card,rgba(12,22,30,.96));border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.btn-danger{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;border-radius:.9rem;padding:.55rem 1rem;font-weight:700;color:#fff;background:linear-gradient(135deg,#f43f5e,#e11d48);box-shadow:0 8px 20px rgba(244,63,94,.35)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}

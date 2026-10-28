@@ -57,23 +57,72 @@ public final class Menu {
         g.push(x + mark + gap, y + 17 - 4.5f * sc, sc); D.gradText(a, 0, 0, true); D.gradText(b, D.w(a) + sp, 0, true); g.pop(); // "Asteria Launcher": two words with a small gap
     }
 
-    // ------------------------------------------------------------------ our loading screen (instead of the red Mojang one): only shapes, the textures may not be loaded yet
-    public static void splash(Gfx g, int w, int h, float progress, float alpha) {
-        if (alpha <= 0.01f) return; D.g = g; double t = System.currentTimeMillis() / 1000.0; float a = Math.min(1, alpha);
-        D.vgrad(0, 0, w, h, D.alpha(0x04101A, (int) (255 * a)), D.alpha(0x061C28, (int) (255 * a)));
-        float cx = w / 2f, cy = h * 0.42f;
-        for (int i = 7; i >= 1; i--) D.circle(cx, cy, 30 + i * 9, D.a(V.a1(), 0.025f * a));
-        for (int k = 0; k < 3; k++) { double an = t * (1.2 + k * 0.4) + k * 2.1; float rr = 46 + k * 9; D.ring(cx, cy, rr, rr + 1.4f, D.a(V.grad(k * 0.3f), 0.55f * a), D.a(V.grad(k * 0.3f + 0.2f), 0.1f * a));
-            D.circle(cx + (float) Math.cos(an) * (rr + 0.7f), cy + (float) Math.sin(an) * (rr + 0.7f), 2.2f, D.a(0xFFFFFFFF, 0.9f * a)); }
-        D.round(cx - 26, cy - 26, cx + 26, cy + 26, 14, D.a(V.a1(), a), D.a(V.a2(), a));
-        D.round(cx - 24, cy - 24, cx + 24, cy + 24, 12, D.alpha(0x04101A, (int) (235 * a)));
-        // "AL" drawn with shapes: A = two legs + bar, L = stem + foot
-        int c = D.a(0xFFFFFFFF, a); D.g.poly(new float[]{cx - 15, cy + 12, cx - 9, cy - 13, cx - 5, cy - 13, cx - 11, cy + 12}, new int[]{c, c, c, c});
-        D.g.poly(new float[]{cx - 5, cy - 13, cx - 1, cy - 13, cx + 5, cy + 12, cx + 1, cy + 12}, new int[]{c, c, c, c}); D.rect(cx - 10, cy + 2, cx, cy + 5.5f, c);
-        D.rect(cx + 7, cy - 13, cx + 11, cy + 12, D.a(V.a2(), a)); D.rect(cx + 7, cy + 8.5f, cx + 18, cy + 12, D.a(V.a2(), a));
-        float bw = Math.min(260, w * 0.5f), by = cy + 78; D.round(cx - bw / 2, by, cx + bw / 2, by + 5, 2.5f, D.alpha(0xFFFFFF, (int) (30 * a)));
-        D.round(cx - bw / 2, by, cx - bw / 2 + Math.max(5, bw * Math.min(1, progress)), by + 5, 2.5f, D.a(V.a1(), a), D.a(V.a2(), a));
-        D.g.text("AsteriaLauncher", cx - D.w("AsteriaLauncher") / 2f, by + 12, D.a(0xFFE6FBFF, a * 0.9f), false);
+    // ------------------------------------------------------------------ our loading screen (instead of the red Mojang one)
+    /** a picture of the mod as a file (the loading screen cannot read the mod's resources yet): copied once to config/asteria-cache */
+    static java.io.File res(String name) {
+        java.io.File f = new java.io.File(new java.io.File(V.dir(), "asteria-cache"), name);
+        try (java.io.InputStream in = Menu.class.getResourceAsStream("/assets/asteria_visuals/textures/gui/" + name)) {
+            if (in == null) return null; byte[] b = readAll(in); if (!f.exists() || f.length() != b.length) { f.getParentFile().mkdirs(); java.nio.file.Files.write(f.toPath(), b); } return f;
+        } catch (Exception e) { return f.exists() ? f : null; }
+    }
+    private static byte[] readAll(java.io.InputStream in) throws java.io.IOException { java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream(); byte[] buf = new byte[16384]; int r; while ((r = in.read(buf)) > 0) o.write(buf, 0, r); return o.toByteArray(); }
+    // the loading screen cannot draw text or shapes yet: the logo (in the chosen font and theme colours), the bar and the shading are drawn once into pngs with Java2D
+    private static final String[] FONT_FILE = {"ubuntu", "ubuntu", "montserrat", "balsamiq", "pangolin", "neucha", "marmelad", "pacifico", "russo", "philosopher", "unbounded"};
+    private static final float[] FONT_SIZE = {9, 9, 8.5f, 9, 9.5f, 10, 9, 9, 8.5f, 9, 7.5f};
+    private static java.io.File cache(String name) { java.io.File d = new java.io.File(V.dir(), "asteria-cache"); d.mkdirs(); return new java.io.File(d, name); }
+    private static java.awt.Color col(int argb, int alpha) { return new java.awt.Color((argb >> 16) & 255, (argb >> 8) & 255, argb & 255, alpha); }
+    /** "AL" mark + "Asteria Launcher" exactly like the main menu logo (58 px high), 4x resolution */
+    static java.io.File logoPng() {
+        int fi = Math.max(0, Math.min(10, V.font)), c1 = V.a1(), c2 = V.a2();
+        java.io.File f = cache("splash-logo-" + fi + "-" + Integer.toHexString(c1 & 0xFFFFFF) + "-" + Integer.toHexString(c2 & 0xFFFFFF) + ".png"); if (f.exists()) return f;
+        try {
+            int K = 4, mark = 58 * K, gap = 6 * K, sp = Math.round(4 * 2.6f * K);
+            java.awt.Font font; try (java.io.InputStream in = Menu.class.getResourceAsStream("/assets/asteria_visuals/font/" + FONT_FILE[fi] + ".ttf")) { font = java.awt.Font.createFont(java.awt.Font.TRUETYPE_FONT, in); }
+            font = font.deriveFont(FONT_SIZE[fi] * 2.6f * K * 1.12f);
+            java.awt.image.BufferedImage probe = new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_ARGB); java.awt.Graphics2D pg = probe.createGraphics(); pg.setFont(font);
+            java.awt.FontMetrics fm = pg.getFontMetrics(); int wa = fm.stringWidth("Asteria"), wb = fm.stringWidth("Launcher"); pg.dispose();
+            int W = mark + gap + wa + sp + wb + 12, H = mark;
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(W, H, java.awt.image.BufferedImage.TYPE_INT_ARGB); java.awt.Graphics2D g = img.createGraphics();
+            g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON); g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC); g.setRenderingHint(java.awt.RenderingHints.KEY_FRACTIONALMETRICS, java.awt.RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+            try (java.io.InputStream in = Menu.class.getResourceAsStream("/assets/asteria_visuals/textures/gui/logo.png")) { java.awt.image.BufferedImage logo = javax.imageio.ImageIO.read(in); g.drawImage(logo, 0, 0, mark, mark, null); }
+            g.setFont(font); int base = (H + fm.getAscent() - fm.getDescent()) / 2 + K, x = mark + gap;
+            for (int w = 0; w < 2; w++) { String t = w == 0 ? "Asteria" : "Launcher"; int tw = w == 0 ? wa : wb;
+                g.setColor(new java.awt.Color(4, 14, 22, 140)); g.drawString(t, x + K, base + K);                                       // soft shadow, like the menu text
+                g.setPaint(new java.awt.GradientPaint(x, 0, col(c1, 255), x + tw, 0, col(c2, 255))); g.drawString(t, x, base); x += tw + sp; }
+            g.dispose(); javax.imageio.ImageIO.write(img, "png", f); return f;
+        } catch (Throwable t) { return res("splash_logo.png"); }
+    }
+    /** a rounded bar (track or theme gradient fill) and the soft shading over the background */
+    static java.io.File barPng(boolean fill) {
+        int c1 = V.a1(), c2 = V.a2(); java.io.File f = cache("splash-bar-" + (fill ? Integer.toHexString(c1 & 0xFFFFFF) + "-" + Integer.toHexString(c2 & 0xFFFFFF) : "track") + ".png"); if (f.exists()) return f;
+        try { int W = 512, H = 16; java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(W, H, java.awt.image.BufferedImage.TYPE_INT_ARGB); java.awt.Graphics2D g = img.createGraphics();
+            g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            if (fill) g.setPaint(new java.awt.GradientPaint(0, 0, col(c1, 255), W, 0, col(c2, 255))); else g.setColor(new java.awt.Color(255, 255, 255, 46));
+            g.fillRoundRect(0, 0, W, H, H, H); if (fill) { g.setColor(new java.awt.Color(255, 255, 255, 70)); g.fillRoundRect(2, 1, W - 4, H / 2 - 1, H / 2, H / 2); }
+            g.dispose(); javax.imageio.ImageIO.write(img, "png", f); return f; } catch (Throwable t) { return null; }
+    }
+    static java.io.File shadePng() {
+        java.io.File f = cache("splash-shade.png"); if (f.exists()) return f;
+        try { java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(4, 256, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            for (int y = 0; y < 256; y++) { int al = (int) (40 + 120 * Math.pow(y / 255.0, 1.6)); for (int x = 0; x < 4; x++) img.setRGB(x, y, (al << 24) | 0x02070A); }
+            javax.imageio.ImageIO.write(img, "png", f); return f; } catch (Throwable t) { return null; }
+    }
+    private static java.io.File splashBg, splashLogo, barTrack, barFill, shade; private static int[] bgSize, logoSize; private static long splashFrom;
+    /** the loading screen looks like the main menu: the same picture (own one from the launcher, or ours), the same logo at the same place, and our bar */
+    public static void splash(Gfx g, int w, int h, float alpha, float progress) {
+        if (alpha <= 0.01f) return; float a = Math.min(1, alpha);
+        if (splashLogo == null || System.currentTimeMillis() - splashFrom > 3000) { splashFrom = System.currentTimeMillis(); // the theme / font may change while the game runs (resource reload)
+            java.io.File own = new java.io.File(V.dir(), "asteria-bg.png"); splashBg = own.exists() ? own : res("menu_bg.png"); splashLogo = logoPng(); barTrack = barPng(false); barFill = barPng(true); shade = shadePng();
+            bgSize = splashBg == null ? null : imgSize(splashBg); logoSize = splashLogo == null ? null : imgSize(splashLogo); }
+        if (splashBg != null && bgSize != null && bgSize[0] > 0) { float s = Math.max(w / (float) bgSize[0], h / (float) bgSize[1]), bw = bgSize[0] * s, bh = bgSize[1] * s;
+            g.imageA("splbg:" + splashBg.lastModified(), splashBg, (w - bw) / 2, (h - bh) / 2, bw, bh, a); }
+        if (shade != null) g.imageA("splshade:1", shade, 0, 0, w, h, a);
+        if (splashLogo != null && logoSize != null && logoSize[0] > 0) { float lh = 58, lw = lh * logoSize[0] / logoSize[1]; if (lw > w * 0.9f) { lw = w * 0.9f; lh = lw * logoSize[1] / logoSize[0]; } // the main menu logo: 58 px high, 30 px from the top
+            g.imageA("spllogo:" + splashLogo.getName(), splashLogo, (w - lw) / 2, 18, lw, lh, a); }
+        float bw = Math.min(w * 0.42f, 240), bx = (w - bw) / 2, by = h * 0.82f, bh = 5;
+        if (barTrack != null) g.imageA("spltrack:1", barTrack, bx, by, bw, bh, a);
+        if (barFill != null) g.imageA("splfill:" + barFill.getName(), barFill, bx, by, Math.max(bh, bw * Math.max(0, Math.min(1, progress))), bh, a);
     }
     // ------------------------------------------------------------------ music card on the pause menu (ESC): track, time, controls, volume
     private static final java.util.List<float[]> PB = new java.util.ArrayList<>(); private static final java.util.List<String> PBC = new java.util.ArrayList<>(); private static boolean wasDown;
@@ -101,10 +150,15 @@ public final class Menu {
     /** the title screen is being drawn (set by the version mixins): the own picture stays sharp there */
     public static boolean onTitle;
     private static int[] imgSize(java.io.File f) { try (java.io.DataInputStream in = new java.io.DataInputStream(new java.io.FileInputStream(f))) { in.skipBytes(16); return new int[]{in.readInt(), in.readInt()}; } catch (Exception e) { return null; } }
+    private static long dbgBg, dbgBg2;
+    /** an own picture was chosen in the launcher (the base mod draws our art in the main menu otherwise) */
+    public static boolean ownBg() { return new java.io.File(V.dir(), "asteria-bg.png").exists(); }
     public static void background(Gfx g, int w, int h) {
+        if (Fx.DEBUG && System.currentTimeMillis() - dbgBg2 > 4000) { dbgBg2 = System.currentTimeMillis(); System.out.println("[Asteria debug] background() own=" + new java.io.File(V.dir(), "asteria-bg.png").getAbsolutePath()); }
         D.g = g;
         java.io.File own = new java.io.File(V.dir(), "asteria-bg.png"), blur = new java.io.File(V.dir(), "asteria-bg-blur.png");
         if (own.exists()) { java.io.File f = !onTitle && V.bgBlur && blur.exists() ? blur : own; int[] sz = imgSize(f);
+            if (Fx.DEBUG && System.currentTimeMillis() - dbgBg > 4000) { dbgBg = System.currentTimeMillis(); System.out.println("[Asteria debug] bg title=" + onTitle + " file=" + f + " size=" + java.util.Arrays.toString(sz)); }
             if (sz != null && sz[0] > 0 && sz[1] > 0) { float s = Math.max(w / (float) sz[0], h / (float) sz[1]), bw = sz[0] * s, bh = sz[1] * s;
                 if (g.image((f == blur ? "bgb:" : "bg:") + f.lastModified(), f, (w - bw) / 2, (h - bh) / 2, bw, bh)) { D.vgrad(0, 0, w, h, D.alpha(0x02070A, onTitle ? 30 : 90), D.alpha(0x02070A, onTitle ? 90 : 150)); return; } } }
         if (V.menuBg == 1) { float s = Math.max(w / 1280f, h / 720f), bw = 1280 * s, bh = 720 * s;

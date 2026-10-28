@@ -1960,6 +1960,12 @@
    "on": false,
    "s": [
     {
+     "id": "theme",
+     "name": "Цвета темы",
+     "type": "bool",
+     "def": true
+    },
+    {
      "id": "color",
      "name": "Цвет",
      "type": "color",

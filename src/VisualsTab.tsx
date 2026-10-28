@@ -147,7 +147,8 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
             <div className="flex items-center gap-2 mt-3">
               <button className={'pill !py-1 ' + (bindFor === m.id ? 'on' : '')} title="Клавиша включения в игре" onClick={() => setBindFor(bindFor === m.id ? '' : m.id)}><Icon n="keyboard" s={13} />{bindFor === m.id ? 'Нажмите клавишу…' : keyName(mc.bind)}</button>
               {m.s.length > 0 && <button className="pill !py-1 ml-auto" onClick={() => setOpen(ex ? '' : m.id)}><Icon n="sliders" s={13} />Настройки<span className={'transition ' + (ex ? 'rotate-180' : '')}><Icon n="chevron" s={12} /></span></button>}</div>
-            {ex && <div className="mt-3 pt-3 flex flex-col gap-3 fade" style={{ borderTop: '1px solid var(--line)' }}>{m.s.map((s) => <Setting key={s.id} mod={m.id} s={s} v={mc.s[s.id]} set={(v) => setS(m.id, s.id, v)} />)}</div>}
+            {ex && <div className="mt-3 pt-3 flex flex-col gap-3 fade" style={{ borderTop: '1px solid var(--line)' }}>{m.s.map((s) => <Setting key={s.id} mod={m.id} s={s} v={mc.s[s.id]} set={(v) => setS(m.id, s.id, v)} />)}
+              {m.s.length > 0 && <button className="pill self-end !text-xs" onClick={() => mod(m.id, { s: Object.fromEntries(m.s.map((x) => [x.id, x.def])) })}><Icon n="reset" s={12} />Сбросить настройки</button>}</div>}
           </div></div> })}
       </div></div>}
 
@@ -249,28 +250,28 @@ function Configs({ c, pr, set, say }: { c: VisCfg; pr: Presets; set: (p: Presets
 function Range({ label, min, max, step, v, set, show }: { label: string; min: number; max: number; step: number; v: number; set: (n: number) => void; show?: (n: number) => string }) {
   return <label className="block"><div className="flex justify-between text-sm mb-1"><span>{label}</span><b>{show ? show(v) : v}</b></div><input type="range" className="w-full" min={min} max={max} step={step} value={v} onChange={(e) => set(+e.target.value)} /></label>
 }
-/** markers of every server for this version: name, colour, coordinates; add by coordinates, edit, delete */
+/** markers per world (overworld / nether / end), the same on every server: name, colour, coordinates; add by coordinates, edit, delete */
 type MarkT = { x: number; y: number; z: number; name?: string; color?: string }
 function MarksTab({ ver, say }: { ver: string; say: (s: string) => void }) {
   const [all, setAll] = useState<Record<string, any[]>>({}), [srv, setSrv] = useState(''), [f, setF] = useState({ x: '', y: '', z: '', name: '', color: '#22d3ee' })
-  useEffect(() => { window.api.marksGet(ver).then((d: any) => { const o = d || {}; setAll(o); setSrv((s) => s || Object.keys(o)[0] || 'mc.safimine.ru|minecraft:overworld') }) }, [ver])
+  useEffect(() => { window.api.marksGet(ver).then((d: any) => { const o: Record<string, any[]> = {}; for (const [k, v] of Object.entries(d || {})) { const dim = k.includes('|') ? k.split('|')[1] || 'minecraft:overworld' : k; o[dim] = [...(o[dim] || []), ...(v as any[])] } setAll(o); setSrv((s) => s || 'minecraft:overworld') }) }, [ver])
   const norm = (m: any): MarkT => Array.isArray(m) ? { x: m[0], y: m[1], z: m[2] } : m
   const list: MarkT[] = (all[srv] || []).map(norm)
   const save = (l: MarkT[]) => { const n = { ...all, [srv]: l }; setAll(n); window.api.marksSet(ver, n) }
   const add = () => { const x = +f.x, y = +f.y, z = +f.z; if ([f.x, f.y, f.z].some((v) => v.trim() === '' || isNaN(+v))) return say('Введите X, Y и Z'); save([...list, { x: Math.floor(x) + 0.5, y: Math.floor(y), z: Math.floor(z) + 0.5, name: f.name || 'Метка ' + (list.length + 1), color: f.color }]); setF({ ...f, x: '', y: '', z: '', name: '' }); say('Метка добавлена — в игре появится через пару секунд') }
   const DIMS: Record<string, string> = { 'minecraft:overworld': 'Верхний мир', 'minecraft:the_nether': 'Ад', 'minecraft:the_end': 'Энд' }
-  const label = (k: string) => { const [sv, d] = k.split('|'); return (sv === 'local' ? 'Одиночная игра' : sv) + (d ? ' · ' + (DIMS[d] || d.replace(/^minecraft:/, '')) : '') }
-  const servers = Array.from(new Set([...Object.keys(all), 'mc.safimine.ru|minecraft:overworld', 'mc.safimine.ru|minecraft:the_nether', 'mc.safimine.ru|minecraft:the_end', 'local|minecraft:overworld']))
+  const label = (k: string) => DIMS[k] || k.replace(/^minecraft:/, '')
+  const servers = Array.from(new Set(['minecraft:overworld', 'minecraft:the_nether', 'minecraft:the_end', ...Object.keys(all)]))
   return <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.3fr)' }}>
     <div className="card rounded-3xl p-5 flex flex-col gap-3"><b className="text-lg">Новая метка</b>
-      <div className="flex items-center gap-2"><span className="text-sm w-20">Сервер и мир</span><select className="flex-1" value={srv} onChange={(e) => setSrv(e.target.value)}>{servers.map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></div>
+      <div className="flex items-center gap-2"><span className="text-sm w-20">Мир</span><select className="flex-1" value={srv} onChange={(e) => setSrv(e.target.value)}>{servers.map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></div>
       <div className="grid grid-cols-3 gap-2">{(['x', 'y', 'z'] as const).map((k) => <input key={k} placeholder={k.toUpperCase()} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className="text-center font-mono" />)}</div>
       <input placeholder="Название (База, Шахта…)" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
       <div className="flex items-center justify-between"><span className="text-sm">Цвет</span><ColorPick value={f.color} set={(v) => setF({ ...f, color: v })} size="sm" /></div>
-      <button className="btn btn-primary" onClick={add}><Icon n="plus" s={15} /> Добавить</button>
+      <button className="btn-add self-start" onClick={add}><span className="ic"><Icon n="plus" s={14} /></span>Добавить метку</button>
       <p className="muted text-xs">В игре: B — метка туда, куда смотрите (ещё раз B рядом — убрать), Shift+B — убрать все. В чат: <b>.метка 100 64 -200 База</b> — координаты из чата тоже можно скопировать так.</p></div>
     <div className="card rounded-3xl p-5"><div className="flex items-center justify-between mb-3"><b className="text-lg">Метки · {label(srv)}</b>{list.length > 0 && <button className="pill" onClick={() => save([])}><Icon n="trash" s={13} />Убрать все</button>}</div>
-      {!list.length && <div className="muted text-sm">Пока нет меток на этом сервере</div>}
+      {!list.length && <div className="muted text-sm">Пока нет меток в этом мире</div>}
       <div className="flex flex-col gap-2">{list.map((m, i) => <div key={i} className="mcard !p-2.5 flex items-center gap-2">
         <ColorPick value={m.color || '#22d3ee'} set={(v) => save(list.map((x, j) => j === i ? { ...x, color: v } : x))} size="sm" />
         <input className="flex-1 min-w-0" value={m.name || ''} placeholder="Без названия" onChange={(e) => save(list.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
@@ -300,7 +301,7 @@ function BindsTab({ say }: { say: (s: string) => void }) {
     const md = (e: MouseEvent) => { if (e.button === 0) return; e.preventDefault(); save(list.map((b, i) => i === listen ? { ...b, key: -([0, 3, 2, 4, 5][e.button] || 0) } : b)); setListen(-1) }
     addEventListener('keydown', kd, true); addEventListener('mousedown', md, true); return () => { removeEventListener('keydown', kd, true); removeEventListener('mousedown', md, true) } }, [listen, list])
   return <div className="card rounded-3xl p-5 flex flex-col gap-3"><div className="flex items-center justify-between"><div><b className="text-lg">Бинды команд</b><div className="muted text-sm">Нажимаете клавишу в игре — отправляется команда или сообщение. Работает, когда функция «Бинды команд» включена</div></div>
-    <button className="btn btn-primary" onClick={() => save([...list, { key: 0, cmd: '/spawn' }])}><Icon n="plus" s={15} /> Добавить</button></div>
+    <button className="btn-add" onClick={() => save([...list, { key: 0, cmd: '/spawn' }])}><span className="ic"><Icon n="plus" s={14} /></span>Добавить бинд</button></div>
     {!list.length && <div className="muted text-sm">Пока нет биндов. Например: V → /spawn, H → /home, J → /warp casino</div>}
     {list.map((b, i) => <div key={i} className="mcard !p-2.5 flex items-center gap-2">
       <button className={'btn !py-1.5 min-w-[90px] ' + (listen === i ? 'btn-on' : '')} onClick={() => setListen(i)}>{listen === i ? 'Нажмите…' : b.key ? keyName(b.key) : 'Клавиша'}</button>

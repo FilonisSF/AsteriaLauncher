@@ -27,8 +27,9 @@ public final class Gui {
 
     private static final class Hit { float x1, y1, x2, y2; Runnable click; String id; Hit(float a, float b, float c, float d, String id, Runnable r) { x1 = a; y1 = b; x2 = c; y2 = d; this.id = id; click = r; } }
 
-    public static void opened() { openedAt = System.currentTimeMillis(); openT = 0; D.set("gui.open", 0); D.frame(); Hud.editing = false; listening = null; searchFocus = false; }
-    public static void closed() { Hud.editing = false; listening = null; textEdit = null; dragging = null; moving = null; V.changed(); }
+    public static boolean open;
+    public static void opened() { open = true; openedAt = System.currentTimeMillis(); openT = 0; D.set("gui.open", 0); D.frame(); Hud.editing = false; listening = null; searchFocus = false; }
+    public static void closed() { open = false; Hud.editing = false; listening = null; textEdit = null; dragging = null; moving = null; V.changed(); }
 
     // ================================================================== render
     public static void render(Gfx g, Game game, float mx, float my) {
@@ -38,7 +39,8 @@ public final class Gui {
         openT = D.anim("gui.open", 1, 9);
         float a = D.ease(openT);
         D.rect(0, 0, screenW, screenH, D.alpha(0x02060A, (int) (150 * a)));
-        sw = Math.min(1, Math.min((screenW - 20) / W, (screenH - 20) / H)) * (0.94f + 0.06f * a);
+        // a scale that is a whole number of half screen pixels: the text stays as sharp as in the HUD (no zoom animation for the same reason)
+        { float k = g.pxScale() * 2, fit = Math.min(1, Math.min((screenW - 20) / W, (screenH - 20) / H)); sw = Math.max(1, (float) Math.floor(fit * k)) / k; }
         ox = (screenW - W * sw) / 2; oy = (screenH - H * sw) / 2 + (1 - a) * 12;
         float lmx = (mx - ox) / sw, lmy = (my - oy) / sw;
         g.push(ox, oy, sw);
@@ -92,7 +94,7 @@ public final class Gui {
         // search box
         float sx = x1 - 120; boolean sh = in(mx, my, sx, 13, x1, 31);
         D.round(sx, 13, x1, 31, 6, searchFocus ? 0x30FFFFFF : sh ? 0x22FFFFFF : 0x16FFFFFF);
-        if (searchFocus) D.round(sx, 30, x1, 31, 0.5f, V.a1(), V.a2());
+        if (searchFocus) D.rim(sx, 13, x1, 31, 6, 0.8f, 150, 60); // focus: a soft light rim instead of a line under the field
         D.icon("search", sx + 5, 17.5f, 9, 0xFF8FA6B2);
         String st = search.isEmpty() && !searchFocus ? "Найти функцию" : search + (searchFocus && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "");
         D.g.text(st, sx + 17, 18, search.isEmpty() && !searchFocus ? 0xFF6F8B99 : 0xFFFFFFFF, false);
@@ -148,6 +150,9 @@ public final class Gui {
             g.push(0, 0, 1);
             float sy = y + 34;
             for (V.S s : m.s) { if (sy > y + h) break; sy += setting(g, game, m, s, x0 + 10, sy, x1 - 10, mx, my); }
+            if (!m.s.isEmpty() && sy + 14 <= y + h) { float bx1 = x1 - 10, bx0 = bx1 - 70; boolean rh = in(mx, my, bx0, sy + 1, bx1, sy + 14); // back to the defaults (hands, positions, colours...)
+                D.round(bx0, sy + 1, bx1, sy + 14, 5, rh ? 0x50FFFFFF : 0x26FFFFFF); D.textC("Сбросить", (bx0 + bx1) / 2, sy + 4, 0xFFEAF6FA);
+                hit(bx0, sy + 1, bx1, sy + 14, "reset:" + m.id, () -> { for (V.S s : m.s) V.reset(s); V.changed(); }); }
             g.pop();
             if (opening) g.scissor(ox + (SIDE + 1) * sw, oy + 46 * sw, (W - SIDE - 2) * sw, (H - 46 - 6) * sw); // back to the list's clip
         }
@@ -158,7 +163,7 @@ public final class Gui {
         int c = D.mix(0xFFE5484D, 0xFF2FBF71, p); D.round(x, y, x + 22, y + 12, 6, c, D.mix(c, 0xFFFFFFFF, 0.12f)); // on = green, off = red
         D.circle(x + 6 + 10 * p, y + 6, 4.3f, 0xFFFFFFFF);
     }
-    private static float settingsHeight(V.Mod m) { float h = 4; for (V.S s : m.s) h += rowH(s); return h; }
+    private static float settingsHeight(V.Mod m) { float h = 4; for (V.S s : m.s) h += rowH(s); return m.s.isEmpty() ? h : h + 18; }
     private static float rowH(V.S s) { return s.type.equals("num") ? 24 : s.type.equals("color") && s == colorOpen ? 44 : s.type.equals("mode") ? (s.options.length > 4 ? 18 + (s.options.length + 2) / 3 * 16 : 22) : 18; }
 
     private static float setting(Gfx g, Game game, V.Mod m, V.S s, float x0, float y, float x1, float mx, float my) {

@@ -16,7 +16,7 @@ export type Loader = 'fabric' | 'vanilla'
 export const loaderOf = (cfg: any, v: string): Loader => !fabricFor(v) ? 'vanilla' : (cfg?.loaders?.[v] ?? (cfg?.fabric === false ? 'vanilla' : 'fabric'))
 
 type P = { ver: string; setVer: (v: string) => void; cfg: any; setCfg: (c: any) => void; running: boolean; play: () => void; VImg: (p: { v: string; cls: string }) => JSX.Element; profiles: ReactNode; recommended: string }
-export default function Versions({ ver, setVer, cfg, setCfg, running, play, VImg, profiles, recommended, label }: P & { label?: string }) {
+export default function Versions({ ver, setVer, cfg, setCfg, running, play, VImg, profiles, recommended, label, manage }: P & { label?: string; manage?: (a: 'reinstall' | 'remove') => void }) {
   const sel = FAMILIES.find((f) => f.subs.includes(ver)) ?? FAMILIES[0], info = VINFO[ver], ld = loaderOf(cfg, ver), ast = ASTERIA[ver]
   const setLoader = (v: string, l: Loader) => cfg && setCfg({ ...cfg, loaders: { ...(cfg.loaders || {}), [v]: l } })
   return <div className="fade">
@@ -32,6 +32,8 @@ export default function Versions({ ver, setVer, cfg, setCfg, running, play, VImg
           <div className="loaders !gap-2">{(['fabric', 'vanilla'] as Loader[]).map((l) => <button key={l} disabled={l === 'fabric' && !fabricFor(ver)} className={'loader !bg-white/10 !text-white ' + (ld === l ? 'on' : '')} onClick={() => setLoader(ver, l)}
             title={l === 'fabric' && !fabricFor(ver) ? 'Для этой версии Fabric не нужен: моды для неё пока не поддерживаются' : ''}><LoaderIcon k={l} s={16} />{l === 'fabric' ? 'Fabric' : 'Vanilla'}</button>)}</div>
           <span className="text-xs opacity-75">Java {info?.java ?? '—'} · {ld === 'fabric' ? 'моды, FPS-буст, Asteria' : 'чистая игра'}</span>
+          {manage && <div className="flex gap-2 ml-auto"><button className="pill !bg-white/10 !text-white" disabled={running} onClick={() => manage('reinstall')}><Icon n="reset" s={13} />Переустановить</button>
+            <button className="pill !bg-white/10 !text-white" disabled={running} onClick={() => manage('remove')}><Icon n="trash" s={13} />Удалить</button></div>}
         </div></div></div>
 
     <div className="section">Все версии</div>

@@ -10,12 +10,12 @@ const mb = (b: number) => b > 1 << 30 ? (b / (1 << 30)).toFixed(1) + ' ГБ' : M
 const ago = (t: number) => { const d = (Date.now() - t) / 60000; return d < 60 ? Math.max(1, Math.round(d)) + ' мин назад' : d < 1440 ? Math.round(d / 60) + ' ч назад' : new Date(t).toLocaleDateString('ru') }
 
 /** Worlds: own worlds of every version (play straight into one, copy to another version, export, delete), import, maps catalog, friends and playing together */
-export function Worlds({ ver, versions, play, say, running }: { ver: string; versions: { value: string; label: string }[]; play: (v: string, join?: boolean, server?: any, extra?: any) => void; say: (s: string, k?: 'ok' | 'err' | 'info') => void; running: boolean }) {
-  const [view, setView] = useState<'mine' | 'maps' | 'friends'>('mine')
+export function Worlds({ ver, versions, play, say, running, initial }: { initial?: 'mine' | 'maps' | 'friends'; ver: string; versions: { value: string; label: string }[]; play: (v: string, join?: boolean, server?: any, extra?: any) => void; say: (s: string, k?: 'ok' | 'err' | 'info') => void; running: boolean }) {
+  const [view, setView] = useState<'mine' | 'maps' | 'friends'>(initial || 'mine')
   const [worlds, setWorlds] = useState<World[]>([]), [maps, setMaps] = useState<MapItem[]>([]), [target, setTarget] = useState(ver), [busy, setBusy] = useState('')
-  const [together, setTogether] = useState(false), [q, setQ] = useState('')
+  const [together, setTogether] = useState(false), [q, setQ] = useState(''), [ask, setAsk] = useState<World | null>(null)
   const load = () => api.worlds().then(setWorlds)
-  useEffect(() => { load(); api.maps().then(setMaps) }, [])
+  useEffect(() => { load(); api.maps().then(setMaps); return api.onFiles?.((d: any) => { if (d.kind === 'saves') load() }) }, []) // worlds made or deleted in the game appear at once
   const instKey = (v: string) => v // instances are named after the version
   const shown = worlds.filter((w) => !q || w.name.toLowerCase().includes(q.toLowerCase()))
   const imp = async () => { const r = await api.worldImport(target); if (!r) return; if (r.error) return say(r.error, 'err'); say('Мир «' + r.name + '» добавлен в ' + target); load() }
@@ -29,7 +29,7 @@ export function Worlds({ ver, versions, play, say, running }: { ver: string; ver
     {view === 'mine' && <div className="flex flex-col gap-3">
       <div className="card rounded-3xl p-4 flex flex-wrap items-center gap-2">
         <div className="relative w-64"><input className="w-full !pl-10" placeholder="Поиск мира" value={q} onChange={(e) => setQ(e.target.value)} /><span className="absolute left-3 top-2.5 muted"><Icon n="search" s={18} /></span></div>
-        <button className="btn !py-2 flex items-center gap-2" onClick={imp}><Icon n="upload" s={15} />Добавить мир (.zip / папка)</button>
+        <button className="btn-add" onClick={imp}><span className="ic"><Icon n="plus" s={14} /></span>Добавить мир</button>
         <button className="pill" onClick={() => api.worldOpenSaves(instKey(target))}><Icon n="folder" s={13} />Папка миров {target}</button>
         <div className="ml-auto w-[330px]"><Switch on={together} set={setTogether} label="Играть вместе с друзьями" hint="Ставит мод e4mc. В игре: ESC → «Открыть для сети»" /></div></div>
       {!shown.length && <div className="card rounded-3xl p-8 text-center muted">Миров пока нет — создайте мир в игре, добавьте свой архив или скачайте карту</div>}
@@ -42,7 +42,7 @@ export function Worlds({ ver, versions, play, say, running }: { ver: string; ver
               <button className="pill !text-xs" title="Открыть папку" onClick={() => api.worldOpen(w.path)}><Icon n="folder" s={12} /></button>
               <button className="pill !text-xs" title="Скопировать в выбранную версию" disabled={w.version === target} onClick={async () => { await api.worldCopy(w.path, target); say('Скопировано в ' + target); load() }}><Icon n="copy" s={12} />{target}</button>
               <button className="pill !text-xs" title="Экспорт в .zip" onClick={() => api.worldExport(w.path)}><Icon n="download" s={12} /></button>
-              <button className="pill !text-xs" title="В корзину" onClick={async () => { if (!confirm('Переместить мир «' + w.name + '» в корзину?')) return; await api.worldRemove(w.path); load() }}><Icon n="trash" s={12} /></button></div></div></div>)}</div>
+              <button className="pill !text-xs" title="Удалить мир" onClick={() => setAsk(w)}><Icon n="trash" s={12} /></button></div></div></div>)}</div>
       <div className="muted text-[11px]">На 1.20 и новее «Играть» сразу открывает мир; на старых версиях откроется меню, мир будет первым в списке одиночной игры.</div></div>}
 
     {view === 'maps' && <div className="flex flex-col gap-3">
@@ -55,6 +55,12 @@ export function Worlds({ ver, versions, play, say, running }: { ver: string; ver
               <button className="btn !py-1 !px-3 text-xs ml-auto flex items-center gap-1" disabled={!!busy} onClick={() => getMap(m)}><Icon n="download" s={12} />{busy === m.url ? 'Скачивание…' : 'Скачать'}</button></div></div></div>)}</div></div>}
 
     {view === 'friends' && <Friends play={play} say={say} running={running} />}
+    {ask && <div className="ask-bg" onClick={() => setAsk(null)}><div className="ask" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-3"><span className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center" style={{ background: 'var(--chip)' }}>{ask.icon ? <img src={ask.icon} className="w-full h-full object-cover" /> : <Icon n="cube" s={22} />}</span>
+        <div className="min-w-0"><b className="block text-lg truncate">Удалить «{ask.name}»?</b><div className="muted text-xs">Minecraft {ask.version} · {mb(ask.size)}</div></div></div>
+      <p className="muted text-sm mt-3">Мир переместится в корзину Windows — его можно будет восстановить.</p>
+      <div className="flex gap-2 mt-4 justify-end"><button className="btn" onClick={() => setAsk(null)}>Отмена</button>
+        <button className="btn-danger" onClick={async () => { const w = ask; setAsk(null); await api.worldRemove(w.path); say('Мир «' + w.name + '» в корзине'); load() }}><Icon n="trash" s={14} />Удалить</button></div></div></div>}
   </div>
 }
 
@@ -72,7 +78,7 @@ function Friends({ play, say, running }: { play: (v: string, join?: boolean, ser
     {host && <div className="card rounded-3xl p-4 flex items-center gap-3"><Icon n="link" s={18} /><div className="flex-1"><b>Ваш мир открыт для друзей</b><div className="muted text-xs">Адрес: {host} — друзья увидят кнопку «Присоединиться»</div></div>
       <button className="pill" onClick={() => { navigator.clipboard.writeText(host); say('Адрес скопирован') }}><Icon n="copy" s={13} />Копировать</button></div>}
     <div className="card rounded-3xl p-4 flex gap-2 items-center"><input className="flex-1" placeholder="Ник игрока" value={nick} onChange={(e) => setNick(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-      <button className="btn !py-2 flex items-center gap-2" onClick={add}><Icon n="plus" s={15} />Отправить заявку</button></div>
+      <button className="btn-add" onClick={add}><span className="ic"><Icon n="plus" s={14} /></span>Отправить заявку</button></div>
     {err && <div className="card rounded-2xl p-3 text-sm" style={{ color: '#ff8a8a' }}>{err}</div>}
     {!!d?.incoming.length && <div className="card rounded-3xl p-4 flex flex-col gap-2"><b className="text-sm">Заявки в друзья · {d.incoming.length}</b>
       {d.incoming.map((n) => <div key={n} className="flex items-center gap-3"><Avatar n={n} /><b className="flex-1 truncate">{n}</b>
@@ -87,6 +93,6 @@ function Friends({ play, say, running }: { play: (v: string, join?: boolean, ser
         <div className="flex-1 min-w-0"><b className="block truncate">{n}</b><div className="muted text-[11px]">{!p.online ? 'Не в игре' : p.host ? 'Открыл мир · ' + p.ver : p.srv ? 'На сервере ' + p.srv + ' · ' + p.ver : 'В игре · ' + (p.ver || '')}</div></div>
         {p.online && p.host && p.ver && <button className="btn !py-1 !px-3 text-xs" disabled={running} onClick={() => play(p.ver!, true, { host: p.host, port: 25565 })}>Присоединиться</button>}
         {p.online && !p.host && p.srv && p.ver && <button className="pill !text-xs" disabled={running} onClick={() => play(p.ver!, true, { host: p.srv, port: 25565 })}>К нему</button>}
-        <button className="pill !text-xs" title="Удалить из друзей" onClick={() => confirm('Удалить ' + n + ' из друзей?') && act('remove', n)}><Icon n="close" s={11} /></button></div> })}</div>
+        <button className="pill !text-xs" title="Удалить из друзей" onClick={() => act('remove', n, false, n + ' удалён из друзей')}><Icon n="close" s={11} /></button></div> })}</div>
     <div className="muted text-[11px]">Статус виден, когда друг играет через AsteriaLauncher. Игра вместе: включите «Играть вместе с друзьями» во вкладке «Мои миры», зайдите в мир и нажмите ESC → «Открыть для сети».</div></div>
 }

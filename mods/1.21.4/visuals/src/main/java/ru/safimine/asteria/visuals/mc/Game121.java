@@ -104,6 +104,15 @@ final class Game121 implements Game {
     @Override public java.util.List<Object> players() { java.util.List<Object> o = new ArrayList<>(); if (c.world == null) return o; for (Object p : c.world.getPlayers()) if (p != c.player) o.add(p); return o; }
     @Override public String playerName(Object e) { return e instanceof net.minecraft.entity.player.PlayerEntity ? ((net.minecraft.entity.player.PlayerEntity) e).getGameProfile().getName() : ""; }
     @Override public float yawOf(Object e) { return e instanceof Entity ? ((Entity) e).getYaw() : 0; }
+    @Override public float pitchOf(Object e) { return e instanceof Entity ? ((Entity) e).getPitch() : 0; }
+    @Override public float bodyYawOf(Object e) { return e instanceof net.minecraft.entity.LivingEntity ? ((net.minecraft.entity.LivingEntity) e).bodyYaw : yawOf(e); }
+    @Override public float headYawOf(Object e) { return e instanceof net.minecraft.entity.LivingEntity ? ((net.minecraft.entity.LivingEntity) e).headYaw : yawOf(e); }
+    @Override public boolean hitboxDebug() { try { return c.getEntityRenderDispatcher().shouldRenderHitboxes(); } catch (Throwable t) { return false; } }
+    @Override public boolean onGroundOf(Object e) { return !(e instanceof Entity) || ((Entity) e).isOnGround(); }
+    @Override public float headYawOf(Object e, float pt) { if (!(e instanceof net.minecraft.entity.LivingEntity)) return headYawOf(e); net.minecraft.entity.LivingEntity l = (net.minecraft.entity.LivingEntity) e; return net.minecraft.util.math.MathHelper.lerpAngleDegrees(pt, l.prevHeadYaw, l.headYaw); }
+    @Override public float bodyYawOf(Object e, float pt) { if (!(e instanceof net.minecraft.entity.LivingEntity)) return bodyYawOf(e); net.minecraft.entity.LivingEntity l = (net.minecraft.entity.LivingEntity) e; return net.minecraft.util.math.MathHelper.lerpAngleDegrees(pt, l.prevBodyYaw, l.bodyYaw); }
+    @Override public float pitchOf(Object e, float pt) { return e instanceof Entity ? ((Entity) e).getPitch(pt) : 0; }
+    @Override public boolean sneakingOf(Object e) { return e instanceof Entity && ((Entity) e).isInSneakingPose(); }
     @Override public boolean tabOpen() { return c.currentScreen == null && c.options.playerListKey.isPressed(); }
     @Override public Object entityIcon(Object e) {
         if (!(e instanceof Entity) || e instanceof net.minecraft.entity.player.PlayerEntity) return null;

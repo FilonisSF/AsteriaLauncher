@@ -102,15 +102,21 @@ public final class Gfx120 implements Gfx {
         m.push(); m.translate(x, y, 0); m.scale(w / 64f, h / 64f, 1); ctx.drawTexture(id, 0, 0, 0f, 0f, 64, 64, 64, 64); m.pop();
         return true;
     }
+    @Override public boolean imageA(String key, java.io.File png, float x, float y, float w, float h, float alpha) { flush();
+        Identifier id = tex(key, png); if (id == null) return false;
+        RenderSystem.enableBlend(); RenderSystem.defaultBlendFunc(); RenderSystem.setShaderColor(1, 1, 1, alpha);
+        m.push(); m.translate(x, y, 0); m.scale(w / 64f, h / 64f, 1); ctx.drawTexture(id, 0, 0, 0f, 0f, 64, 64, 64, 64); m.pop(); RenderSystem.setShaderColor(1, 1, 1, 1);
+        return true;
+    }
     @Override public void textTop(String s, float x, float y, int argb) { m.push(); m.translate(0, 0, 300); text(s, x, y, argb, true); m.pop(); }
     @Override public int width(String s) { return tr.getWidth(t(s)); }
     /** our smooth TTF font (assets/asteria_visuals/font/ui.json) unless the theme switches it off */
-    private static final Identifier[][] UI = new Identifier[16][7];
+    private static final Identifier[][] UI = new Identifier[16][13];
     /** GUI scale 1..6: the font variant rendered for exactly this many pixels per GUI pixel */
     private static int gs() { return Math.max(1, Math.min(6, (int) Math.round(net.minecraft.client.MinecraftClient.getInstance().getWindow().getScaleFactor()))); }
-    private static Text t(String s) { return t(s, gs()); }
+    private static Text t(String s) { return t(s, gs() * 2); }
     /** k = real screen pixels per GUI pixel (GUI scale x HUD scale): glyphs rasterised for exactly that size stay sharp */
-    private static Text t(String s, int k0) { if (V.font <= 0) return Text.literal(s); int i = Math.min(15, V.font), k = Math.max(1, Math.min(6, k0)); if (UI[i][k] == null) UI[i][k] = new Identifier("asteria_visuals", "f" + i + "s" + k); return Text.literal(s).setStyle(Style.EMPTY.withFont(UI[i][k])); }
+    private static Text t(String s, int k0) { if (V.font <= 0) return Text.literal(s); int i = Math.min(15, V.font), k = Math.max(2, Math.min(12, k0)); if (UI[i][k] == null) UI[i][k] = new Identifier("asteria_visuals", "f" + i + "h" + k); return Text.literal(s).setStyle(Style.EMPTY.withFont(UI[i][k])); }
     @Override public void item(Object stack, int x, int y) { flush(); ctx.drawItem((ItemStack) stack, x, y); }
     @Override public boolean effectIcon(Object type, int x, int y, int size) { flush();
         Sprite sp = c.getStatusEffectSpriteManager().getSprite((StatusEffect) type);
@@ -135,10 +141,13 @@ public final class Gfx120 implements Gfx {
         return true;
     }
     @Override public void push(float x, float y, float s) { scs.push(sc); m.push(); m.translate(snap(x), snap(y), 0); m.scale(s, s, 1f); sc *= s; }
+    @Override public float pxScale() { return gs(); }
+    @Override public void pushRot(float cx, float cy, float deg) { flush(); scs.push(sc); m.push(); m.translate(cx, cy, 0); m.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_Z.rotationDegrees(deg)); m.translate(-cx, -cy, 0); }
     @Override public void pop() { m.pop(); if (!scs.isEmpty()) sc = scs.pop(); }
     /** scale on top of the GUI scale (HUD element scale): picks the font size and snaps positions to whole screen pixels */
     private float sc = 1f; private final java.util.ArrayDeque<Float> scs = new java.util.ArrayDeque<>();
-    private int px() { return Math.max(1, Math.min(6, Math.round(gs() * sc))); }
+    /** half-steps: the font variant h<k> is rasterised at k/2 pixels per GUI unit (1.5x text at GUI scale 2 stays sharp) */
+    private int px() { return Math.max(2, Math.min(12, Math.round(gs() * sc * 2))); }
     private float snap(float v) { float g = gs() * sc; return Math.round(v * g) / g; }
     @Override public void scissor(float x, float y, float w, float h) { flush();
         ctx.draw();

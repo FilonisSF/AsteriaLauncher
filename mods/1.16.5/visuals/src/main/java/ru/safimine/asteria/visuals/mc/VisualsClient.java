@@ -37,7 +37,7 @@ public class VisualsClient implements ClientModInitializer {
         MARK = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.mark", InputUtil.Type.KEYSYM, 66, "category.asteria"));
         FREELOOK = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.asteria.freelook", InputUtil.Type.KEYSYM, 342, "category.asteria"));
         // the HUD is drawn by InGameHudMixin under the chat, Tab and scoreboard
-        WorldRenderEvents.LAST.register(ctx -> { try { Fx.render(new R3_116(ctx), Game116.I); } catch (Throwable ignored) {} });
+        WorldRenderEvents.LAST.register(ctx -> { try { Fx.render(new R3_116(ctx), Game116.I); } catch (Throwable t) { Fx.err("world", t); } });
         ClientTickEvents.END_CLIENT_TICK.register(VisualsClient::tick);
     }
 
@@ -77,7 +77,7 @@ public class VisualsClient implements ClientModInitializer {
     }
     /** chat messages of ours (.метка ...) stay in the client */
     public static boolean chat(String msg) { return Fx.chatCommand(Game116.I, msg); }
-    public static void hud(net.minecraft.client.util.math.MatrixStack m) { Gfx116 g = new Gfx116(m, true); try { Hud.render(g, Game116.I); } catch (Throwable ignored) {} finally { try { g.flush(); } catch (Throwable ignored) {} } }
+    public static void hud(net.minecraft.client.util.math.MatrixStack m) { Gfx116 g = new Gfx116(m, true); try { Hud.render(g, Game116.I); } catch (Throwable t) { Fx.err("hud", t); } finally { try { g.flush(); } catch (Throwable ignored) {} } }
     /** our font for every text of Minecraft (theme "font for all text"): minecraft:default -> asteria_visuals:f<N>s<scale> */
     private static final Identifier[][] ALL = new Identifier[16][7];
     public static Identifier allFont(Identifier id) {
