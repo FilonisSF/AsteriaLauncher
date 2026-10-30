@@ -35,9 +35,26 @@ const planOf = (n) => { const p = plans[n]; if (!p || p.plan !== 'PREMIUM') retu
 setInterval(() => wr('seen.json', seenDb), 60000)
 // friends: { nick: { f: [Nick...], in: [Nick...] requests to me, out: [Nick...] my requests, notes: [{ k: 'accepted' | 'declined' | 'request', who, t }] } }
 const friendsDb = rd('friends.json', {}); let friendsDirty = false; setInterval(() => { if (friendsDirty) { wr('friends.json', friendsDb); friendsDirty = false } }, 5000)
+const seenName = {} // nick as the player types it (case), for requests by code
 const fr = (n) => (friendsDb[n] = friendsDb[n] || { f: [], in: [], out: [], notes: [] })
 const without = (l, who) => l.filter((x) => x.toLowerCase() !== who.toLowerCase())
-const note = (n, k, who) => { const d = fr(n); d.notes = [...d.notes, { k, who, t: Date.now() }].slice(-30); friendsDirty = true }
+// friend codes: requests only by code (a nick alone is not enough), XXXX-XXXX without look-alike letters
+const fcodes = rd('friend-codes.json', {}), fbyCode = Object.fromEntries(Object.entries(fcodes).map(([n, c]) => [c, n]))
+const fcode = (n) => { if (!fcodes[n]) { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c; do { c = Array.from(crypto.randomBytes(8), (b) => A[b % A.length]).join(''); c = c.slice(0, 4) + '-' + c.slice(4) } while (fbyCode[c]); fcodes[n] = c; fbyCode[c] = n; wr('friend-codes.json', fcodes) } return fcodes[n] }
+const note = (n, k, who, x = {}) => { const d = fr(n); d.notes = [...d.notes, { k, who, t: Date.now(), ...x }].slice(-30); friendsDirty = true }
+// chat between friends: the last 300 messages of each pair
+const chats = rd('chats.json', {}); let chatsDirty = false; setInterval(() => { if (chatsDirty) { wr('chats.json', chats); chatsDirty = false } }, 5000)
+const pair = (a, b) => [a.toLowerCase(), b.toLowerCase()].sort().join('|')
+
+// maps: CurseForge worlds (gameId 432, classId 17); answers are cached for 10 minutes
+const CF = 'https://api.curseforge.com/v1', cfCache = new Map()
+async function cf(p) { const key = process.env.CF_API_KEY; if (!key) return { error: 'no key' }
+  const hit = cfCache.get(p); if (hit && Date.now() - hit.t < 600000) return hit.j
+  const r = await fetch(CF + p, { headers: { 'x-api-key': key, accept: 'application/json' }, signal: AbortSignal.timeout(15000) }); if (r.status === 403) return { error: 'forbidden' }; if (!r.ok) return { error: 'curseforge ' + r.status }
+  const j = await r.json(); cfCache.set(p, { t: Date.now(), j }); if (cfCache.size > 500) cfCache.delete(cfCache.keys().next().value); return j }
+const mapOf = (m) => ({ id: m.id, name: m.name, desc: m.summary, img: m.screenshots?.[0]?.thumbnailUrl || m.logo?.thumbnailUrl || '', logo: m.logo?.thumbnailUrl || '', downloads: m.downloadCount, author: m.authors?.[0]?.name || '',
+  url: m.links?.websiteUrl || '', updated: m.dateModified, cats: (m.categories || []).map((c) => c.name).slice(0, 3),
+  files: (m.latestFilesIndexes || []).filter((f) => /^d+.d+(.d+)?$/.test(f.gameVersion)).map((f) => ({ id: f.fileId, ver: f.gameVersion, name: f.filename })).slice(0, 30), free: m.allowModDistribution !== false })
 
 const server = http.createServer((req, res) => {
   res.setHeader('access-control-allow-origin', '*'); res.setHeader('access-control-allow-headers', 'content-type,x-admin,x-key')
@@ -55,6 +72,7 @@ const server = http.createServer((req, res) => {
     if (url === '/admin') return file(path.join(__dirname, 'admin.html'), 'text/html; charset=utf-8')
     let m
     if ((m = url.match(/^\/model\/(\w{3,16})\/(pet|hat|back|wings)\.json$/))) return file(path.join(DATA, 'models', m[1].toLowerCase() + '-' + m[2] + '.json'), 'application/json') // own 3D models of players
+    if ((m = url.match(/^\/backup\/([A-Z0-9]{10})$/i))) return file(path.join(DATA, 'backups', m[1].toUpperCase() + '.json'), 'application/json') // everything of a launcher, by its code
     if ((m = url.match(/^\/share\/([A-Z0-9]{6})$/i))) return file(path.join(DATA, 'share', m[1].toUpperCase() + '.json'), 'application/json') // things shared between friends
     if ((m = url.match(/^\/vcfg\/([A-Z0-9]{6})$/i))) return file(path.join(DATA, 'vcfg', m[1].toUpperCase() + '.json'), 'application/json') // shared Asteria Visuals configs
     if ((m = url.match(/^\/(skin|cape|mini)\/(\w{3,16})\.png$/))) return file(path.join(DATA, 'skins', `${m[1]}-${m[2].toLowerCase()}.png`), 'image/png')
@@ -72,6 +90,11 @@ const server = http.createServer((req, res) => {
     if (url === '/cosmetics') return json(Object.fromEntries(cosm))
     if (url === '/rev') return json({ t: revAll })
     if (url === '/revs') { const now = Date.now(), out = {}; for (const [n, t] of online) if (now - t < 120000) out[n] = revs.get(n) || 0; return json(out) }
+    if (url === '/maps/search') { const p = new URLSearchParams({ gameId: '432', classId: '17', pageSize: '24', index: String(Math.max(0, Math.min(400, +q.get('page') || 0)) * 24), sortOrder: 'desc', sortField: { downloads: '6', newest: '11', updated: '3' }[q.get('sort')] || '2' })
+      if (q.get('q')) p.set('searchFilter', String(q.get('q')).slice(0, 60)); if (MC.test(q.get('ver') || '')) p.set('gameVersion', q.get('ver'))
+      cf('/mods/search?' + p).then((j) => j.error ? json(j, j.error === 'no key' ? 503 : 502) : json({ maps: (j.data || []).map(mapOf), total: j.pagination?.totalCount || 0 })).catch((e) => json({ error: String(e.message || e) }, 502)); return }
+    if (url === '/maps/file') { const mod = +q.get('mod'), fid = +q.get('file'); if (!mod || !fid) return json({ error: 'bad id' }, 400)
+      cf('/mods/' + mod + '/files/' + fid).then((j) => { if (j.error) return json(j, j.error === 'no key' ? 503 : 502); const f = j.data; if (!f || f.modId !== mod) return json({ error: 'not found' }, 404); json({ url: f.downloadUrl || '', name: f.fileName, size: f.fileLength }) }).catch((e) => json({ error: String(e.message || e) }, 502)); return }
     if (url === '/config') return fs.existsSync(path.join(DATA, 'launcher-config.json')) ? file(path.join(DATA, 'launcher-config.json'), 'application/json') : json({}, 404)
     if (url === '/premium/mod.jar') { // the PREMIUM mod is given only to PREMIUM players (and is useless without a signed ticket anyway)
       const n = (q.get('name') || '').toLowerCase(), mc = q.get('mc') || '1.16.5'; adopt(n, q.get('token'))
@@ -143,6 +166,11 @@ const server = http.createServer((req, res) => {
         try { if (fs.readFileSync(f, 'utf8') === c) return json({ id }) } catch { fs.writeFileSync(f, c); return json({ id }) } }
       return json({ error: 'busy' }, 500)
     }
+    if (url === '/backup') { // { data: '<json>' } -> { code }: moving the launcher to another computer, or a setup for a friend
+      const d = String(j.data || ''); if (d.length < 10 || d.length > 3_900_000) return json({ error: 'bad size' }, 400); try { JSON.parse(d) } catch { return json({ error: 'bad data' }, 400) }
+      const dir = path.join(DATA, 'backups'); fs.mkdirSync(dir, { recursive: true }); const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let code
+      do { code = Array.from(crypto.randomBytes(10), (b) => A[b % A.length]).join('') } while (fs.existsSync(path.join(dir, code + '.json')))
+      fs.writeFileSync(path.join(dir, code + '.json'), d); return json({ code }) }
     if (url === '/vcfg') { // { code: 'AST1:...' } -> { id: 'K7Q2XD' } short share code for a visuals config
       const c = String(j.code || ''); if (!/^AST1:[\w-]{8,60000}$/.test(c)) return json({ error: 'bad code' }, 400)
       const dir = path.join(DATA, 'vcfg'); fs.mkdirSync(dir, { recursive: true })
@@ -160,18 +188,30 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/friends') { // { name, token, act: 'get' | 'request' | 'answer' | 'remove', who?, accept? }
       if (!authed(n, j.token)) return json({ error: 'owned' }, 403)
-      const me = fr(n), who = String(j.who || ''), w = who.toLowerCase()
+      let who = String(j.who || '')
+      if (j.act === 'request') { const c = String(j.code || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), key = c.slice(0, 4) + '-' + c.slice(4, 8), owner = fbyCode[key]
+        if (!owner) return json({ error: 'bad code' }, 404); who = (seenName[owner] || owner) }
+      const me = fr(n), w = who.toLowerCase()
       if (j.act && j.act !== 'get') { if (!NAME.test(who) || w === n) return json({ error: 'bad name' }, 400); const other = fr(w)
         if (j.act === 'request') { if (me.f.some((x) => x.toLowerCase() === w)) return json({ error: 'already' }, 400)
           if (me.in.some((x) => x.toLowerCase() === w)) { me.in = without(me.in, w); other.out = without(other.out, n); me.f.push(who); other.f.push(j.name); note(w, 'accepted', j.name) } // they asked first: friends at once
           else if (!me.out.some((x) => x.toLowerCase() === w)) { me.out.push(who); other.in.push(j.name); note(w, 'request', j.name) } }
         if (j.act === 'answer') { if (!me.in.some((x) => x.toLowerCase() === w)) return json({ error: 'no request' }, 400); me.in = without(me.in, w); other.out = without(other.out, n)
           if (j.accept) { me.f.push(who); other.f.push(j.name) } note(w, j.accept ? 'accepted' : 'declined', j.name) }
+        const isFriend = me.f.some((x) => x.toLowerCase() === w)
+        if (j.act === 'invite') { if (!isFriend) return json({ error: 'not friend' }, 400); const p = j.where || {}
+          const where = { kind: p.kind === 'world' ? 'world' : 'server', host: String(p.host || '').toLowerCase(), port: Math.max(1, Math.min(65535, +p.port || 25565)), ver: MC.test(String(p.ver || '')) ? String(p.ver) : '', label: String(p.label || '').slice(0, 40) }
+          if (!/^([a-z0-9-]+\.)+[a-z0-9-]{2,}$/.test(where.host) || where.host.length > 80) return json({ error: 'bad address' }, 400)
+          note(w, 'invite', j.name, { where }); return json({ ok: true }) }
+        if (j.act === 'msg') { if (!isFriend) return json({ error: 'not friend' }, 400); const text = String(j.text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 500); if (!text) return json({ error: 'empty' }, 400)
+          const k = pair(n, w), m = { f: j.name, x: text, t: Date.now() }; chats[k] = [...(chats[k] || []), m].slice(-300); chatsDirty = true; note(w, 'msg', j.name, { text: text.slice(0, 140) }); return json({ ok: true, m }) }
+        if (j.act === 'chat') { if (!isFriend) return json({ error: 'not friend' }, 400); const since = +j.after || 0; return json({ msgs: (chats[pair(n, w)] || []).filter((m) => m.t > since) }) }
         if (j.act === 'remove') { me.f = without(me.f, w); me.out = without(me.out, w); other.f = without(other.f, n); other.in = without(other.in, n) }
         me.f = me.f.slice(0, 200); friendsDirty = true }
       const since = +j.since || 0, now = Date.now(), pres = {}
       for (const x of me.f) { const k = x.toLowerCase(), t = online.get(k), on = !!t && now - t < 120000; pres[x] = { online: on, ...(on ? presence.get(k) || {} : {}) } }
-      return json({ friends: me.f, incoming: me.in, outgoing: me.out, notes: me.notes.filter((x) => x.t > since), pres }) }
+      seenName[n] = j.name
+      return json({ code: fcode(n), friends: me.f, incoming: me.in, outgoing: me.out, notes: me.notes.filter((x) => x.t > since), pres }) }
     if (url === '/heartbeat') {
       if (tokens[n] && !authed(n, j.token)) return json({ error: 'owned' }, 403)
       online.set(n, Date.now()); seenDb[n] = Date.now(); presence.set(n, { ver: /^[0-9.]{3,10}$/.test(String(j.ver || '')) ? String(j.ver) : '', host: /^([a-z0-9-]+\.)+e4mc\.link$/.test(String(j.host || '')) ? String(j.host) : '', srv: /^[a-z0-9.-]{0,60}$/i.test(String(j.srv || '')) ? String(j.srv) : '' }); setCosm(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?(:m)?$/.test(String(j.pet || '')) ? String(j.pet) : '', fx: /^[a-z0-9:.,]{0,60}$/.test(String(j.fx || '')) ? String(j.fx || '') : '' }) // pet: "<kind>:<size>" from the visuals, '' = none; return json({ ok: true, ...planOf(n) })
