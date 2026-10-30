@@ -40,7 +40,7 @@ public final class Gui {
         float a = D.ease(openT);
         D.rect(0, 0, screenW, screenH, D.alpha(0x02060A, (int) (150 * a)));
         // a scale that is a whole number of half screen pixels: the text stays as sharp as in the HUD (no zoom animation for the same reason)
-        { float k = g.pxScale() * 2, fit = Math.min(1, Math.min((screenW - 20) / W, (screenH - 20) / H)); sw = Math.max(1, (float) Math.floor(fit * k)) / k; }
+        { float k = g.pxScale() * 2, fit = Math.min(1.6f, Math.min((screenW - 24) / W, (screenH - 24) / H)); sw = Math.max(1, (float) Math.floor(fit * k)) / k; } // bigger on big screens: letters as readable as in Lunar
         ox = (screenW - W * sw) / 2; oy = (screenH - H * sw) / 2 + (1 - a) * 12;
         float lmx = (mx - ox) / sw, lmy = (my - oy) / sw;
         g.push(ox, oy, sw);
@@ -60,8 +60,8 @@ public final class Gui {
 
     private static void sidebar(Gfx g, Game game, float mx, float my) {
         D.mark(5, 8, 22);
-        { float ts = Math.min(1.25f, (SIDE - 40) / (float) Math.max(1, D.w("Asteria"))); D.g.push(32, 18 - 5 * ts, ts); D.gradText("Asteria", 0, 0, true); D.g.pop(); }
-        D.textS("VISUALS", 33, 25, 0.6f, 0xFF6F8B99);
+        { float ts = Math.min(1.35f, (SIDE - 40) / (float) Math.max(1, D.w("Asteria"))); D.g.push(32, 16 - 5 * ts, ts); D.gradText("Asteria", 0, 0, true); D.g.pop(); }
+        D.textS("Visuals", 33, 25, 0.85f, 0xFFDDEFF6); // clearly readable under the name
         float y = 44;
         List<V.Cat> cats = new ArrayList<>(V.CATS); V.Cat th = new V.Cat(); th.id = "theme"; th.name = "Тема"; th.icon = "◐"; cats.add(th);
         V.Cat cf = new V.Cat(); cf.id = "configs"; cf.name = "Конфиги"; cf.icon = "☰"; cats.add(cf);
@@ -120,7 +120,7 @@ public final class Gui {
         float p = D.anim("on." + m.id, m.on ? 1 : 0, 12);
         D.round(x0, y, x1, y + h, 7, hov ? 0x1EFFFFFF : 0x12FFFFFF);
         if (p > 0.01f) D.vgradRound(x0 + 3, y + 7, x0 + 5.5f, Math.min(y + h - 7, y + 25), D.a(V.a1(), p), D.a(V.a2(), p));
-        hit(x0, y, x1, y + 32, "card", () -> { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); if (V.on("sounds") && V.bool("sounds", "menu")) Fx.sound(m.on ? "module_enable" : "module_disable", (float) V.num("sounds", "volume")); });
+        hit(x0, y, x1, y + 32, "card", () -> { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); if (V.on("sounds") && V.bool("sounds", "menu")) Fx.sound(m.on ? "module_enable" : "module_disable", (float) V.num("sounds", "volume")); if (V.on("voice") && V.bool("voice", "modules")) Voice.say((m.on ? "on_" : "off_") + m.id); });
         D.g.text(m.name, x0 + 10, y + 6, D.mix(0xFFCFE0E8, 0xFFFFFFFF, p), false);
         D.textS(m.desc, x0 + 10, y + 18, 0.72f, 0xFF7E97A4);
         // switch
@@ -153,6 +153,9 @@ public final class Gui {
             if (!m.s.isEmpty() && sy + 14 <= y + h) { float bx1 = x1 - 10, bx0 = bx1 - 70; boolean rh = in(mx, my, bx0, sy + 1, bx1, sy + 14); // back to the defaults (hands, positions, colours...)
                 D.round(bx0, sy + 1, bx1, sy + 14, 5, rh ? 0x50FFFFFF : 0x26FFFFFF); D.textC("Сбросить", (bx0 + bx1) / 2, sy + 4, 0xFFEAF6FA);
                 hit(bx0, sy + 1, bx1, sy + 14, "reset:" + m.id, () -> { for (V.S s : m.s) V.reset(s); V.changed(); }); }
+            if (m.id.equals("viewmodel") && sy + 14 <= y + h) for (int k = 0; k < 2; k++) { final boolean left = k == 1; float rx1 = x1 - 10 - 76 - k * 84, rx0 = rx1 - 78; boolean hv = in(mx, my, rx0, sy + 1, rx1, sy + 14); // each hand back to its place
+                D.round(rx0, sy + 1, rx1, sy + 14, 5, hv ? 0x50FFFFFF : 0x26FFFFFF); D.textC(left ? "Сброс левой" : "Сброс правой", (rx0 + rx1) / 2, sy + 4, 0xFFEAF6FA);
+                hit(rx0, sy + 1, rx1, sy + 14, "reset:hand" + k, () -> { for (V.S s : m.s) { boolean l = s.id.startsWith("l") && s.id.length() > 1 && !s.id.equals("split"); if (left == l && !s.id.equals("split") && !(left && s.id.equals("scale"))) V.reset(s); } V.changed(); }); }
             g.pop();
             if (opening) g.scissor(ox + (SIDE + 1) * sw, oy + 46 * sw, (W - SIDE - 2) * sw, (H - 46 - 6) * sw); // back to the list's clip
         }
@@ -305,7 +308,7 @@ public final class Gui {
 
     // ------------------------------------------------------------------ HUD editor
     private static void editor(Gfx g, Game game, float mx, float my) {
-        int W0 = screenW, H0 = screenH;
+        int W0 = screenW, H0 = screenH; lastMx = mx; lastMy = my; /* the wheel sizes the element under the mouse */
         D.rect(0, 0, W0, H0, 0x33000000);
         // guides
         D.rect(W0 / 2f - 0.25f, 0, W0 / 2f + 0.25f, H0, 0x22FFFFFF); D.rect(0, H0 / 2f - 0.25f, W0, H0 / 2f + 0.25f, 0x22FFFFFF);
@@ -314,13 +317,13 @@ public final class Gui {
             int c = hov ? V.a1() : 0x88FFFFFF;
             D.rect(b.x - 1, b.y - 1, b.x + b.w + 1, b.y, c); D.rect(b.x - 1, b.y + b.h, b.x + b.w + 1, b.y + b.h + 1, c);
             D.rect(b.x - 1, b.y, b.x, b.y + b.h, c); D.rect(b.x + b.w, b.y, b.x + b.w + 1, b.y + b.h, c);
-            if (hov) { String n = b.mod.name + (b.mod.on ? "" : " (выкл.)"); D.round(b.x, b.y - 12, b.x + D.w(n) * 0.75f + 8, b.y - 2, 3, V.a1()); D.textS(n, b.x + 4, b.y - 10, 0.75f, 0xFFFFFFFF); }
+            if (hov) { String n = b.mod.name + (b.mod.on ? "" : " (выкл.)") + "  ·  " + Math.round(b.mod.hs * 100) + "%"; D.round(b.x, b.y - 12, b.x + D.w(n) * 0.75f + 8, b.y - 2, 3, V.a1()); D.textS(n, b.x + 4, b.y - 10, 0.75f, 0xFFFFFFFF); }
         }
-        String hint = "Перетаскивайте элементы  ·  ПКМ — вкл/выкл  ·  Esc — готово";
+        String hint = "Перетаскивайте элементы  ·  Колесо — размер элемента  ·  ПКМ — вкл/выкл  ·  Esc — готово";
         float w = D.w(hint) + 24; D.panel((W0 - w) / 2, H0 - 40, (W0 + w) / 2, H0 - 18, 6); D.textC(hint, W0 / 2f, H0 - 33, 0xFFFFFFFF);
         float rx = (W0 - 120) / 2f, ry = 10; boolean rh = in(mx, my, rx, ry, rx + 120, ry + 18);
         D.round(rx, ry, rx + 120, ry + 18, 6, rh ? 0x50FFFFFF : 0x30FFFFFF); D.textC("Сбросить расположение", W0 / 2f, ry + 5, 0xFFFFFFFF);
-        hit(rx, ry, rx + 120, ry + 18, "reset", () -> { for (V.Mod m : V.MODS) if (m.hud != null) m.hud = m.defHud.clone(); V.changed(); });
+        hit(rx, ry, rx + 120, ry + 18, "reset", () -> { for (V.Mod m : V.MODS) if (m.hud != null) { m.hud = m.defHud.clone(); m.hs = 1; } V.changed(); });
     }
 
     // ================================================================== input
@@ -373,7 +376,10 @@ public final class Gui {
         double v = s.min + (s.max - s.min) * f; v = Math.round(v / s.step) * s.step; s.num = Math.max(s.min, Math.min(s.max, v)); V.changed();
     }
     public static void release() { dragging = null; moving = null; themeDragBg = themeDragScale = false; }
-    public static void scroll(double amount) { if (!Hud.editing) scrollTarget -= (float) amount * 28; }
+    public static void scroll(double amount) {
+        if (Hud.editing) { for (int i = Hud.BOXES.size() - 1; i >= 0; i--) { Hud.Box b = Hud.BOXES.get(i); /* the element under the mouse grows / shrinks by 5 % a notch */
+            if (in(lastMx, lastMy, b.x, b.y, b.x + b.w, b.y + b.h)) { b.mod.hs = Math.max(0.5f, Math.min(2.5f, Math.round((b.mod.hs + (amount > 0 ? 0.05f : -0.05f)) * 20) / 20f)); V.changed(); return; } } return; }
+        scrollTarget -= (float) amount * 28; }
     /** @return true if the key was used (Esc with nothing to cancel returns false -> the screen closes) */
     public static boolean key(int code) {
         if (listening != null) { listening.bind = code == 256 || code == 259 ? 0 : code; listening = null; V.changed(); return true; }

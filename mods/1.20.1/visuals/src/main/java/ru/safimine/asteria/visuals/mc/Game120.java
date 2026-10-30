@@ -107,6 +107,8 @@ final class Game120 implements Game {
     @Override public float pitchOf(Object e) { return e instanceof Entity ? ((Entity) e).getPitch() : 0; }
     @Override public float bodyYawOf(Object e) { return e instanceof net.minecraft.entity.LivingEntity ? ((net.minecraft.entity.LivingEntity) e).bodyYaw : yawOf(e); }
     @Override public float headYawOf(Object e) { return e instanceof net.minecraft.entity.LivingEntity ? ((net.minecraft.entity.LivingEntity) e).headYaw : yawOf(e); }
+    @Override public boolean glidingOf(Object e) { return e instanceof net.minecraft.entity.LivingEntity && ((net.minecraft.entity.LivingEntity) e).isFallFlying(); }
+    @Override public boolean mainHandEmpty() { return c.player == null || c.player.getMainHandStack().isEmpty(); }
     @Override public boolean hitboxDebug() { try { return c.getEntityRenderDispatcher().shouldRenderHitboxes(); } catch (Throwable t) { return false; } }
     @Override public boolean onGroundOf(Object e) { return !(e instanceof Entity) || ((Entity) e).isOnGround(); }
     @Override public float headYawOf(Object e, float pt) { if (!(e instanceof net.minecraft.entity.LivingEntity)) return headYawOf(e); net.minecraft.entity.LivingEntity l = (net.minecraft.entity.LivingEntity) e; return net.minecraft.util.math.MathHelper.lerpAngleDegrees(pt, l.prevHeadYaw, l.headYaw); }

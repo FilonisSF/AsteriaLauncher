@@ -45,16 +45,30 @@ const fromMesh = (a: number[], dx = 0, dz = 0): Q[] => { const out: Q[] = []
   for (let i = 0; i + 12 < a.length; i += 13) { const c = a[i + 12] >>> 0; out.push({ p: [a[i] + dx, a[i + 1], a[i + 2] + dz, a[i + 3] + dx, a[i + 4], a[i + 5] + dz, a[i + 6] + dx, a[i + 7], a[i + 8] + dz, a[i + 9] + dx, a[i + 10], a[i + 11] + dz], c: [(c >> 16) & 255, (c >> 8) & 255, c & 255, (c >>> 24) & 255] }) }
   return out }
 
-export function LookPreview({ skin, slim, height = 470 }: { skin: string; slim: boolean; height?: number }) {
+/** the cape: 10 x 16 behind the shoulders, a little away from the back at the bottom; HD capes keep up to 4 samples per pixel */
+function capeQuads(img: HTMLImageElement): Q[] {
+  const s = Math.max(1, img.width / 64), n = Math.min(4, Math.round(s)), cv = document.createElement('canvas'); cv.width = 22 * n; cv.height = 17 * n
+  const x = cv.getContext('2d')!; x.imageSmoothingEnabled = true; x.drawImage(img, 0, 0, 22 * s, 17 * s, 0, 0, 22 * n, 17 * n); const px = x.getImageData(0, 0, 22 * n, 17 * n).data, out: Q[] = []
+  const at = (u: number, v: number) => { const i = (v * 22 * n + u) * 4; return [px[i], px[i + 1], px[i + 2], px[i + 3]] }, d = 1 / n, tilt = Math.tan(10 * Math.PI / 180)
+  const zAt = (y: number) => -2.7 - (24 - y) * tilt
+  for (let i = 0; i < 10 * n; i++) for (let j = 0; j < 16 * n; j++) { const yt = 24 - j * d, yb = yt - d, x0 = 5 - i * d, x1 = x0 - d
+    const o = at(n + i, n + j); if (o[3] > 8) out.push({ p: [x0, yt, zAt(yt) - 0.06, x1, yt, zAt(yt) - 0.06, x1, yb, zAt(yb) - 0.06, x0, yb, zAt(yb) - 0.06], c: [o[0] * 0.82, o[1] * 0.82, o[2] * 0.82, 255] }) // outside
+    const inn = at(12 * n + i, n + j); if (inn[3] > 8) out.push({ p: [-x0, yt, zAt(yt), -x1, yt, zAt(yt), -x1, yb, zAt(yb), -x0, yb, zAt(yb)], c: [inn[0] * 0.7, inn[1] * 0.7, inn[2] * 0.7, 255] }) } // towards the back
+  return out }
+const loadImg = (src: string) => new Promise<HTMLImageElement | null>((res) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = src })
+
+export function LookPreview({ skin, slim, height = 470, cape, hint = true }: { skin: string; slim: boolean; height?: number; cape?: string; hint?: boolean }) {
   const cv = useRef<HTMLCanvasElement>(null), [vis, setVis] = useState<any>(null), quads = useRef<Q[]>([]), view = useRef({ yaw: 200, pitch: 12, drag: false, lx: 0, ly: 0, idle: 0 })
   const load = () => window.api.visGet().then(setVis)
   useEffect(() => { load(); return window.api.onFiles?.((f: any) => { if (f.kind === 'vis') load() }) }, [])
   useEffect(() => { let alive = true; const img = new Image(); img.crossOrigin = 'anonymous'
     img.onload = async () => { const m = vis?.modules || {}, c = m.cosmetics, p = m.pet, list: Q[] = skinQuads(img, slim)
+      const wingsOn = c?.on && (+c.s?.wings || 0) > 0
+      if (cape && !wingsOn) { const ci = await loadImg(cape); if (ci) list.push(...capeQuads(ci)) } // wings take the cape's place, as in the game
       if (c?.on) for (const [k, pre] of [['wings', 'w'], ['hat', 'h'], ['back', 'b']] as const) { const i = +c.s?.[k] || 0; if (i > 0) list.push(...fromMesh(await mesh(pre + '-' + i))) }
       const pk = +p?.s?.kind; if (p?.on && (pk >= 10 && pk !== 16)) { const sc = Math.max(0.5, Math.min(2, +p.s?.size || 1)); list.push(...fromMesh((await mesh('pet-' + pk)).map((v, i) => (i % 13 === 12 ? v : v * sc)), 15, 6)) }
       if (alive) quads.current = list }
-    img.src = skin; return () => { alive = false } }, [skin, slim, vis])
+    img.src = skin; return () => { alive = false } }, [skin, slim, vis, cape])
   useEffect(() => { let raf = 0
     const draw = () => { raf = requestAnimationFrame(draw); const c = cv.current; if (!c) return; const W = c.clientWidth, H = c.clientHeight, dpr = devicePixelRatio || 1
       if (c.width !== W * dpr || c.height !== H * dpr) { c.width = W * dpr; c.height = H * dpr }
@@ -74,5 +88,5 @@ export function LookPreview({ skin, slim, height = 470 }: { skin: string; slim: 
   return <div className="relative" style={{ height }}>
     <div className="absolute inset-x-[18%] bottom-[9%] h-6 rounded-[50%]" style={{ background: 'radial-gradient(closest-side, rgba(0,0,0,.35), transparent)' }} />
     <canvas ref={cv} className="w-full h-full cursor-grab active:cursor-grabbing relative" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
-    <div className="absolute left-3 bottom-2 muted text-[11px]">Крутите мышью · так вас видят в игре</div></div>
+    {hint && <div className="absolute left-3 bottom-2 muted text-[11px]">Крутите мышью · так вас видят в игре</div>}</div>
 }

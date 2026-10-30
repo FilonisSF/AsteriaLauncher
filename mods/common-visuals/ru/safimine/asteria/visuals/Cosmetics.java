@@ -11,13 +11,13 @@ import java.util.List;
 public final class Cosmetics {
     private Cosmetics() {}
     // the own model keeps its old place in every list (wings 5, hat 6, back 4); new pieces come after it, so older mods of other players stay correct
-    public static final String[] WINGS = {"Нет", "Ангел", "Демон", "Фея", "Дракон", "Своя модель", "Кристальные", "Бабочка"},
-        HATS = {"Нет", "Корона", "Цилиндр", "Кошачьи ушки", "Шляпа ведьмы", "Рога", "Своя модель", "Ледяная тиара", "Цветочный венок"},
-        BACK = {"Нет", "Коса", "Молот", "Катана", "Своя модель", "Небесный клинок", "Посох звёзд", "Лук ветра", "Нефритовое копьё"};
+    public static final String[] WINGS = {"Нет", "Ангел", "Демон", "Фея", "Дракон", "Своя модель", "Кристальные", "Бабочка", "Летучая мышь"},
+        HATS = {"Нет", "Корона", "Цилиндр", "Кошачьи ушки", "Шляпа ведьмы", "Рога", "Своя модель", "Ледяная тиара", "Цветочный венок", "Тыква"},
+        BACK = {"Нет", "Коса", "Молот", "Катана", "Своя модель", "Небесный клинок", "Посох звёзд", "Лук ветра", "Нефритовое копьё", "Метла ведьмы"};
     static final int OWN_W = 5, OWN_H = 6, OWN_B = 4;
 
     /** an oriented box: centre, length axis u, width axis v (thickness along u x v), sizes, colour at the u- end and at the u+ end, part (0 still, 1 left wing, 2 right wing) */
-    static final class Ob { float cx, cy, cz, ux, uy, uz, vx, vy, vz, lu, lv, lw; int c0, c1, part; boolean tri; }
+    static final class Ob { float cx, cy, cz, ux, uy, uz, vx, vy, vz, lu, lv, lw; int c0, c1, part; boolean tri, glow; }
     @SuppressWarnings("unchecked") private static final List<Ob>[] CACHE_W = new List[WINGS.length], CACHE_H = new List[HATS.length], CACHE_B = new List[BACK.length];
 
     private static Ob ob(List<Ob> l, double cx, double cy, double cz, double ux, double uy, double uz, double vx, double vy, double vz, double lu, double lv, double lw, int c0, int c1, int part) {
@@ -35,6 +35,13 @@ public final class Cosmetics {
     private static void tri(List<Ob> l, double[] a, double[] b, double[] c, int ca, int cbc, int part) {
         Ob o = new Ob(); o.tri = true; o.part = part; o.c0 = ca; o.c1 = cbc;
         o.cx = (float) a[0]; o.cy = (float) a[1]; o.cz = (float) a[2]; o.ux = (float) b[0]; o.uy = (float) b[1]; o.uz = (float) b[2]; o.vx = (float) c[0]; o.vy = (float) c[1]; o.vz = (float) c[2]; l.add(o);
+    }
+    /** a triangle that glows (not darkened by the world light) */
+    private static void triGlow(List<Ob> l, double[] a, double[] b, double[] c, int ca, int cbc) { tri(l, a, b, c, ca, cbc, 0); l.get(l.size() - 1).glow = true; }
+    /** a point on the front (+z) of the jack-o'-lantern's shell at x,y, lifted by d */
+    private static double[] onFront(double x, double y, double yc, double H, double RM, double d) {
+        double u = Math.max(-1, Math.min(1, (y - yc) / H)), r = RM * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(u), 3)), 1 / 3.0);
+        return p(x, y, Math.sqrt(Math.max(0, r * r - x * x)) + d);
     }
     private static int mix(int a, int b, double t) { return D.mix(a, b, (float) Math.max(0, Math.min(1, t))); }
     private static double[] p(double x, double y, double z) { return new double[]{x, y, z}; }
@@ -97,6 +104,16 @@ public final class Cosmetics {
                 for (int i = 1; i < n; i += 3) { seg(l, p(0, 0, -0.25), add(rim[i], new double[]{-rim[i][0] * 0.12, -rim[i][1] * 0.12, 0}, 1), 0.18, 0.12, side, 0xD01C1626, 0x601C1626, 0);
                     double[] sp = add(rim[i], new double[]{-rim[i][0] * 0.16, -rim[i][1] * 0.16, 0.1}, 1); ob(l, sp[0], sp[1], -0.2, 0, 1, 0, 1, 0, 0, 0.7, 0.7, 0.12, 0xFFFFFFFF, 0xFFF4F0FF, 0); } }
             seg(l, p(0.3, -3, -0.2), p(0.3, 3, -0.2), 0.9, 0.9, side, 0xFF2A2236, 0xFF3A3048, 0);
+        } else if (kind == 8) { // bat: long thin finger bones, a dark purple membrane with a scalloped edge, a claw on the wrist
+            int bone = 0xFF1A1420, boneTip = 0xFF3A2C48, memA = 0xE8301E40, memB = 0xC0120A18;
+            double[] root = p(0, 0, 0), wrist = p(-7, 5, -0.6);
+            seg(l, root, wrist, 1.2, 1.2, side, bone, boneTip, 0); seg(l, wrist, add(wrist, new double[]{0.4, 1, 0}, 1.8), 0.6, 0.6, side, boneTip, 0xFFD8D0E0, 0);
+            double[][] fingers = {{10, 15}, {-14, 16}, {-40, 15}, {-66, 12}, {-88, 8}}; double[][] tips = new double[5][];
+            for (int i = 0; i < 5; i++) { double a = Math.toRadians(fingers[i][0]); double[] d = {-Math.cos(a), Math.sin(a), -0.04}; tips[i] = add(wrist, d, fingers[i][1]);
+                double[] mid = add(wrist, d, fingers[i][1] * 0.5); seg(l, wrist, mid, 0.7, 0.7, side, bone, boneTip, 0); seg(l, mid, tips[i], 0.45, 0.45, side, boneTip, boneTip, 0); }
+            for (int i = 0; i < 4; i++) { double[] a = tips[i], b = tips[i + 1]; double[] notch = { (a[0] + b[0]) / 2 * 0.78 + wrist[0] * 0.22, (a[1] + b[1]) / 2 * 0.78 + wrist[1] * 0.22, -0.5 };
+                tri(l, wrist, a, notch, memA, memB, 0); tri(l, wrist, notch, b, memA, memB, 0); }
+            tri(l, root, wrist, tips[4], memA, memB, 0);
         }
         return l;
     }
@@ -153,6 +170,42 @@ public final class Cosmetics {
                 for (int k = 0; k < 5; k++) { double pa = Math.PI * 2 * k / 5 + i, dx = Math.cos(pa) * 0.75, dy = Math.sin(pa) * 0.75;
                     ob(l, x + t[0] * dx, 9.4 + dy, z + t[2] * dx, o[0], o[1], o[2], t[0] * Math.cos(pa), Math.sin(pa), t[2] * Math.cos(pa), 0.3, 1.05, 0.8, c[0], c[1], 0); }
                 ob(l, x * 1.04, 9.4, z * 1.04, o[0], o[1], o[2], t[0], 0, t[2], 0.45, 0.6, 0.6, c[2], 0xFFFFFFFF, 0); }
+        } else if (kind == 9) { // jack-o'-lantern: a smooth squat pumpkin of 8 lobes (baked light, dark grooves) around the head, a carved face glowing from inside, a curved stem with a leaf
+            final int M = 48, N = 12; final double yc = 4, H = 5.9, RM = 7.2; // the head cube's corners are 5.7 px from its axis: the groove bottoms stay outside them
+            double[][][] v = new double[M + 1][N + 1][]; int[][] c = new int[M + 1][N + 1]; double lx = 0.35, ly = 0.8, lz = 0.48;
+            for (int j = 0; j <= N; j++) for (int i = 0; i <= M; i++) {
+                double u = Math.sin(-Math.PI / 2 + Math.PI * j / N), a = Math.PI * 2 * i / M, lobe = Math.abs(Math.cos(4 * a));
+                double prof = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(u), 3)), 1 / 3.0), r = RM * prof * (0.93 + 0.07 * Math.sqrt(lobe));
+                double y = yc + u * H * (1 - 0.14 * Math.pow(Math.abs(u), 6)); // dimples at the top and the bottom
+                v[i][j] = p(Math.cos(a) * r, y, Math.sin(a) * r);
+                double nx = Math.cos(a) * prof, ny = u * 1.15, nz = Math.sin(a) * prof, nl = Math.sqrt(nx * nx + ny * ny + nz * nz) + 1e-9;
+                double lit = 0.58 + 0.42 * Math.max(0, (nx * lx + ny * ly + nz * lz) / nl), rim = 1 - 0.18 * Math.pow(Math.abs(u), 4);
+                int base = mix(0xFFA8440A, 0xFFF28A1E, Math.pow(lobe, 0.55)); base = mix(base, 0xFFFFB04A, Math.max(0, lobe - 0.75) * 1.2 * Math.max(0, ny / nl + 0.2));
+                c[i][j] = Fx.shade(base, (float) (lit * rim)); }
+            for (int j = 0; j < N; j++) for (int i = 0; i < M; i++) {
+                int q = mix(mix(c[i][j], c[i + 1][j], 0.5), mix(c[i][j + 1], c[i + 1][j + 1], 0.5), 0.5); /* one colour per facet: no diagonal streaks */
+                tri(l, v[i][j], v[i + 1][j], v[i + 1][j + 1], q, q, 0); tri(l, v[i + 1][j + 1], v[i][j + 1], v[i][j], q, q, 0); }
+            // stem: a ribbed, slightly bent and tapering column with a lighter cut top, plus a curled leaf
+            double[] s0 = p(0, yc + H * 0.86 - 0.4, 0), s1 = p(0.35, yc + H + 1.1, -0.1), s2 = p(1.1, yc + H + 2.3, 0.35);
+            seg(l, s0, s1, 1.6, 1.6, new double[]{1, 0, 0}, 0xFF3C5A1E, 0xFF587A2C, 0); seg(l, s1, s2, 1.2, 1.2, new double[]{1, 0, 0.3}, 0xFF587A2C, 0xFF6E8E36, 0);
+            double[] lf0 = p(0.3, yc + H + 0.4, 0.1), lf1 = p(2.6, yc + H + 0.9, 1.4), lf2 = p(4.4, yc + H + 0.2, 2.6), lfs = p(2.3, yc + H + 0.1, 2.4), lfn = p(2.9, yc + H + 1.4, 0.6);
+            tri(l, lf0, lf1, lfs, 0xFF4E8A2A, 0xFF6FAE3C, 0); tri(l, lf0, lfn, lf1, 0xFF4E8A2A, 0xFF5E9C32, 0); tri(l, lf1, lf2, lfs, 0xFF6FAE3C, 0xFF88C450, 0); tri(l, lf1, lfn, lf2, 0xFF5E9C32, 0xFF88C450, 0);
+            seg(l, s1, p(-1.2, yc + H + 1.6, -0.9), 0.25, 0.25, new double[]{0, 0, 1}, 0xFF587A2C, 0xFF6E8E36, 0); seg(l, p(-1.2, yc + H + 1.6, -0.9), p(-1.9, yc + H + 0.9, -0.4), 0.22, 0.22, new double[]{0, 0, 1}, 0xFF6E8E36, 0xFF7A9A40, 0);
+            // the carved face: each hole is a dark rim with a glowing inside, laid onto the curved front
+            double[][][] holes = {{{-3.5, 4.9}, {-1.0, 4.9}, {-2.25, 7.1}}, {{1.0, 4.9}, {3.5, 4.9}, {2.25, 7.1}}, {{-0.7, 3.6}, {0.7, 3.6}, {0, 4.6}}};
+            for (double[][] h : holes) { double mx = (h[0][0] + h[1][0] + h[2][0]) / 3, my = (h[0][1] + h[1][1] + h[2][1]) / 3; double[][] dark = new double[3][], hot = new double[3][];
+                for (int k = 0; k < 3; k++) { double x = h[k][0], y = h[k][1]; dark[k] = onFront(mx + (x - mx) * 1.18, my + (y - my) * 1.18, yc, H, RM, 0.06); hot[k] = onFront(x, y, yc, H, RM, 0.12); }
+                tri(l, dark[0], dark[1], dark[2], 0xFF2A1004, 0xFF3A1606, 0); triGlow(l, hot[0], hot[1], hot[2], 0xFFFFE07A, 0xFFFF9424); }
+            for (int pass = 0; pass < 2; pass++) { double grow = pass == 0 ? 0.3 : 0, lift = pass == 0 ? 0.06 : 0.12, W = 3.9 + grow; int n = 40; /* pass 0: the dark cut edge, pass 1: the glowing inside */
+                for (int i = 0; i < n; i++) { double x0 = -W + 2 * W * i / n, x1 = -W + 2 * W * (i + 1) / n; double[] lo = new double[2], hi = new double[2];
+                    for (int e = 0; e < 2; e++) { double x = e == 0 ? x0 : x1, k = x / 3.9, t = Math.max(0, 1.05 * (1 - k * k)) + grow * 0.6, bot = 1.0 + 1.6 * k * k - grow;
+                        double top = bot + t, ax = Math.abs(x), tg = 0.45 - grow; /* teeth: two hanging from the top, one standing at the bottom */
+                        if (Math.abs(ax - 1.45) < tg) top = bot + t * (pass == 0 ? 0.62 : 0.5); if (ax < tg) bot = bot + t * (pass == 0 ? 0.38 : 0.5);
+                        lo[e] = bot; hi[e] = top; }
+                    if (hi[0] - lo[0] < 0.02 && hi[1] - lo[1] < 0.02) continue;
+                    double[] p00 = onFront(x0, lo[0], yc, H, RM, lift), p10 = onFront(x1, lo[1], yc, H, RM, lift), p01 = onFront(x0, hi[0], yc, H, RM, lift), p11 = onFront(x1, hi[1], yc, H, RM, lift);
+                    if (pass == 0) { tri(l, p00, p10, p11, 0xFF2A1004, 0xFF2A1004, 0); tri(l, p11, p01, p00, 0xFF2A1004, 0xFF2A1004, 0); }
+                    else { triGlow(l, p00, p10, p11, 0xFFFF9424, 0xFFFFC85A); triGlow(l, p11, p01, p00, 0xFFFFE07A, 0xFFFF9424); } } }
         }
         return l;
     }
@@ -236,6 +289,11 @@ public final class Cosmetics {
             for (int i = 0; i < 4; i++) { double[] a = rim[i], b = rim[(i + 1) % 4]; tri(l, b0, a, b, 0xFF1F8A62, 0xFF3FD69A, 0); tri(l, tip, b, a, 0xFFB8FFE0, 0xFF3FD69A, 0); }
             seg(l, p(0, 12, 0), p(0, 20, 0), 0.3, 2.1, side, GLOW, GLOW, 0);
             double[] tq = p(0, 10, 0); for (int k = 1; k <= 5; k++) { double[] nx = p(-0.4 * k, 10 - k * 1.1, -0.5 * k); seg(l, tq, nx, 1.1 - k * 0.1, 1.1 - k * 0.1, side, 0xFFD02436, 0xFFFF5A6A, 0); tq = nx; }
+        } else if (kind == 9) { // witch's broom: a twisted dark handle, a cord binding, a full straw brush with darker tips
+            double[] pr = p(0, 15, 0); for (int k = 1; k <= 8; k++) { double[] nx = p(Math.sin(k * 0.9) * 0.35, 15 - k * 3.4, Math.cos(k * 0.7) * 0.25); seg(l, pr, nx, 0.9, 0.9, side, 0xFF4A3020, 0xFF6B4A30, 0); pr = nx; }
+            for (int k = 0; k < 4; k++) ob(l, 0, -12.6 - k * 0.55, 0, 0, 1, k % 2 == 0 ? 0.4 : -0.4, 1, 0, 0, 0.5, 1.5, 1.5, 0xFF7A1E2C, 0xFFB0303E, 0);
+            for (int i = 0; i < 26; i++) { double a = Math.PI * 2 * i / 26, rr = 0.6 + (i % 3) * 0.35; double[] st = p(Math.cos(a) * rr * 0.6, -13.6, Math.sin(a) * rr * 0.6), en = p(Math.cos(a) * (1.6 + rr), -21 - (i % 4) * 0.5, Math.sin(a) * (1.6 + rr));
+                seg(l, st, en, 0.45, 0.35, side, 0xFFD9B45A, i % 2 == 0 ? 0xFF8A6A2A : 0xFFA88438, 0); }
         }
         return l;
     }
@@ -288,7 +346,7 @@ public final class Cosmetics {
         for (Ob o : list) {
             int c0 = col(o.c0, acc, acc2), c1 = col(o.c1, acc, acc2); float glow0 = (o.c0 & 0xFFFFFF) == 0xFEFE03 || (o.c1 & 0xFFFFFF) == 0xFEFE03 ? 1 : light;
             if (o.tri) { double[] a = world(tf.at(o.cx, o.cy, o.cz), pos, cy, sy, k), b = world(tf.at(o.ux, o.uy, o.uz), pos, cy, sy, k), c = world(tf.at(o.vx, o.vy, o.vz), pos, cy, sy, k);
-                int ca = Fx.shade(c0, light), cb = Fx.shade(c1, light); r.v(a[0], a[1], a[2], ca); r.v(b[0], b[1], b[2], cb); r.v(c[0], c[1], c[2], cb); r.v(c[0], c[1], c[2], cb); continue; }
+                float tl = o.glow ? 1 : light; int ca = Fx.shade(c0, tl), cb = Fx.shade(c1, tl); r.v(a[0], a[1], a[2], ca); r.v(b[0], b[1], b[2], cb); r.v(c[0], c[1], c[2], cb); r.v(c[0], c[1], c[2], cb); continue; }
             double nx = o.uy * o.vz - o.uz * o.vy, ny = o.uz * o.vx - o.ux * o.vz, nz = o.ux * o.vy - o.uy * o.vx;
             double[][] v = new double[8][];
             for (int i = 0; i < 8; i++) { double su = (i & 1) == 0 ? -0.5 : 0.5, sv = (i & 2) == 0 ? -0.5 : 0.5, sn = (i & 4) == 0 ? -0.5 : 0.5;
@@ -300,6 +358,9 @@ public final class Cosmetics {
             q(r, v[1], v[3], v[7], v[5], a1, a1, a1, a1); q(r, v[0], v[4], v[6], v[2], d0, d0, d0, d0);   // ends (+u tip, -u root)
         }
     }
-    private static double[] world(double[] l, double[] pos, double cy, double sy, double k) { return new double[]{pos[0] + (l[0] * cy - l[2] * sy) * k, pos[1] + l[1] * k, pos[2] + (l[0] * sy + l[2] * cy) * k}; }
+    /** elytra flight: the body lies along the look direction (degrees, like the player model: 90 + pitch); NaN = upright */
+    public static double glide = Double.NaN;
+    private static double[] world(double[] l, double[] pos, double cy, double sy, double k) {
+        if (!Double.isNaN(glide)) { double a = Math.toRadians(glide), c = Math.cos(a), s = Math.sin(a), y = l[1] * c - l[2] * s, z = l[1] * s + l[2] * c; l = new double[]{l[0], y, z}; } return new double[]{pos[0] + (l[0] * cy - l[2] * sy) * k, pos[1] + l[1] * k, pos[2] + (l[0] * sy + l[2] * cy) * k}; }
     private static void q(Fx.R3 r, double[] a, double[] b, double[] c, double[] d, int ca, int cb, int cc, int cd) { r.v(a[0], a[1], a[2], ca); r.v(b[0], b[1], b[2], cb); r.v(c[0], c[1], c[2], cc); r.v(d[0], d[1], d[2], cd); }
 }

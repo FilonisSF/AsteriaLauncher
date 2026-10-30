@@ -181,15 +181,22 @@ public final class Fx {
     // ------------------------------------------------------------------ alerts
     private static final java.util.Map<String, Long> ALERTED = new java.util.HashMap<>(); private static int lastTotems = -1; private static long alertAll;
     private static boolean once(String k, long now, long gap) { Long t = ALERTED.get(k); if (t != null && now - t < gap) return false; ALERTED.put(k, now); return true; }
+    /** another player near you used a totem of undying (from the game's status packet) */
+    public static void otherTotem(String name) { if (!V.on("alerts") || !V.bool("alerts", "enemytotem")) return; long now = System.currentTimeMillis();
+        if (once("etot" + name, now, 1500)) Hud.alert(name + " потерял тотем", "Противник использовал тотем бессмертия", 0xFFFACC15, "star", "enemy_totem"); }
     private static void alerts(Game g, long now) {
         if (!V.on("alerts") || now - alertAll < 300) return; alertAll = now; Object self = g.self(); if (self == null) return;
         if (V.bool("alerts", "armor")) for (Game.Item it : g.armor()) if (it.max > 0) { float left = 1f - it.damage / (float) it.max;
-            if (left * 100 < V.num("alerts", "armorpct") && once("arm" + it.name, now, 60000)) Hud.alert("Броня ломается!", it.name + " — осталось " + Math.round(left * 100) + "%", 0xFFFFB547, "shield"); }
-        if (V.bool("alerts", "hp")) { float hp = g.hp(self); if (hp > 0 && hp <= V.num("alerts", "hpval") * 2 && once("hp", now, 8000)) Hud.alert("Мало здоровья!", String.format(java.util.Locale.ROOT, "%.1f ❤", hp / 2).replace("❤", "сердца"), 0xFFFF4D6A, "heart"); }
-        if (V.bool("alerts", "food")) { int f = g.food(); if (f >= 0 && f <= 6 && once("food", now, 30000)) Hud.alert("Голод", "Поешьте — бег скоро отключится", 0xFFF59E0B, "shop"); }
+            if (left * 100 < V.num("alerts", "armorpct") && once("arm" + it.name, now, 60000)) Hud.alert("Броня ломается!", it.name + " — осталось " + Math.round(left * 100) + "%", 0xFFFFB547, "shield", "armor"); }
+        if (V.bool("alerts", "hp")) { float hp = g.hp(self); if (hp > 0 && hp <= V.num("alerts", "hpval") * 2 && once("hp", now, 8000)) Hud.alert("Мало здоровья!", String.format(java.util.Locale.ROOT, "%.1f ❤", hp / 2).replace("❤", "сердца"), 0xFFFF4D6A, "heart", "hp"); }
+        if (V.bool("alerts", "food")) { int f = g.food(); if (f >= 0 && f <= 6 && once("food", now, 30000)) Hud.alert("Голод", "Поешьте — бег скоро отключится", 0xFFF59E0B, "shop", "food"); }
         if (V.bool("alerts", "totem")) { int tot = 0; for (Object st : g.inventory()) if (st != null && g.itemId(st).endsWith("totem_of_undying")) tot += g.count(st); Object off = g.offhand(); if (off != null && g.itemId(off).endsWith("totem_of_undying")) tot += g.count(off);
             if (lastTotems >= 0 && tot < lastTotems) Hud.alert("Тотем использован", tot == 0 ? "Тотемов больше нет!" : "Осталось: " + tot, tot == 0 ? 0xFFFF4D6A : 0xFFFACC15, "shield"); lastTotems = tot; }
-        if (V.bool("alerts", "effect")) for (Game.Effect e : g.effects()) if (e.ticks > 0 && e.ticks < 100 && once("ef" + e.name, now, 20000)) Hud.alert("Эффект заканчивается", e.name + " — 5 сек", 0xFF60A5FA, "clock");
+        if (V.bool("alerts", "effect")) for (Game.Effect e : g.effects()) if (e.ticks > 0 && e.ticks < 100 && once("ef" + e.name, now, 20000)) Hud.alert("Эффект заканчивается", e.name + " — 5 сек", 0xFF60A5FA, "clock", "effect");
+        // other players near you: their armour almost broken
+        if (V.bool("alerts", "enemyarmor")) for (Object e : g.players()) { if (e == self || !g.alive(e)) continue; double[] p = g.pos(e, 1), me = g.pos(self, 1); if (Math.abs(p[0] - me[0]) + Math.abs(p[2] - me[2]) > 40) continue;
+            for (Game.Item it : g.armorOf(e)) if (it.max > 0) { float left = 1f - it.damage / (float) it.max; if (left * 100 < V.num("alerts", "enemypct") && once("earm" + g.playerName(e) + it.name, now, 90000)) {
+                Hud.alert("У " + g.playerName(e) + " ломается броня", it.name + " — " + Math.round(left * 100) + "%", 0xFFF59E0B, "shield", "enemy_armor"); break; } } }
     }
     // ------------------------------------------------------------------ pets: following and looks
     static final class Follow { double[] pos, prev, owner, spot; double phase, speed, yaw, idleYaw, vx, vz; long wanderAt; }
@@ -198,8 +205,14 @@ public final class Fx {
     static Game G; // for the pets' ground height
     /** top of the ground under x, z near y (pets stand on it instead of sinking into slopes and steps) */
     static double groundY(double x, double y, double z) { if (G == null) return y; int by = (int) Math.floor(y);
-        for (int k = by + 2; k >= by - 5; k--) if (G.solid(x, k + 0.5, z) && !G.solid(x, k + 1.5, z)) return k + 1; return y; }
+        // the real top of what is under the pet: full blocks, slabs, stairs, carpets (sampled inside the block), with room above it
+        for (int k = by + 2; k >= by - 5; k--) { if (!G.solid(x, k + 0.04, z)) continue; double top = k + 0.0625;
+            for (double h : new double[]{0.95, 0.8, 0.6, 0.45, 0.3, 0.15}) if (G.solid(x, k + h, z)) { top = k + Math.min(1, h + 0.05); break; }
+            if (!G.solid(x, top + 0.3, z)) return top; }
+        return y; }
     private static Follow selfF; private static final java.util.Map<String, Follow> OTHER_F = new java.util.HashMap<>();
+    /** the same for everyone: the owner's nick + the clock in 3 s steps, so the pet wanders to the same spots on every screen */
+    static long petSeed(String owner, long now) { return (now / 3000) * 3000 + (owner == null ? 0 : owner.toLowerCase().hashCode() & 0x7FFFFFFFL) * 3000; }
     static boolean onGroundKind(int k) { return k == MINI || (k >= 10 && k != 14 && k != 17); } // 16 = own model: walks // 3D pets walk, the pictures and the bee float
     /** one tick of a pet near its owner: wanders around when the owner stands, follows behind (never in front) when the owner moves */
     static void follow(Follow f, double[] o, boolean ground, long seed) {
@@ -353,13 +366,13 @@ public final class Fx {
         wasSprint = spr; DASH.removeIf(q -> now0 - q[5] > 600);
         alerts(g, now0);
         // our pet
-        G = g; if (V.on("pet")) { if (selfF == null) selfF = new Follow(); follow(selfF, p, onGroundKind(V.mode("pet", "kind")), now0); petPos = selfF.pos; petPrev = selfF.prev; } else { selfF = null; petPos = null; }
+        G = g; if (V.on("pet")) { if (selfF == null) selfF = new Follow(); follow(selfF, p, onGroundKind(V.mode("pet", "kind")), petSeed(V.user, now0)); petPos = selfF.pos; petPrev = selfF.prev; } else { selfF = null; petPos = null; }
         // pets of other Asteria players (list refreshed every 10 s)
         if (now0 - petsAt > (revOk ? 2000 : 10000)) { petsAt = now0; if (revOk) checkRev(); else fetchPets(); }
         if (V.bool("pet", "others") && !PET_OF.isEmpty()) {
             java.util.Set<String> seen = new java.util.HashSet<>();
             for (Object e : g.players()) { String n = g.playerName(e).toLowerCase(); double[] k = PET_OF.get(n); if (k == null) continue; seen.add(n); OTHER_E.put(n, e);
-                Follow f = OTHER_F.computeIfAbsent(n, x -> new Follow()); follow(f, g.pos(e, 1), onGroundKind((int) k[0]), now0 + n.hashCode()); }
+                Follow f = OTHER_F.computeIfAbsent(n, x -> new Follow()); follow(f, g.pos(e, 1), onGroundKind((int) k[0]), petSeed(n, now0)); }
             OTHER_F.keySet().retainAll(seen); OTHER_E.keySet().retainAll(seen);
         } else OTHER_F.clear();
         // particles left behind while moving
@@ -468,6 +481,11 @@ public final class Fx {
                 Cosmetics.who = g.playerName(e).toLowerCase(); Cosmetics.draw(r, q, g.bodyYawOf(e, pt), g.headYawOf(e, pt), g.pitchOf(e, pt), g.sneakingOf(e), g.height(e), Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2]), c.length > 3 ? (int) Long.parseLong(c[3], 16) : -1, !g.onGroundOf(e), lit(g, q), now); } catch (Throwable ex) { err("cosmetics", ex); } finally { Cosmetics.who = ""; } }
         if (V.on("cosmetics") && g.thirdPerson()) try { double[] q = g.pos(self, pt);
             Cosmetics.draw(r, q, g.bodyYawOf(self, pt), g.headYawOf(self, pt), g.pitchOf(self, pt), g.sneakingOf(self), g.height(self), V.mode("cosmetics", "wings"), V.mode("cosmetics", "hat"), V.mode("cosmetics", "back"), V.bool("cosmetics", "tint") ? -1 : V.color("cosmetics", "color"), !g.onGround(), lit(g, q), now); } catch (Throwable ex) { err("cosmetics", ex); }
+        // wings instead of the elytra: folded on the ground, beating in flight, the body lying along the flight
+        if (V.on("elytrawings") && g.thirdPerson() && g.elytraOf(self)) try { double[] q = g.pos(self, pt); int[] map = {1, 2, 3, 4, 6, 7, 8}; boolean fly = g.glidingOf(self);
+            if (fly) Cosmetics.glide = 90 + g.pitchOf(self, pt);
+            Cosmetics.draw(r, q, g.bodyYawOf(self, pt), g.headYawOf(self, pt), g.pitchOf(self, pt), g.sneakingOf(self), g.height(self), map[Math.max(0, Math.min(6, V.mode("elytrawings", "style")))], 0, 0, V.bool("elytrawings", "tint") ? -1 : 0xFFE8F4FF, fly, lit(g, q), now);
+        } catch (Throwable ex) { err("elytra", ex); } finally { Cosmetics.glide = Double.NaN; }
         if (V.on("markers") && !MARKS.isEmpty()) markBeams(r, g, now);
         if (V.on("hitboxes") && g.hitboxDebug()) try { hitboxes(r, g, pt); } catch (Throwable ex) { err("cosmetics", ex); }
         if (V.on("trajectories")) try { trajectory(r, g, now); } catch (Throwable ignored) {}
@@ -1013,7 +1031,7 @@ public final class Fx {
     private static float ease(float x) { x = Math.max(0, Math.min(1, x)); return x < 0.5f ? 4 * x * x * x : 1 - (float) Math.pow(-2 * x + 2, 3) / 2; }
     /** the real swing progress; the vanilla swing movement gets 0 for our styles, so only our animation is seen */
     public static float realSwing;
-    public static float vanillaSwing(float s) { realSwing = s; return V.on("swing") && V.mode("swing", "preset") != 0 ? 0 : s; }
+    public static float vanillaSwing(float s) { realSwing = s; return V.on("swing") && V.mode("swing", "preset") != 0 && (G == null || !G.mainHandEmpty()) ? 0 : s; } // an empty hand keeps the vanilla swing (our styles move items)
     public static float[] swingPose(float ignored) {
         if (!V.on("swing")) return null; float swing = realSwing;
         int preset = V.mode("swing", "preset");

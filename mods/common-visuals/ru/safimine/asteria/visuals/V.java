@@ -25,7 +25,7 @@ public final class V {
         String save() { switch (type) { case "bool": return String.valueOf(bool); case "num": return String.valueOf(num); case "mode": return String.valueOf(mode); case "color": return hex(color); case "str": return text; default: return String.valueOf(key); } }
     }
     public static final class Mod {
-        public String id, cat, name, desc; public boolean on, defOn; public int bind; public float[] hud; public float[] defHud;
+        public String id, cat, name, desc; public boolean on, defOn; public int bind; public float[] hud; public float[] defHud; /** this HUD element's own size (times the general one) */ public float hs = 1;
         public final List<S> s = new ArrayList<>();
         public S get(String sid) { for (S x : s) if (x.id.equals(sid)) return x; return null; }
     }
@@ -37,7 +37,7 @@ public final class V {
     // theme
     public static int accent = 0xFF22D3EE, accent2 = 0xFF3B82F6;
     public static boolean chroma = false, shadow = true, blur = true;
-    public static float bg = 0.6f, scale = 1f;
+    public static float bg = 0.6f, scale = 1.25f;
     /** HUD look: 0 = crystal panels, 1 = Asteria lines (thin lines, minimal backing) */
     public static int hudStyle = 0;
     /** a light sheen running over the HUD panels now and then */
@@ -156,13 +156,13 @@ public final class V {
         {
             if (o.has("theme")) { JsonObject t = o.getAsJsonObject("theme");
                 accent = parse(str(t, "accent"), accent); accent2 = parse(str(t, "accent2"), accent2);
-                chroma = b(t, "chroma", chroma); shadow = b(t, "shadow", shadow); blur = b(t, "blur", blur); bg = (float) d(t, "bg", bg); scale = (float) d(t, "scale", scale); hudStyle = (int) d(t, "hud", hudStyle); glare = b(t, "glare", glare); if (t.has("font")) { try { font = t.get("font").isJsonPrimitive() && t.get("font").getAsJsonPrimitive().isBoolean() ? (t.get("font").getAsBoolean() ? 2 : 0) : Math.max(0, Math.min(FONTS.length - 1, t.get("font").getAsInt())); } catch (Exception ignored) {} } menu = b(t, "menu", menu); menuBg = (int) d(t, "menuBg", menuBg); allFont = b(t, "allFont", allFont); lite = b(t, "lite", lite); bgBlur = b(t, "bgBlur", bgBlur); }
+                chroma = b(t, "chroma", chroma); shadow = b(t, "shadow", shadow); blur = b(t, "blur", blur); bg = (float) d(t, "bg", bg); scale = Math.max(0.5f, Math.round((float) d(t, "scale", scale) * 4) / 4f); /* whole quarters: the text stays sharp */ hudStyle = (int) d(t, "hud", hudStyle); glare = b(t, "glare", glare); if (t.has("font")) { try { font = t.get("font").isJsonPrimitive() && t.get("font").getAsJsonPrimitive().isBoolean() ? (t.get("font").getAsBoolean() ? 2 : 0) : Math.max(0, Math.min(FONTS.length - 1, t.get("font").getAsInt())); } catch (Exception ignored) {} } menu = b(t, "menu", menu); menuBg = (int) d(t, "menuBg", menuBg); allFont = b(t, "allFont", allFont); lite = b(t, "lite", lite); bgBlur = b(t, "bgBlur", bgBlur); }
             JsonObject mods = o.has("modules") ? o.getAsJsonObject("modules") : new JsonObject();
             for (Mod md : MODS) {
                 if (!mods.has(md.id)) continue;
                 JsonObject j = mods.getAsJsonObject(md.id);
                 md.on = b(j, "on", md.on); if (binds && j.has("bind")) md.bind = j.get("bind").getAsInt();
-                if (j.has("hud") && md.hud != null) { JsonArray h = j.getAsJsonArray("hud"); md.hud[0] = h.get(0).getAsFloat(); md.hud[1] = h.get(1).getAsFloat(); }
+                if (j.has("hud") && md.hud != null) { JsonArray h = j.getAsJsonArray("hud"); md.hud[0] = h.get(0).getAsFloat(); md.hud[1] = h.get(1).getAsFloat(); } md.hs = Math.max(0.5f, Math.min(2.5f, (float) d(j, "hs", 1)));
                 JsonObject sv = j.has("s") ? j.getAsJsonObject("s") : new JsonObject();
                 for (S s : md.s) if (sv.has(s.id)) { JsonElement e = sv.get(s.id);
                     try { switch (s.type) { case "bool": s.bool = e.getAsBoolean(); break; case "num": s.num = Math.max(s.min, Math.min(s.max, e.getAsDouble())); break; case "mode": s.mode = Math.max(0, Math.min(s.options.length - 1, e.getAsInt())); break; case "color": s.color = parse(e.getAsString(), s.color); break; case "str": s.text = e.getAsString(); break; default: s.key = e.getAsInt(); } } catch (Exception ignored) {} }
@@ -177,7 +177,7 @@ public final class V {
             o.add("theme", t);
             for (Mod m : MODS) {
                 JsonObject j = new JsonObject(), sv = new JsonObject(); j.addProperty("on", m.on); j.addProperty("bind", m.bind);
-                if (m.hud != null) { JsonArray h = new JsonArray(); h.add(new JsonPrimitive(m.hud[0])); h.add(new JsonPrimitive(m.hud[1])); j.add("hud", h); }
+                if (m.hud != null) { JsonArray h = new JsonArray(); h.add(new JsonPrimitive(m.hud[0])); h.add(new JsonPrimitive(m.hud[1])); j.add("hud", h); if (m.hs != 1) j.addProperty("hs", m.hs); }
                 for (S s : m.s) switch (s.type) { case "bool": sv.addProperty(s.id, s.bool); break; case "num": sv.addProperty(s.id, s.num); break; case "mode": sv.addProperty(s.id, s.mode); break; case "color": sv.addProperty(s.id, hex(s.color)); break; case "str": sv.addProperty(s.id, s.text); break; default: sv.addProperty(s.id, s.key); }
                 j.add("s", sv); mods.add(m.id, j);
             }

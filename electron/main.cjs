@@ -65,6 +65,10 @@ async function poll() {
   win?.webContents.send('status', lastSt)
 }
 ipcMain.handle('srv:status', (_, host, port) => srvStatus(host, port))
+/** servers next to SafiMine in the launcher and in the game: partners (built in) and the player's own */
+const PARTNER_SERVERS = [{ name: 'GrumWorld', ip: 'mc.GrumWorld.space' }]
+const myServers = () => (store.get('myServers', []) || []).filter((x) => x && x.ip)
+ipcMain.handle('srv:mine', (_, list) => { if (Array.isArray(list)) store.set('myServers', list.filter((x) => x && /^[a-z0-9.\-]{3,80}$/i.test(String(x.ip || ''))).slice(0, 40).map((x) => ({ name: String(x.name || x.ip).slice(0, 40), ip: String(x.ip), port: +x.port || 25565, desc: String(x.desc || '').slice(0, 300), version: String(x.version || '') }))); return myServers() })
 async function addServerEntry(dir, name, ip) { // adds one more server to the in-game list (once)
   const nbt = require('prismarine-nbt'), f = path.join(dir, 'servers.dat'); if (!fs.existsSync(f)) return
   const { parsed } = await nbt.parse(fs.readFileSync(f)), list = parsed.value.servers.value.value
@@ -162,7 +166,9 @@ ipcMain.handle('pack:export', (_, ver) => { const d = inst(settings(), ver), ls 
 // ---------- own 3D models (pet / hat / back / wings): Blockbench .bbmodel or a resource pack .zip with an item model
 const MODEL_SLOTS = ['pet', 'hat', 'back', 'wings']
 ipcMain.handle('model:import', async (_, slot) => { if (!MODEL_SLOTS.includes(slot)) return { error: 'bad slot' }
-  const r = await dialog.showOpenDialog(win, { filters: [{ name: 'Модель Blockbench или ресурспак', extensions: ['bbmodel', 'zip', 'json'] }] }); const f = r.filePaths[0]; if (!f) return null
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'openDirectory'], filters: [{ name: 'Модель Blockbench, ресурспак или папка аватара Figura', extensions: ['bbmodel', 'zip', 'json'] }] }); let f = r.filePaths[0]; if (!f) return null
+  if (fs.statSync(f).isDirectory()) { const all = []; const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/.bbmodel$/i.test(e.name)) all.push([p, fs.statSync(p).size]) } }; walk(f)
+    if (!all.length) return { error: 'В папке нет .bbmodel' }; f = all.sort((a, b) => b[1] - a[1])[0][0] } // a Figura avatar folder: its biggest model
   let m; try { m = require('./models.cjs').convert(fs.readFileSync(f), f, slot) } catch (e) { return { error: 'Не удалось прочитать модель: ' + (e?.message || e) } }
   const json = JSON.stringify(m); if (json.length > 1_800_000) return { error: 'Модель слишком большая (больше 1.8 МБ)' }
   const d = path.join(settings().dir, 'skins', 'models'); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, slot + '.json'), json)
@@ -176,7 +182,34 @@ ipcMain.handle('model:remove', (_, slot) => { const meta = store.get('models', {
   for (const dir of instanceDirs()) fs.rmSync(path.join(dir, 'config', 'asteria-model-' + slot + '.json'), { force: true }); return true })
 ipcMain.handle('bg:set', (_, orig, blur) => { const dec = (d) => d ? Buffer.from(String(d).split(',')[1], 'base64') : null, a = dec(orig), b = dec(blur)
   for (const dir of instanceDirs()) { const c = path.join(dir, 'config'); try { fs.mkdirSync(c, { recursive: true }); for (const [n, buf] of [['asteria-bg.png', a], ['asteria-bg-blur.png', b]]) buf ? fs.writeFileSync(path.join(c, n), buf) : fs.rmSync(path.join(c, n), { force: true }) } catch {} }
+  const keep = path.join(app.getPath('userData'), 'menu-bg'); fs.mkdirSync(keep, { recursive: true }) // kept by the launcher too: new or reinstalled versions get it at launch
+  for (const [n, buf] of [['asteria-bg.png', a], ['asteria-bg-blur.png', b]]) buf ? fs.writeFileSync(path.join(keep, n), buf) : fs.rmSync(path.join(keep, n), { force: true })
   orig ? store.set('menuBg', orig) : store.delete('menuBg'); return true })
+app.whenReady().then(() => { try { const keep = path.join(app.getPath('userData'), 'menu-bg'), o = store.get('menuBg', null); if (o && !fs.existsSync(path.join(keep, 'asteria-bg.png'))) { fs.mkdirSync(keep, { recursive: true }); fs.writeFileSync(path.join(keep, 'asteria-bg.png'), Buffer.from(String(o).split(',')[1], 'base64')) } } catch {} }) // a background set before this version
+// ------------------------------------------------------------------ the announcer: phrases spoken by a Windows voice (WinRT, offline), WAV files the mod plays
+function voiceRun(env) { return new Promise((ok, no) => { const script = fs.readFileSync(path.join(__dirname, 'voice.ps1'), 'utf8'), enc = Buffer.from(script, 'utf16le').toString('base64')
+  require('child_process').execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', enc], { env: { ...process.env, ...env }, windowsHide: true, maxBuffer: 4 << 20, timeout: 240000 },
+    (e, out, err) => e ? no(new Error(String(err || e.message).slice(0, 300))) : ok(String(out))) }) }
+const voiceDir = () => path.join(app.getPath('userData'), 'voice')
+function writeVoice(dir) { const src = voiceDir(), dst = path.join(dir, 'config', 'asteria-voice'); try { fs.rmSync(dst, { recursive: true, force: true }); if (fs.existsSync(src)) fs.cpSync(src, dst, { recursive: true }) } catch {} }
+ipcMain.handle('voice:list', async () => { try { const out = await voiceRun({ AV_MODE: 'list' }); const l = JSON.parse(out.trim().replace(/^\uFEFF/, '') || '[]'); return { voices: Array.isArray(l) ? l : [l], chosen: store.get('voice', null) } } catch (e) { return { error: 'Голоса Windows недоступны: ' + e.message, voices: [] } } })
+ipcMain.handle('voice:test', async (_, o) => { const tmp = path.join(app.getPath('temp'), 'asteria-voice-test'); fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp, { recursive: true })
+  fs.writeFileSync(path.join(tmp, 'in.json'), JSON.stringify([{ id: 'test', text: String(o.text || 'Функция «Траектория» включена') }]))
+  try { await voiceRun({ AV_MODE: 'make', AV_VOICE: String(o.voice || ''), AV_RATE: String(+o.rate || 1), AV_PITCH: String(+o.pitch || 1), AV_IN: path.join(tmp, 'in.json'), AV_OUT: tmp })
+    return 'data:audio/wav;base64,' + fs.readFileSync(path.join(tmp, 'test.wav')).toString('base64') } catch (e) { return null } })
+ipcMain.handle('voice:make', async (_, o) => { const out = voiceDir(), tmp = out + '-new'; fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp, { recursive: true })
+  const items = (o.items || []).filter((x) => /^[a-z0-9_]{1,40}$/.test(x.id) && x.text).map((x) => ({ id: x.id, text: String(x.text).slice(0, 120) }))
+  fs.writeFileSync(path.join(tmp, 'in.json'), JSON.stringify(items))
+  try { await voiceRun({ AV_MODE: 'make', AV_VOICE: String(o.voice || ''), AV_RATE: String(+o.rate || 1), AV_PITCH: String(+o.pitch || 1), AV_IN: path.join(tmp, 'in.json'), AV_OUT: tmp }) } catch (e) { return { error: 'Не получилось озвучить: ' + e.message } }
+  fs.rmSync(path.join(tmp, 'in.json'), { force: true }); fs.rmSync(out, { recursive: true, force: true }); fs.renameSync(tmp, out)
+  store.set('voice', { voice: o.voice, rate: o.rate, pitch: o.pitch }); for (const d of instanceDirs()) writeVoice(d)
+  return { ok: true, count: fs.readdirSync(out).length } })
+ipcMain.handle('voice:clear', () => { fs.rmSync(voiceDir(), { recursive: true, force: true }); store.delete('voice'); for (const d of instanceDirs()) writeVoice(d); return true })
+/** own 3D models into a game folder (new or reinstalled versions get them too) */
+function writeModels(dir) { const src = path.join(settings().dir, 'skins', 'models'); for (const slot of ['pet', 'hat', 'back', 'wings']) { const a = path.join(src, slot + '.json'), b = path.join(dir, 'config', 'asteria-model-' + slot + '.json'); try { if (fs.existsSync(a)) { fs.mkdirSync(path.dirname(b), { recursive: true }); fs.copyFileSync(a, b) } else fs.rmSync(b, { force: true }) } catch {} } }
+/** own menu background into a game folder (or removed from it) */
+function writeBg(dir) { const keep = path.join(app.getPath('userData'), 'menu-bg'), c = path.join(dir, 'config'); try { fs.mkdirSync(c, { recursive: true })
+  for (const n of ['asteria-bg.png', 'asteria-bg-blur.png']) { const src = path.join(keep, n); if (fs.existsSync(src)) fs.copyFileSync(src, path.join(c, n)); else fs.rmSync(path.join(c, n), { force: true }) } } catch {} }
 ipcMain.handle('bg:get', () => store.get('menuBg', null))
 ipcMain.handle('binds:get', () => store.get('cmdBinds', []))
 ipcMain.handle('binds:set', (_, list) => { store.set('cmdBinds', list); for (const d of instanceDirs()) { try { fs.mkdirSync(path.join(d, 'config'), { recursive: true }); fs.writeFileSync(path.join(d, 'config', 'asteria-binds.json'), JSON.stringify(list)) } catch {} } return true })
@@ -443,7 +476,12 @@ function mediaStart() {
 function mediaLine(o) {
   mediaRetry = 0
   if (o.cover !== undefined) { mediaCover = o.cover ? Buffer.from(o.cover, 'base64') : null; mediaCoverKey = o.key || ''; delete o.cover }
-  o.at = Date.now(); media = o
+  o.at = Date.now()
+  // players report the position with ~0.5 s of noise (and lines arrive late while the launcher is busy): a small difference from the
+  // running clock is pulled in gently instead of jumping back and forth; a seek or a new track (> 1.5 s off) still jumps at once
+  if (o.playing && media.playing && o.key === media.key && o.dur === media.dur && typeof o.pos === 'number' && typeof media.pos === 'number') {
+    const ran = media.pos + (o.at - media.at) / 1000, err = o.pos - ran; if (Math.abs(err) < 1.5) o.pos = ran + err * 0.08 }
+  media = o
   try { win?.webContents.send('media', { ...o, cover: mediaCover ? 'data:image/png;base64,' + mediaCover.toString('base64') : '' }) } catch {}
   const dir = liveGameDir(); if (!dir) return
   try { const cfg = path.join(dir, 'config'); fs.mkdirSync(cfg, { recursive: true })
@@ -539,6 +577,49 @@ ipcMain.handle('game:alt', async (_, { accountId, version, join }) => {
     return { ok: true } } catch (e) { return { error: 'Не удалось запустить: ' + (e?.message || e) } } })
 ipcMain.handle('game:alts', () => [...alts.keys()])
 ipcMain.handle('game:altStop', (_, id) => { try { alts.get(id)?.kill() } catch {} return true })
+// ------------------------------------------------------------------ backup: everything of the launcher as one code (or a file)
+// "own": for moving to another computer (offline accounts and nick ownership included); "friend": only the setup (visuals, presets, binds, marks, skin and cape libraries), no accounts
+const BACKUP_SKIP = /^(trui:|installed$|visualsAt$|visPresetsAt$|remoteConf$|apiNow|perVer$|playMs$|launches$|friendNotes:|menuBg$)/
+function backupMake(mode, local) { const all = store.store, keep = {}
+  for (const [k, v] of Object.entries(all)) { if (BACKUP_SKIP.test(k)) continue; if (mode === 'friend' && /^(accounts|active|tokens|friends|settings)$/.test(k)) continue
+    if (k === 'accounts') { keep[k] = (v || []).filter((a) => a.type === 'offline'); continue } keep[k] = v } // Microsoft sign-ins are never copied: log in again on the new computer
+  const files = {}, s = settings(), skins = path.join(s.dir, 'skins'), add = (abs, rel) => { try { const st = fs.statSync(abs); if (st.isFile() && st.size < 1_500_000) files[rel] = fs.readFileSync(abs).toString('base64') } catch {} }
+  const walk = (d, rel) => { let l = []; try { l = fs.readdirSync(d, { withFileTypes: true }) } catch {} for (const e of l) { const p = path.join(d, e.name), r = rel ? rel + '/' + e.name : e.name; if (e.isDirectory()) { if (mode !== 'friend' || e.name !== 'accounts') walk(p, r) } else add(p, 'skins/' + r) } }
+  walk(skins, ''); const marks = path.join(inst(s, '1.21.4'), 'config', 'asteria-marks.json'); for (const d of instanceDirs()) { const f = path.join(d, 'config', 'asteria-marks.json'); if (fs.existsSync(f)) { add(f, 'marks.json'); break } }
+  return JSON.stringify({ v: 1, mode, at: Date.now(), store: keep, local: local || {}, files }) }
+function backupApply(json) { const b = JSON.parse(json); if (!b || b.v !== 1) throw new Error('Это не код AsteriaLauncher'); const s = settings()
+  for (const [k, v] of Object.entries(b.store || {})) { if (k === 'accounts') { const cur = store.get('accounts', []); const names = new Set(cur.map((a) => a.name.toLowerCase())); store.set('accounts', [...cur, ...v.filter((a) => !names.has(a.name.toLowerCase()))]); continue }
+    if (k === 'settings') { store.set('settings', { ...v, dir: s.dir }); continue } store.set(k, v) } // the game folder stays where it is on this computer
+  for (const [rel, data] of Object.entries(b.files || {})) { if (rel.includes('..')) continue; const buf = Buffer.from(data, 'base64')
+    if (rel === 'marks.json') { for (const d of instanceDirs()) { try { fs.mkdirSync(path.join(d, 'config'), { recursive: true }); fs.writeFileSync(path.join(d, 'config', 'asteria-marks.json'), buf) } catch {} } continue }
+    const f = path.join(s.dir, rel); try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, buf) } catch {} }
+  const v = store.get('visuals'); if (v) for (const d of instanceDirs()) writeVisuals(d, v); useAccountTextures()
+  return { local: b.local || {}, mode: b.mode } }
+ipcMain.handle('backup:code', async (_, mode, local) => { try { await resolveApi().catch(() => {}); const data = backupMake(mode, local)
+    const r = await net.fetch(apiBase() + '/backup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data }) }); const j = await r.json().catch(() => ({}))
+    if (!r.ok || !j.code) return { error: r.status === 404 ? 'Коды заработают после обновления сервера Asteria — пока сохраните в файл' : 'Сервер не принял: ' + (j.error || r.status) }
+    return { code: j.code.slice(0, 5) + '-' + j.code.slice(5) } } catch (e) { return { error: 'Сервер Asteria недоступен — сохраните в файл' } } })
+ipcMain.handle('backup:file', async (_, mode, local) => { const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), 'AsteriaLauncher-' + new Date().toISOString().slice(0, 10) + '.asteria-backup'), filters: [{ name: 'Сохранение AsteriaLauncher', extensions: ['asteria-backup'] }] })
+  if (!r.filePath) return null; fs.writeFileSync(r.filePath, backupMake(mode, local)); shell.showItemInFolder(r.filePath); return { file: r.filePath } })
+ipcMain.handle('backup:restore', async (_, code) => { try { let json
+    if (code) { const c = String(code).toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length !== 10) return { error: 'Код — 10 символов, например K7Q2X-D4MPR' }
+      await resolveApi().catch(() => {}); const r = await net.fetch(apiBase() + '/backup/' + c); if (!r.ok) return { error: r.status === 404 ? 'Такого кода нет' : 'Сервер: ' + r.status }; json = await r.text() }
+    else { const r = await dialog.showOpenDialog(win, { filters: [{ name: 'Сохранение AsteriaLauncher', extensions: ['asteria-backup', 'json'] }] }); if (!r.filePaths[0]) return null; json = fs.readFileSync(r.filePaths[0], 'utf8') }
+    return backupApply(json) } catch (e) { return { error: e.message || 'Не удалось восстановить' } } })
+// ------------------------------------------------------------------ uninstall: everything / only the data / only the app
+ipcMain.handle('app:uninstall', async (_, mode) => { // mode: 'all' | 'data' | 'app'
+  if ((mode === 'all' || mode === 'app') && !app.isPackaged) return { error: 'Это тестовая сборка — приложение не установлено' }
+  const s = settings(), def = path.join(app.getPath('appData'), '.asteria'), uninst = path.join(path.dirname(app.getPath('exe')), 'Uninstall AsteriaLauncher.exe')
+  if ((mode === 'all' || mode === 'app') && !fs.existsSync(uninst)) return { error: 'Не найден деинсталлятор: ' + uninst }
+  const del = []; if (mode !== 'app') { del.push(app.getPath('userData'))
+    // the game folder: the whole default one; a folder chosen by the player loses only what the launcher put there (never other files)
+    if (path.resolve(s.dir) === path.resolve(def)) del.push(s.dir); else for (const n of ['instances', 'versions', 'libraries', 'assets', 'runtime', 'skins', 'cache', 'natives', 'logs', 'config', 'servers.dat', 'launcher_profiles.json', 'log4j2_112-116.xml', 'log4j2_17-111.xml']) del.push(path.join(s.dir, n)) }
+  const q = (p) => "'" + String(p).replace(/'/g, "''") + "'"
+  const ps = ['$ErrorActionPreference = "SilentlyContinue"', 'Wait-Process -Id ' + process.pid + ' -Timeout 30', 'Start-Sleep -Milliseconds 800',
+    ...del.map((p) => 'Remove-Item -LiteralPath ' + q(p) + ' -Recurse -Force'),
+    mode === 'data' ? 'Start-Process -FilePath ' + q(app.getPath('exe')) : 'Start-Process -FilePath ' + q(uninst) + ' -ArgumentList "/S"'].join('; ')
+  require('child_process').spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', ps], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+  setTimeout(() => app.exit(0), 300); return { ok: true } })
 /** delete a version: its game files (and, if asked, its folder with worlds, mods and settings) go to the recycle bin */
 ipcMain.handle('ver:remove', async (_, ver, withData) => { if (game || pf.job || !/^[\w.\-]+$/.test(String(ver))) return { error: 'Подождите — идёт загрузка или игра запущена' }
   const s = settings(), vd = path.join(s.dir, 'versions'), m = store.get('installed', {}); delete m[ver]; store.set('installed', m)
@@ -626,21 +707,55 @@ ipcMain.handle('maps:get', async (_, url, ver, name) => { const m = ((store.get(
   const tmp = path.join(app.getPath('temp'), 'asteria-map-' + Date.now() + '.zip')
   try { const res = await net.fetch(url); if (!res.ok) throw new Error('HTTP ' + res.status); fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer())); return { name: unpackWorld(tmp, ver, name || m.name) } }
   catch (e) { return { error: 'Не скачалось: ' + e.message } } finally { fs.rmSync(tmp, { force: true }) } })
+/** the big maps catalog (CurseForge "Worlds") through the Asteria server */
+ipcMain.handle('maps:search', async (_, o = {}) => { await resolveApi().catch(() => {})
+  const p = new URLSearchParams({ q: String(o.q || '').slice(0, 60), sort: o.sort || '', page: String(o.page || 0), ...(o.ver ? { ver: o.ver } : {}) })
+  try { const r = await net.fetch(apiBase() + '/maps/search?' + p, { signal: AbortSignal.timeout(20000) }); const j = await r.json().catch(() => ({}))
+    if (r.status === 503 || j.error === 'no key') return { error: 'nokey' }; if (r.status === 404) return { error: 'old' }; if (!r.ok) return { error: j.error || 'HTTP ' + r.status }; return j }
+  catch (e) { return { error: 'Нет связи с сервером Asteria' } } })
+ipcMain.handle('maps:cf', async (_, mod, file, ver, name) => { await resolveApi().catch(() => {})
+  const tmp = path.join(app.getPath('temp'), 'asteria-map-' + Date.now() + '.zip')
+  try { const j = await net.fetch(apiBase() + '/maps/file?mod=' + (+mod) + '&file=' + (+file), { signal: AbortSignal.timeout(20000) }).then((x) => x.json())
+    if (!j.url) return { error: j.error ? 'Сервер: ' + j.error : 'Автор запретил скачивание из лаунчеров — откройте страницу карты', page: true }
+    const h = new URL(j.url).hostname; if (!/(^|.)forgecdn.net$/.test(h)) return { error: 'Неожиданный адрес файла' }
+    if (!/.zip$/i.test(j.name || j.url)) return { error: 'Это не архив мира (' + (j.name || '?') + ')', page: true }
+    const res = await net.fetch(j.url); if (!res.ok) throw new Error('HTTP ' + res.status); fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer()))
+    return { name: unpackWorld(tmp, ver, String(name || '').replace(/[\/:*?"<>|]/g, '').slice(0, 60) || undefined) } }
+  catch (e) { return { error: 'Не скачалось: ' + e.message } } finally { fs.rmSync(tmp, { force: true }) } })
 // ------------------------------------------------------------------ friends: a local list, presence (in game, version, e4mc address) from the Asteria server
 let hostNow = '', beatNow = null // beatNow: send the heartbeat at once (cosmetics changed in the launcher) // the e4mc address of the world this player opened to friends
 // requests go through the Asteria server under the active account; new notices (request / accepted / declined) are pushed to the window
 let friendsLast = null
-async function friendsCall(act = 'get', who = '', accept = false) { const acc = store.get('accounts', []).find((a) => a.id === store.get('active')); if (!acc) return { error: 'Нет аккаунта' }
+let playNow = null // { ver, srv } while a game of ours runs: what "invite a friend" points to
+/** a Windows notification with sound + a banner inside the running game */
+function friendAlert(x) {
+  const body = x.k === 'invite' ? x.who + ' зовёт вас ' + (x.where?.kind === 'world' ? 'в свой мир' : 'на сервер ' + (x.where?.label || x.where?.host || '')) : x.k === 'msg' ? x.who + ': ' + (x.text || '') : ''
+  if (!body) return
+  try { new Notification({ title: x.k === 'invite' ? 'Приглашение от друга' : 'Сообщение от друга', body, silent: false }).show() } catch {}
+  const dir = liveGameDir(); if (dir) try { fs.mkdirSync(path.join(dir, 'config'), { recursive: true }); fs.writeFileSync(path.join(dir, 'config', 'asteria-notify.json'), JSON.stringify({ t: Date.now(), title: x.k === 'invite' ? 'Приглашение' : x.who, text: x.k === 'invite' ? body : x.text || '', kind: x.k })) } catch {} }
+async function friendsCall(act = 'get', who = '', accept = false, code = '', extra = {}) { const acc = store.get('accounts', []).find((a) => a.id === store.get('active')); if (!acc) return { error: 'Нет аккаунта' }
   await resolveApi().catch(() => {}); const token = await getToken(acc.name).catch(() => null); if (!token) return { error: 'Нет связи с сервером Asteria' }
   const seenK = 'friendNotes:' + acc.name.toLowerCase(), since = store.get(seenK, Date.now() - 86400000)
-  try { const r = await net.fetch(apiBase() + '/friends', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token, act, who, accept, since }) })
-    const j = await r.json(); if (!r.ok) return { error: j.error === 'already' ? 'Уже в друзьях' : j.error === 'owned' ? 'Ник занят другим лаунчером' : r.status === 404 || j.error === 'not found' ? 'Друзья заработают после обновления сервера Asteria (он ещё старой версии)' : 'Сервер: ' + (j.error || r.status) }
+  try { const r = await net.fetch(apiBase() + '/friends', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token, act, who, accept, since, code, ...extra }) })
+    const j = await r.json(); if (!r.ok) return { error: j.error === 'bad code' ? 'Нет игрока с таким кодом дружбы' : j.error === 'bad name' ? 'Это ваш собственный код' : j.error === 'already' ? 'Уже в друзьях' : j.error === 'not friend' ? 'Это не ваш друг' : j.error === 'bad address' ? 'Неверный адрес сервера' : j.error === 'owned' ? 'Ник занят другим лаунчером' : r.status === 404 || j.error === 'not found' ? 'Друзья заработают после обновления сервера Asteria (он ещё старой версии)' : 'Сервер: ' + (j.error || r.status) }
     if (j.notes?.length) { store.set(seenK, Math.max(...j.notes.map((x) => x.t))); try { win?.webContents.send('friendNotes', j.notes) } catch {}
-      if (!win?.isFocused()) for (const x of j.notes) try { new Notification({ title: 'AsteriaLauncher', body: x.k === 'request' ? x.who + ' хочет добавить вас в друзья' : x.k === 'accepted' ? x.who + ' принял(а) вашу заявку в друзья' : x.who + ' отклонил(а) заявку в друзья' }).show() } catch {} }
+      for (const x of j.notes) if (x.k === 'invite' || x.k === 'msg') friendAlert(x)
+      if (!win?.isFocused()) for (const x of j.notes.filter((y) => y.k !== 'invite' && y.k !== 'msg')) try { new Notification({ title: 'AsteriaLauncher', body: x.k === 'request' ? x.who + ' хочет добавить вас в друзья' : x.k === 'accepted' ? x.who + ' принял(а) вашу заявку в друзья' : x.who + ' отклонил(а) заявку в друзья' }).show() } catch {} }
+    if (act !== 'get' && j.friends === undefined) return j // invite / msg / chat: their own answer
     friendsLast = { ...j, host: hostNow }; return friendsLast } catch (e) { return { error: 'Сервер Asteria недоступен' } } }
 ipcMain.handle('friends:get', () => friendsCall('get'))
-ipcMain.handle('friends:act', (_, act, who, accept) => friendsCall(act, String(who || '').trim(), !!accept))
-setInterval(() => { if (store.get('accounts', []).length) friendsCall('get').catch(() => {}) }, 30000) // notices arrive even when the Friends page is closed
+ipcMain.handle('friends:act', (_, act, who, accept) => act === 'request' ? friendsCall('request', '', false, String(who || '').trim()) : friendsCall(act, String(who || '').trim(), !!accept)) // requests: who = the friend code
+setInterval(() => { if (store.get('accounts', []).length && (!friendsLast || friendsLast.friends?.length || friendsLast.incoming?.length || friendsLast.outgoing?.length)) friendsCall('get').catch(() => {}) }, 8000) // invites and messages arrive within seconds, even with the Friends page closed
+/** invite a friend to where you are: your world opened to friends, the server you joined from the launcher, or SafiMine */
+ipcMain.handle('friends:invite', (_, who, kind) => {
+  const where = kind === 'world' ? (hostNow ? { kind: 'world', host: hostNow, port: 25565, ver: playNow?.ver || '' } : null)
+    : kind === 'here' ? (playNow?.srv ? { kind: 'server', host: playNow.srv.split(':')[0], port: +playNow.srv.split(':')[1] || 25565, ver: playNow.ver } : null)
+    : { kind: 'server', host: HOST, port: PORT, ver: playNow?.ver || '1.16.5', label: 'SafiMine' }
+  if (!where) return { error: kind === 'world' ? 'Сначала откройте мир для друзей: ESC → «Открыть для сети»' : 'Сначала зайдите на сервер через лаунчер' }
+  return friendsCall('invite', String(who || ''), false, '', { where }) })
+ipcMain.handle('friends:msg', (_, who, text) => friendsCall('msg', String(who || ''), false, '', { text: String(text || '').slice(0, 500) }))
+ipcMain.handle('friends:chat', (_, who, after) => friendsCall('chat', String(who || ''), false, '', { after: +after || 0 }))
+ipcMain.handle('friends:where', () => ({ world: !!hostNow, here: playNow?.srv || '', ver: playNow?.ver || '' }))
 ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, together }) => {
   const srv = server && server.host ? { host: String(server.host), port: +server.port || 25565 } : { host: HOST, port: PORT }
   if (game) return { error: 'Игра уже запущена' }
@@ -669,7 +784,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
     let togetherWarn = ''; hostNow = ''
     if (together) { if (!custom) togetherWarn = 'Игра вместе работает через Fabric-мод e4mc — Fabric не установился'; else { send('e4mc', 8, '', 2); await installSlug('e4mc', version, md).catch(() => { togetherWarn = 'Мод e4mc для ' + version + ' не найден — для игры вместе выберите 1.20.1 или 1.21.4' }) } }
     const warn = (wantFabric && modern && !custom ? 'Fabric не установился (нет связи с meta.fabricmc.net?) — игра запущена без модов: без звезды, визуалов и FPS-буста' : '') || togetherWarn
-    writeVisuals(dir); writePresets(dir); const relay = await relayStart()
+    writeVisuals(dir); writePresets(dir); writeBg(dir); writeVoice(dir); writeModels(dir); const relay = await relayStart()
     const opts = { root: s.dir, overrides: { gameDirectory: dir }, authorization: acc.type === 'offline' ? offlineAuth(acc.name) : acc.auth, version: { number: version, type: 'release', ...(custom ? { custom } : {}) },
       memory: { max: s.ramMb + 'M', min: Math.min(s.ramMb, 2048) + 'M' }, customLaunchArgs: ['--width', String(winW), '--height', String(winH), ...(s.fullscreen ? ['--fullscreen'] : [])], javaPath,
       customArgs: [...s.jvm.split(/\s+/).filter(Boolean), '-Djava.net.useSystemProxies=true' /* skins, Mojang keys and our API go through the Windows proxy, like in the browser */, '-Dasteria.launcher=1', '-Dasteria.api=' + apiBase(), '-Dasteria.user=' + acc.name, '-Dasteria.gamedir=' + dir, '-Dasteria.root=' + s.dir,
@@ -691,7 +806,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
       if (Object.keys(pendingOpts).length) { setOpts(dir, pendingOpts); pendingOpts = {} } // the game may rewrite options.txt on exit: keep what was changed in the launcher
       if (t0) { const el = Date.now() - t0, pv = store.get('perVer', {}); store.set('playMs', store.get('playMs', 0) + el); pv[version] = (pv[version] || 0) + el; store.set('perVer', pv); store.set('launches', store.get('launches', 0) + 1) }
       rpcIdle()
-      try { send('', 0); win?.webContents.send('game', false); if (win?.isMinimized()) win.restore() } catch {} })
+      playNow = null; try { send('', 0); win?.webContents.send('game', false); if (win?.isMinimized()) win.restore() } catch {} })
     const tok = await getToken(acc.name).catch(() => null)
     const visNow = () => { try { return JSON.parse(fs.readFileSync(path.join(dir, 'config', 'asteria-visuals.json'), 'utf8')) } catch { return null } }
     const petOf = () => { const p = visNow()?.modules?.pet; if (!p?.on) return '' // other Asteria players see your pet (":m" = mini-me with a skin from the launcher)
@@ -699,9 +814,9 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
       return `${+p.s?.kind || 0}:${(+p.s?.size || 1).toFixed(2)}${mini ? ':m' : ''}` }
     const fxOf = () => { const m = visNow()?.modules || {}; const c = m.cosmetics; const cos = c?.on ? `c:${+c.s?.wings || 0}.${+c.s?.hat || 0}.${+c.s?.back || 0}${c.s?.tint === false && c.s?.color ? '.' + String(c.s.color).replace('#', 'ff') : ''}` : ''
       return [m.halo?.on && 'halo', m.chinahat?.on && 'hat', m.trails?.on && 'trail', cos].filter(Boolean).join(',') }
-    const beat = () => fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf(), ver: version, host: hostNow, srv: join ? srv.host : '' }) }).catch(() => {}); beat(); beatNow = beat; let cfgM = 0; const cfgF = path.join(dir, 'config', 'asteria-visuals.json')
+    const beat = () => fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf(), ver: version, host: hostNow, srv: join ? srv.host : '' }) }).catch(() => {}); playNow = { ver: version, srv: join ? srv.host + (srv.port && srv.port !== 25565 ? ':' + srv.port : '') : '' }; beat(); beatNow = beat; let cfgM = 0; const cfgF = path.join(dir, 'config', 'asteria-visuals.json')
     hb = setInterval(() => { let m = 0; try { m = fs.statSync(cfgF).mtimeMs } catch {} if (m !== cfgM && cfgM) beat(); cfgM = m || cfgM; if (++hbN % 20 === 0) beat() }, 1000); let hbN = 0 // registers right away, so other launcher players see the icon at once
-    await addServer(dir).catch(() => {}); for (const x of (store.get('remoteConf') || {}).servers || []) if (x.ip && x.ip !== HOST) await addServerEntry(dir, x.name || x.ip, x.port && +x.port !== 25565 ? x.ip + ':' + x.port : x.ip).catch(() => {})
+    await addServer(dir).catch(() => {}); for (const x of [...PARTNER_SERVERS, ...((store.get('remoteConf') || {}).servers || []), ...myServers()]) if (x.ip && x.ip !== HOST) await addServerEntry(dir, x.name || x.ip, x.port && +x.port !== 25565 ? x.ip + ':' + x.port : x.ip).catch(() => {}) // put back every time, even if deleted in the game
     game = await l.launch(opts); gameVer = version
     if (!game) { clearInterval(hb); send('', 0); return { error: 'Не удалось запустить игру' } }
     send('Запуск игры', 100, '', 5); if (!warn) markInstalled(version)

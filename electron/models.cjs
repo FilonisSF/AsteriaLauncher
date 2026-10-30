@@ -20,14 +20,14 @@ function faceUv(uv, w, h, rot) { const [u0, v0, u1, v1] = uv; let c = [[u0 / w, 
   for (let r = ((rot || 0) / 90) % 4; r > 0; r--) c = [c[3], c[0], c[1], c[2]]; return c }
 
 /** Blockbench .bbmodel -> polys (rest pose, every parent group rotation applied) */
-function fromBbmodel(j) {
+function fromBbmodel(j, all = false) {
   const tex = (j.textures || []).map((t) => ({ png: String(t.source || '').replace(/^data:image\/png;base64,/, ''), w: t.uv_width || j.resolution?.width || 16, h: t.uv_height || j.resolution?.height || 16 }))
   const parents = {}; // element uuid -> list of groups from the inside out
-  const walk = (nodes, chain) => { for (const n of nodes || []) { if (typeof n === 'string') parents[n] = chain; else if (n && n.visibility !== false) walk(n.children, [n, ...chain]) } }
+  const walk = (nodes, chain) => { for (const n of nodes || []) { if (typeof n === 'string') parents[n] = chain; else if (n && (all || n.visibility !== false)) walk(n.children, [n, ...chain]) } }
   walk(j.outliner, [])
   const polys = []
   for (const e of j.elements || []) {
-    if (e.visibility === false || !(e.uuid in parents)) continue
+    if ((!all && e.visibility === false) || (!(e.uuid in parents) && !all)) continue; if (!(e.uuid in parents)) parents[e.uuid] = []
     const place = (p) => { let q = rotAround(p, e.origin || [0, 0, 0], e.rotation); for (const g of parents[e.uuid]) q = rotAround(q, g.origin || [0, 0, 0], g.rotation); return q }
     if (e.type === 'mesh') {
       for (const f of Object.values(e.faces || {})) { if (f.texture === null || f.texture === undefined) continue; const T = tex[f.texture] || tex[0]; if (!T) continue
@@ -70,8 +70,9 @@ function normalise(m, size) {
 /** file (bbmodel / zip / json) -> ready model; slot decides the size: pet 0.7 blocks, hat 0.6, back 1.6, wings 1.8 */
 function convert(buf, name, slot) {
   const size = { pet: 0.7, hat: 0.62, back: 1.7, wings: 1.9 }[slot] || 0.8
-  const m = /\.zip$/i.test(name) ? fromPackZip(buf) : fromBbmodel(JSON.parse(buf.toString('utf8')))
-  if (!m.polys.length) throw new Error('В модели нет видимых частей'); if (!m.tex.length) throw new Error('В модели нет текстуры')
+  let m = /\.zip$/i.test(name) ? fromPackZip(buf) : fromBbmodel(JSON.parse(buf.toString('utf8')))
+  if (!m.polys.length && !/\.zip$/i.test(name)) m = fromBbmodel(JSON.parse(buf.toString('utf8')), true) // Figura avatars hide parts and show them from scripts
+  if (!m.polys.length) throw new Error('В этом файле нет блоков модели — у аватара Figura выберите другой .bbmodel или всю папку аватара'); if (!m.tex.length) throw new Error('В модели нет текстуры')
   return normalise(m, size)
 }
 module.exports = { convert }

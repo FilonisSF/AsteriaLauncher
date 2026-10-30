@@ -74,19 +74,18 @@ public final class Menu {
     /** "AL" mark + "Asteria Launcher" exactly like the main menu logo (58 px high), 4x resolution */
     static java.io.File logoPng() {
         int fi = Math.max(0, Math.min(10, V.font)), c1 = V.a1(), c2 = V.a2();
-        java.io.File f = cache("splash-logo-" + fi + "-" + Integer.toHexString(c1 & 0xFFFFFF) + "-" + Integer.toHexString(c2 & 0xFFFFFF) + ".png"); if (f.exists()) return f;
+        java.io.File f = cache("splash-text-" + fi + "-" + Integer.toHexString(c1 & 0xFFFFFF) + "-" + Integer.toHexString(c2 & 0xFFFFFF) + ".png"); if (f.exists()) return f;
         try {
             int K = 4, mark = 58 * K, gap = 6 * K, sp = Math.round(4 * 2.6f * K);
             java.awt.Font font; try (java.io.InputStream in = Menu.class.getResourceAsStream("/assets/asteria_visuals/font/" + FONT_FILE[fi] + ".ttf")) { font = java.awt.Font.createFont(java.awt.Font.TRUETYPE_FONT, in); }
             font = font.deriveFont(FONT_SIZE[fi] * 2.6f * K * 1.12f);
             java.awt.image.BufferedImage probe = new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_ARGB); java.awt.Graphics2D pg = probe.createGraphics(); pg.setFont(font);
             java.awt.FontMetrics fm = pg.getFontMetrics(); int wa = fm.stringWidth("Asteria"), wb = fm.stringWidth("Launcher"); pg.dispose();
-            int W = mark + gap + wa + sp + wb + 12, H = mark;
+            int W = wa + sp + wb + 12, H = mark; // only the words: the AL picture is drawn next to them
             java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(W, H, java.awt.image.BufferedImage.TYPE_INT_ARGB); java.awt.Graphics2D g = img.createGraphics();
             g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON); g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC); g.setRenderingHint(java.awt.RenderingHints.KEY_FRACTIONALMETRICS, java.awt.RenderingHints.VALUE_FRACTIONALMETRICS_ON);
-            try (java.io.InputStream in = Menu.class.getResourceAsStream("/assets/asteria_visuals/textures/gui/logo.png")) { java.awt.image.BufferedImage logo = javax.imageio.ImageIO.read(in); g.drawImage(logo, 0, 0, mark, mark, null); }
-            g.setFont(font); int base = (H + fm.getAscent() - fm.getDescent()) / 2 + K, x = mark + gap;
+            g.setFont(font); int base = (H + fm.getAscent() - fm.getDescent()) / 2 + K, x = 0;
             for (int w = 0; w < 2; w++) { String t = w == 0 ? "Asteria" : "Launcher"; int tw = w == 0 ? wa : wb;
                 g.setColor(new java.awt.Color(4, 14, 22, 140)); g.drawString(t, x + K, base + K);                                       // soft shadow, like the menu text
                 g.setPaint(new java.awt.GradientPaint(x, 0, col(c1, 255), x + tw, 0, col(c2, 255))); g.drawString(t, x, base); x += tw + sp; }
@@ -108,34 +107,43 @@ public final class Menu {
             for (int y = 0; y < 256; y++) { int al = (int) (40 + 120 * Math.pow(y / 255.0, 1.6)); for (int x = 0; x < 4; x++) img.setRGB(x, y, (al << 24) | 0x02070A); }
             javax.imageio.ImageIO.write(img, "png", f); return f; } catch (Throwable t) { return null; }
     }
+    private static java.io.File splashMark; private static int[] markSize;
     private static java.io.File splashBg, splashLogo, barTrack, barFill, shade; private static int[] bgSize, logoSize; private static long splashFrom;
     /** the loading screen looks like the main menu: the same picture (own one from the launcher, or ours), the same logo at the same place, and our bar */
-    public static void splash(Gfx g, int w, int h, float alpha, float progress) {
+    public static void splash(Gfx g, int w, int h, float alpha, float progress) { splash(g, w, h, alpha, progress, true); }
+    /** bar = false: the loading is done, our screen fades into the main menu without the bar */
+    public static void splash(Gfx g, int w, int h, float alpha, float progress, boolean bar) {
         if (alpha <= 0.01f) return; float a = Math.min(1, alpha);
         if (splashLogo == null || System.currentTimeMillis() - splashFrom > 3000) { splashFrom = System.currentTimeMillis(); // the theme / font may change while the game runs (resource reload)
-            java.io.File own = new java.io.File(V.dir(), "asteria-bg.png"); splashBg = own.exists() ? own : res("menu_bg.png"); splashLogo = logoPng(); barTrack = barPng(false); barFill = barPng(true); shade = shadePng();
+            java.io.File own = new java.io.File(V.dir(), "asteria-bg.png"); splashBg = own.exists() ? own : res("menu_bg.png"); splashLogo = logoPng(); splashMark = res("logo.png"); markSize = splashMark == null ? null : imgSize(splashMark); barTrack = barPng(false); barFill = barPng(true); shade = shadePng();
             bgSize = splashBg == null ? null : imgSize(splashBg); logoSize = splashLogo == null ? null : imgSize(splashLogo); }
         if (splashBg != null && bgSize != null && bgSize[0] > 0) { float s = Math.max(w / (float) bgSize[0], h / (float) bgSize[1]), bw = bgSize[0] * s, bh = bgSize[1] * s;
             g.imageA("splbg:" + splashBg.lastModified(), splashBg, (w - bw) / 2, (h - bh) / 2, bw, bh, a); }
         if (shade != null) g.imageA("splshade:1", shade, 0, 0, w, h, a);
-        if (splashLogo != null && logoSize != null && logoSize[0] > 0) { float lh = 58, lw = lh * logoSize[0] / logoSize[1]; if (lw > w * 0.9f) { lw = w * 0.9f; lh = lw * logoSize[1] / logoSize[0]; } // the main menu logo: 58 px high, 30 px from the top
-            g.imageA("spllogo:" + splashLogo.getName(), splashLogo, (w - lw) / 2, 18, lw, lh, a); }
+        // the words in the middle of the screen, the AL picture left of them, the bar in its place lower down
+        float th = Math.min(h * 0.16f, 76), cy = h * 0.46f;
+        if (splashLogo != null && logoSize != null && logoSize[0] > 0) { float tw = th * logoSize[0] / logoSize[1]; if (tw > w * 0.7f) { tw = w * 0.7f; th = tw * logoSize[1] / logoSize[0]; }
+            float m = splashMark != null ? th * 1.05f : 0, gap = splashMark != null ? th * 0.1f : 0, x0 = (w - (m + gap + tw)) / 2; // the AL picture and the words together, centred over the bar
+            if (splashMark != null) g.imageA("splmark:1", splashMark, x0, cy - m / 2, m, m, a);
+            g.imageA("spllogo:" + splashLogo.getName(), splashLogo, x0 + m + gap, cy - th / 2, tw, th, a); }
         float bw = Math.min(w * 0.42f, 240), bx = (w - bw) / 2, by = h * 0.82f, bh = 5;
+        if (!bar) return;
         if (barTrack != null) g.imageA("spltrack:1", barTrack, bx, by, bw, bh, a);
         if (barFill != null) g.imageA("splfill:" + barFill.getName(), barFill, bx, by, Math.max(bh, bw * Math.max(0, Math.min(1, progress))), bh, a);
     }
     // ------------------------------------------------------------------ music card on the pause menu (ESC): track, time, controls, volume
     private static final java.util.List<float[]> PB = new java.util.ArrayList<>(); private static final java.util.List<String> PBC = new java.util.ArrayList<>(); private static boolean wasDown;
-    public static void pauseMusic(Gfx g, int W, int H, float mx, float my, boolean down) {
+    public static void pauseMusic(Gfx g, int W, int H, float mx, float my, boolean down) { pauseMusic(g, W, H, mx, my, down, -1); }
+    /** top = bottom of the lowest button of the pause menu: the card goes right under all buttons (new ones included); no room -> top right corner */
+    public static void pauseMusic(Gfx g, int W, int H, float mx, float my, boolean down, float top) {
         D.g = g; PB.clear(); PBC.clear(); if (!Media.present()) { wasDown = down; return; }
-        float w = 190, h = 74, x = W - w - 8, y = 8;
+        float w = 204, h = 74, x = W - w - 8, y = 8; if (top > 0 && top + 10 + h < H - 4) { x = (W - w) / 2; y = top + 10; }
         D.panel(x, y, x + w, y + h, 8);
         java.io.File cv = Media.coverFile(); if (cv == null || !g.image(Media.cover, cv, x + 6, y + 6, 36, 36)) { D.round(x + 6, y + 6, x + 42, y + 42, 7, V.a1(), V.a2()); D.icon("music", x + 16, y + 16, 16, 0xFFFFFFFF); }
         String t = Media.title; while (D.w(t) > w - 56 && t.length() > 3) t = t.substring(0, t.length() - 2); if (!t.equals(Media.title)) t += "…";
         g.text(t, x + 48, y + 8, 0xFFFFFFFF, true); D.textS(Media.artist.isEmpty() ? (Media.active() ? "Играет" : "Пауза") : Media.artist, x + 48, y + 20, 0.8f, 0xFF9FB3C0);
         double d = Media.dur(), p = Media.pos(); float f = d > 0 ? (float) Math.min(1, p / d) : 0;
-        D.round(x + 48, y + 33, x + w - 8, y + 35, 1, 0x30FFFFFF); D.round(x + 48, y + 33, x + 48 + (w - 56) * f, y + 35, 1, V.a1(), V.a2());
-        if (d > 0) D.textS(Media.time(p) + " / " + Media.time(d), x + 48, y + 37, 0.65f, 0xFF9FB3C0);
+        Hud.timeBar(x + 48, y + 33, x + w - 8, d > 0 ? Media.time(p) : "", d > 0 ? Media.time(d) : "", f);
         String[][] b = {{"prev", "prev"}, {Media.active() ? "pause" : "play", "toggle"}, {"next", "next"}, {"vol-", "voldown"}, {"mute", "mute"}, {"vol+", "volup"}};
         float bx = x + 8, by = y + 50, bw = (w - 16) / b.length;
         for (String[] k : b) { boolean hov = mx >= bx && mx < bx + bw - 3 && my >= by && my < by + 18;

@@ -71,15 +71,15 @@ export function GifCapeMaker({ src, onDone, onCancel, onError }: { src: string; 
   useEffect(() => { (async () => { try {
       const D = (window as any).ImageDecoder; if (!D) return onError('Эта версия лаунчера не умеет читать GIF')
       const blob = await (await fetch(src)).blob(), dec = new D({ data: blob.stream(), type: 'image/gif' }); await dec.tracks.ready
-      const n = Math.min(24, dec.tracks.selectedTrack.frameCount), step = Math.max(1, Math.ceil(dec.tracks.selectedTrack.frameCount / 24))
+      const n = Math.min(16, dec.tracks.selectedTrack.frameCount), step = Math.max(1, Math.ceil(dec.tracks.selectedTrack.frameCount / 16)) // up to 16 frames: small enough to keep and upload
       for (let i = 0; i < n * step && i < dec.tracks.selectedTrack.frameCount; i += step) { const r = await dec.decode({ frameIndex: i }); frames.current.push({ bmp: r.image, w: r.image.displayWidth, h: r.image.displayHeight }) }
       const f = frames.current[0], c = document.createElement('canvas'); c.width = f.w; c.height = f.h; c.getContext('2d')!.drawImage(f.bmp as any, 0, 0); setFirst(c.toDataURL('image/png'))
     } catch { onError('Не удалось прочитать GIF') } })() }, [src])
   if (!first) return <div className="fixed inset-0 z-[90] flex items-center justify-center" style={{ background: 'rgba(2,8,14,.8)' }}><div className="glass rounded-3xl p-6 flex items-center gap-3"><span className="dlspin" />Читаем GIF…</div></div>
   return <CropBox src={first} aspect={10 / 16} title={busy ? 'Собираем кадры…' : 'Область анимации на плаще'} okText="Сделать плащ" onCancel={onCancel} onDone={() => {}} onRect={async (r) => {
-    setBusy(true); const W = 40, H = 64, out = document.createElement('canvas'), list = frames.current; out.width = 256; out.height = 128 * list.length; const ox = out.getContext('2d')!
+    setBusy(true); const W = 40, H = 64, out = document.createElement('canvas'), list = frames.current; out.width = 128; out.height = 64 * list.length; const ox = out.getContext('2d')! // 2x cape per frame
     for (let i = 0; i < list.length; i++) { const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d')!; x.imageSmoothingQuality = 'high'; x.drawImage(list[i].bmp as any, r.x, r.y, r.w, r.h, 0, 0, W, H)
-      const cape = await buildCape(c.toDataURL('image/png'), 'mirror', 4); ox.drawImage(await loadIm(cape), 0, 128 * i) }
+      const cape = await buildCape(c.toDataURL('image/png'), 'mirror', 2); ox.drawImage(await loadIm(cape), 0, 64 * i, 128, 64) }
     onDone(out.toDataURL('image/png'), list.length) }} />
 }
 /** any picture -> cape: pick the part for the outside, then the part for the inside */

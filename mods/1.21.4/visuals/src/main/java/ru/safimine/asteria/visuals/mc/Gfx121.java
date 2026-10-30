@@ -78,8 +78,10 @@ public final class Gfx121 implements Gfx {
     }
     @Override public void text(String s, float x, float y, int argb, boolean shadow) { flush();
         if (((argb >>> 24) & 255) < 5) return;
-        m.push(); m.translate(snap(x), snap(y), 0);
-        ctx.drawText(tr, t(s, px()), 0, 0, argb, shadow);
+        m.push(); m.translate(snap(x), snap(y), 0); Text tx = t(s, px());
+        if (shadow && V.font > 0) { float k = gs() * sc, d = Math.max(1, Math.round(k * 0.4f)) / k; int sh = ((int) (((argb >>> 24) & 255) * 0.7f) << 24) | ((argb & 0xF8F8F8) >> 3); /* own fonts: a crisp shadow exactly 1-2 screen pixels away (the vanilla one, 1 GUI unit at a fractional scale, smears the letters) */
+            m.push(); m.translate(d, d, 0); ctx.drawText(tr, tx, 0, 0, sh, false); m.pop(); shadow = false; }
+        ctx.drawText(tr, tx, 0, 0, argb, shadow);
         m.pop();
     }
     private static Identifier imgId; private static String imgKey;

@@ -35,6 +35,7 @@ public class VisualsClient implements ClientModInitializer {
     public static void hud(DrawContext ctx) { Gfx121 g = new Gfx121(ctx, true); try { Hud.render(g, Game121.I); } catch (Throwable t) { Fx.err("hud", t); } finally { try { g.flush(); } catch (Throwable ignored) {} } }
     public static void world(Matrix4f pos, Camera cam, float pt) { try { Fx.render(new R3_121(pos, cam, pt), Game121.I); } catch (Throwable t) { Fx.err("world", t); } }
 
+    private static final boolean TEST_SWING = System.getProperty("asteria.test.swing") != null;
     public static void tick(MinecraftClient c) {
         try {
             V.tick();
@@ -47,6 +48,7 @@ public class VisualsClient implements ClientModInitializer {
             while (MARK.wasPressed()) if (c.player != null && c.currentScreen == null) Fx.markKey(Game121.I, net.minecraft.client.gui.screen.Screen.hasShiftDown());
             if (c.player != null) Fx.freeLookKey(Game121.I, FREELOOK.isPressed() && c.currentScreen == null, c.player.getYaw(), c.player.getPitch());
             if (c.player != null) Fx.tick(Game121.I);
+            if (TEST_SWING && c.player != null) { if (c.player.getMainHandStack().isEmpty()) c.player.getInventory().setStack(c.player.getInventory().selectedSlot, new net.minecraft.item.ItemStack(net.minecraft.registry.Registries.ITEM.get(net.minecraft.util.Identifier.of("minecraft", "diamond_sword")))); if (c.player.age % 40 == 0) c.player.swingHand(net.minecraft.util.Hand.MAIN_HAND); } // test runs only (-Dasteria.test.swing)
             long h = c.getWindow().getHandle();
             for (V.Mod m : V.MODS) {
                 if (m.bind == 0) continue;
@@ -72,7 +74,7 @@ public class VisualsClient implements ClientModInitializer {
     /** our font for every text of Minecraft (theme "font for all text"): minecraft:default -> asteria_visuals:f<N>s<scale> */
     private static final Identifier[][] ALL = new Identifier[16][7];
     public static Identifier allFont(Identifier id) {
-        if (!V.allFont || V.font <= 0 || id == null || !"minecraft".equals(id.getNamespace()) || !"default".equals(id.getPath())) return id;
+        if (!V.allFont || V.font <= 0 || id == null || !"minecraft".equals(id.getNamespace()) || !("default".equals(id.getPath()) || "uniform".equals(id.getPath()))) return id; // the main and the "uniform" font: menus, chat, mods
         int i = Math.min(15, V.font), k = Math.max(1, Math.min(6, (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor())));
         if (ALL[i][k] == null) ALL[i][k] = Identifier.of("asteria_visuals", "f" + i + "s" + k); return ALL[i][k];
     }

@@ -84,6 +84,11 @@ public interface Game {
     default float bodyYawOf(Object e, float pt) { return bodyYawOf(e); }
     default float pitchOf(Object e, float pt) { return pitchOf(e); }
     default boolean onGroundOf(Object e) { return true; }
+    /** nothing in the main hand (the arm alone is drawn by another vanilla path) */
+    default boolean mainHandEmpty() { return false; }
+    /** wears elytra in the chest slot / is flying with them */
+    default boolean elytraOf(Object e) { for (Item it : armorOf(e)) if (itemId(it.stack).endsWith("elytra")) return true; return false; }
+    default boolean glidingOf(Object e) { return false; }
     /** F3+B: entity hitboxes are shown */
     default boolean hitboxDebug() { return false; }
     /** chat is open (the HUD stays visible there, unlike under menus) */

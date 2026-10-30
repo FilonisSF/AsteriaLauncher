@@ -35,6 +35,7 @@ public final class Hud {
         while (!RMB.isEmpty() && now - RMB.peekFirst() > 1000) RMB.pollFirst();
         if (now - speedAt >= 250) { double dx = game.x() - lx, dz = game.z() - lz; double inst = speedAt == 0 ? 0 : Math.sqrt(dx * dx + dz * dz) / ((now - speedAt) / 1000.0); speed = inst > 100 ? speed : speed * 0.5 + inst * 0.5; lx = game.x(); lz = game.z(); speedAt = now; }
 
+        if (now - notifyAt > 500) { notifyAt = now; friendNote(); }
         int W = game.width(), H = game.height(); bossBars = game.bossBars();
         if (V.on("frame") && !game.screenOpen()) frame(W, H);
         if (V.on("crosshair") && !game.screenOpen()) { float turn = (float) V.num("crosshair", "rotate"); // every style turns, the own picture too
@@ -64,7 +65,7 @@ public final class Hud {
             List<Object> cd = cooldowns(game, inv);
             if (!cd.isEmpty() || editing) place("cooldowns", W, H, s, () -> new float[]{104, Math.max(1, cd.size()) * 20 + 4}, () -> cooldownList(game, cd));
         }
-        if (Media.present() || editing) place("music", W, H, s, () -> new float[]{156, 36}, Hud::music);
+        if (Media.present() || editing) place("music", W, H, s, () -> new float[]{170, 42}, Hud::music);
         if (game.serverInfo() != null || editing) place("servercard", W, H, s, () -> serverSize(game), () -> serverCard(game));
         if (V.on("nametags") && !editing) try { nametags(game, W, H); } catch (Throwable ignored) {}
         if (V.on("markers") && !editing) try { marks(game, W, H); } catch (Throwable ignored) {}
@@ -151,20 +152,27 @@ public final class Hud {
     }
     private static void music() {
         boolean has = Media.present(), on = Media.active(); String t = has ? Media.title : "Ничего не играет", a = has ? (Media.artist.isEmpty() ? (on ? "Играет" : "Пауза") : Media.artist + (on ? "" : "  ·  пауза")) : "Spotify, Яндекс Музыка, браузер…";
-        D.panel(0, 0, 156, 36, 7);
+        D.panel(0, 0, 170, 42, 7);
         java.io.File cv = Media.coverFile();
-        if (cv == null || !D.g.image(Media.cover, cv, 4, 4, 28, 28)) { // no cover: gradient tile with an equalizer
-            D.round(4, 4, 32, 32, 6, V.a1(), V.a2());
+        if (cv == null || !D.g.image(Media.cover, cv, 4, 4, 34, 34)) { // no cover: gradient tile with an equalizer
+            D.round(4, 4, 38, 38, 6, V.a1(), V.a2());
             float bars = System.currentTimeMillis() / 160f;
-            for (int i = 0; i < 4; i++) { float h = on ? 5 + 9 * Math.abs((float) Math.sin(bars + i * 1.3f)) : 4; D.round(9 + i * 5.5f, 25 - h, 12 + i * 5.5f, 25, 1, 0xFFFFFFFF); } }
-        String tt = t; while (D.w(tt) > 116 && tt.length() > 3) tt = tt.substring(0, tt.length() - 2); if (!tt.equals(t)) tt += "…";
-        D.g.text(tt, 37, 5, 0xFFFFFFFF, V.shadow);
-        String aa = a; while (D.w(aa) * 0.8f > 114 && aa.length() > 3) aa = aa.substring(0, aa.length() - 2); if (!aa.equals(a)) aa += "…";
-        D.textS(aa, 37, 15, 0.8f, 0xFF9FB3C0);
+            for (int i = 0; i < 4; i++) { float h = on ? 6 + 11 * Math.abs((float) Math.sin(bars + i * 1.3f)) : 4; D.round(10 + i * 6.5f, 30 - h, 14 + i * 6.5f, 30, 1, 0xFFFFFFFF); } }
+        String tt = t; while (D.w(tt) > 124 && tt.length() > 3) tt = tt.substring(0, tt.length() - 2); if (!tt.equals(t)) tt += "…";
+        D.g.text(tt, 43, 5, 0xFFFFFFFF, V.shadow);
+        String aa = a; while (D.w(aa) * 0.8f > 122 && aa.length() > 3) aa = aa.substring(0, aa.length() - 2); if (!aa.equals(a)) aa += "…";
+        D.textS(aa, 43, 15.5f, 0.8f, 0xFFB4C4D0);
         double d = Media.dur(), p = Media.pos(); float f = d > 0 ? (float) Math.min(1, p / d) : 0;
-        String tm = d > 0 ? Media.time(p) + " / " + Media.time(d) : ""; float tw = D.w(tm) * 0.6f;
-        D.round(37, 28, 150 - tw - 4, 30, 1, 0x30FFFFFF); D.round(37, 28, 37 + (113 - tw - 4) * f, 30, 1, V.a1(), V.a2());
-        if (!tm.isEmpty()) D.textS(tm, 150 - tw, 26.5f, 0.6f, 0xFF9FB3C0);
+        timeBar(43, 27.5f, 165, d > 0 ? Media.time(p) : "", d > 0 ? Media.time(d) : "", f);
+    }
+    /** elapsed  ━━━●───  total: the times in full-size bright text on both sides of a 3 px bar */
+    static void timeBar(float x0, float y, float x1, String el, String tot, float f) {
+        float ew = el.isEmpty() ? 0 : D.w(el) + 5, tw = tot.isEmpty() ? 0 : D.w(tot) + 5, bx0 = x0 + ew, bx1 = x1 - tw, by = y + 3;
+        if (!el.isEmpty()) D.g.text(el, x0, y, 0xFFFFFFFF, true);
+        if (!tot.isEmpty()) D.g.text(tot, x1 - D.w(tot), y, 0xFFD2DEE8, true);
+        D.round(bx0, by, bx1, by + 3, 1.5f, 0x38FFFFFF); float kx = bx0 + (bx1 - bx0) * f;
+        if (f > 0) D.round(bx0, by, kx, by + 3, 1.5f, V.a1(), V.a2());
+        D.circle(kx, by + 1.5f, 2.6f, 0xFFFFFFFF);
     }
 
     /** elements that always grow from their middle */
@@ -173,7 +181,7 @@ public final class Hud {
     /** draws an element at its saved position; x/y > 0.5 anchor to the right/bottom edge so elements grow away from the edge */
     private static void place(String id, int W, int H, float s, Size size, Runnable draw) {
         V.Mod m = V.mod(id); if (m == null || !(m.on || editing)) return;
-        float[] wh = size.get(); float w = wh[0] * s, h = wh[1] * s; if (w <= 0 || h <= 0) return;
+        s *= m.hs; float[] wh = size.get(); float w = wh[0] * s, h = wh[1] * s; if (w <= 0 || h <= 0) return;
         float x = m.hud[0] > 0.5f ? m.hud[0] * W - w : m.hud[0] * W, y = m.hud[1] > 0.5f ? m.hud[1] * H - h : m.hud[1] * H;
         if (centred(id) || Math.abs(m.hud[0] - 0.5f) < 0.002f) x = m.hud[0] * W - w / 2; // centred elements (or put in the middle in the editor)
         if (Math.abs(m.hud[1] - 0.5f) < 0.002f) y = H / 2f - h / 2;
@@ -441,14 +449,25 @@ public final class Hud {
         String txt = "Тотем спас вас!"; D.textS(txt, cx - D.w(txt) * 0.6f, cy + 34 * pop, 1.2f, D.a(0xFFFFE8A0, a));
     }
     // ------------------------------------------------------------------ alerts (armour, HP, food, totem, effects)
-    private static String alertT = "", alertS = ""; private static int alertC; private static long alertAt; private static String alertIcon = "heart";
-    public static void alert(String title, String text, int color, String icon) {
-        if (!V.on("alerts")) return; alertT = title; alertS = text; alertC = color; alertIcon = icon; alertAt = System.currentTimeMillis();
-        if (V.bool("alerts", "sound")) Fx.sound("wv_disable", 0.7f);
+    private static String alertT = "", alertS = ""; private static int alertC; private static long alertAt; private static String alertIcon = "heart"; private static float alertDur = 2.8f;
+    public static void alert(String title, String text, int color, String icon) { alert(title, text, color, icon, ""); }
+    /** key: which phrase the announcer says (alert_<key>.wav); otherwise a soft signal, never the "module off" voice */
+    public static void alert(String title, String text, int color, String icon, String key) {
+        if (!V.on("alerts")) return; alertT = title; alertS = text; alertC = color; alertIcon = icon; alertAt = System.currentTimeMillis(); alertDur = 2.8f;
+        if (V.bool("alerts", "sound")) Voice.alert(key.isEmpty() ? "generic" : key);
+    }
+    /** invites and messages from friends: the launcher writes config/asteria-notify.json, shown here for 6 s with a sound (even with the alerts module off) */
+    private static long notifyAt, notifyMtime, notifySeen = System.currentTimeMillis();
+    private static void friendNote() {
+        try { java.io.File f = new java.io.File(V.dir(), "asteria-notify.json"); if (!f.exists() || f.lastModified() == notifyMtime) return; notifyMtime = f.lastModified();
+            com.google.gson.JsonObject o = new com.google.gson.JsonParser().parse(new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            long t = (long) V.d(o, "t", 0); if (t <= notifySeen) return; notifySeen = t; boolean inv = "invite".equals(V.str(o, "kind"));
+            alertT = V.str(o, "title"); alertS = V.str(o, "text"); if (alertS.length() > 70) alertS = alertS.substring(0, 69) + "…"; alertC = inv ? 0xFF4ADE80 : 0xFF22D3EE; alertIcon = inv ? "users" : "dot"; alertAt = System.currentTimeMillis(); alertDur = 6f;
+            Voice.alert("friend"); } catch (Throwable ignored) {}
     }
     private static void alertBanner(int W, int H) {
-        float t = (System.currentTimeMillis() - alertAt) / 1000f; if (t > 2.8f) { alertAt = 0; return; }
-        float in = D.ease(Math.min(1, t * 5)), out = t > 2.4f ? D.ease((t - 2.4f) / 0.4f) : 0, a = in * (1 - out), w = Math.max(D.w(alertT), D.w(alertS) * 0.8f) + 44, x = (W - w) / 2, y = H * 0.22f - 10 * (1 - in);
+        float t = (System.currentTimeMillis() - alertAt) / 1000f; if (t > alertDur) { alertAt = 0; return; }
+        float in = D.ease(Math.min(1, t * 5)), out = t > alertDur - 0.4f ? D.ease((t - alertDur + 0.4f) / 0.4f) : 0, a = in * (1 - out), w = Math.max(D.w(alertT), D.w(alertS) * 0.8f) + 44, x = (W - w) / 2, y = H * 0.22f - 10 * (1 - in);
         float pulse = 0.6f + 0.4f * (float) Math.sin(t * 9);
         D.round(x - 2, y - 2, x + w + 2, y + 30, 10, D.a(alertC, 0.35f * a * pulse));
         D.round(x, y, x + w, y + 28, 9, D.alpha(0x0A0F18, (int) (225 * a)));
@@ -457,7 +476,7 @@ public final class Hud {
         D.g.text(alertT, x + 32, y + 5, D.a(0xFFFFFFFF, a), false); D.textS(alertS, x + 32, y + 16, 0.8f, D.a(0xFFB9CBD4, a));
     }
     /** a module switched by its key: sound + notification */
-    public static void bindToggled(V.Mod m) { notify(m.name, m.on ? "Включено" : "Выключено", m.on); Fx.sound(m.on ? "wv_enable" : "wv_disable", 0.6f); }
+    public static void bindToggled(V.Mod m) { notify(m.name, m.on ? "Включено" : "Выключено", m.on); Voice.toggled(m); if (false) Fx.sound(m.on ? "wv_enable" : "wv_disable", 0.6f); }
 
     // ------------------------------------------------------------------ array list
     private static final Map<String, Float> SLIDE = new HashMap<>();

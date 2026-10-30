@@ -7,14 +7,14 @@ declare global { interface Window { api: any } }
 // The same schema.json the mod reads: the launcher and the in-game menu edit one file (config/asteria-visuals.json in every build).
 type S = { id: string; name: string; type: 'bool' | 'num' | 'mode' | 'color' | 'str'; def: any; min?: number; max?: number; step?: number; options?: string[] }
 type M = { id: string; cat: string; name: string; desc: string; on: boolean; hud?: [number, number]; s: S[] }
-type ModCfg = { on: boolean; bind: number; hud?: [number, number]; s: Record<string, any> }
+type ModCfg = { on: boolean; bind: number; hud?: [number, number]; hs?: number; s: Record<string, any> }
 type Theme = { accent: string; accent2: string; chroma: boolean; shadow: boolean; blur: boolean; bg: number; scale: number; hud?: number; glare?: boolean; font?: number | boolean; menu?: boolean; menuBg?: number; allFont?: boolean; lite?: boolean; bgBlur?: boolean }
 export type VisCfg = { theme: Theme; modules: Record<string, ModCfg> }
 const MODS = (schema as any).modules as M[], CATS = (schema as any).categories as { id: string; name: string }[]
 const CAT_ICON: Record<string, string> = { hud: 'grid', world: 'cube', combat: 'sparkles', camera: 'eye' }
 // card pictures: src/assets/art/vis-<id>.jpg (or .png / .webp), prompts in src/assets/art/PROMPTS_RU.md
 const PIC: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob('./assets/art/vis-*.{jpg,png,webp}', { eager: true, query: '?url', import: 'default' }) as Record<string, string>).map(([k, v]) => [k.split('/').pop()!.replace(/^vis-|\.(jpg|png|webp)$/g, ''), v]))
-const THEME0: Theme = { accent: '#22d3ee', accent2: '#3b82f6', chroma: false, shadow: true, blur: true, bg: 0.55, scale: 1, hud: 0, font: 8 } as Theme
+const THEME0: Theme = { accent: '#22d3ee', accent2: '#3b82f6', chroma: false, shadow: true, blur: true, bg: 0.55, scale: 1.25, hud: 0, font: 8 } as Theme
 export function visDefaults(): VisCfg {
   const modules: Record<string, ModCfg> = {}
   for (const m of MODS) modules[m.id] = { on: m.on, bind: 0, ...(m.hud ? { hud: [...m.hud] as [number, number] } : {}), s: Object.fromEntries(m.s.map((x) => [x.id, x.def])) }
@@ -58,7 +58,7 @@ function only(ids: string[], theme: Partial<Theme> = {}): VisCfg { const d = vis
 function merge(saved: any): VisCfg {
   const d = visDefaults(); if (!saved || !saved.modules) return d
   for (const m of MODS) { const o = saved.modules[m.id]; if (!o) continue; const t = d.modules[m.id]
-    t.on = o.on ?? t.on; t.bind = o.bind ?? 0; if (o.hud && t.hud) t.hud = [o.hud[0], o.hud[1]]; for (const x of m.s) if (o.s && o.s[x.id] !== undefined) t.s[x.id] = o.s[x.id] }
+    t.on = o.on ?? t.on; t.bind = o.bind ?? 0; if (o.hud && t.hud) t.hud = [o.hud[0], o.hud[1]]; if (typeof o.hs === 'number') t.hs = o.hs; for (const x of m.s) if (o.s && o.s[x.id] !== undefined) t.s[x.id] = o.s[x.id] }
   return { theme: { ...d.theme, ...(saved.theme || {}) }, modules: d.modules }
 }
 
@@ -75,7 +75,7 @@ const GW = 640, GH = 360
 
 export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string; bg: string; onBuy: () => void; say: (m: string) => void; ver: string }) {
   const premium = plan === 'PREMIUM'
-  const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout' | 'configs' | 'crosshair' | 'marks' | 'abbr' | 'binds'>('mods'), [q, setQ] = useState('')
+  const [c, setC] = useState<VisCfg | null>(null), [cat, setCat] = useState('hud'), [open, setOpen] = useState(''), [bindFor, setBindFor] = useState(''), [view, setView] = useState<'mods' | 'theme' | 'layout' | 'configs' | 'crosshair' | 'marks' | 'abbr' | 'binds' | 'voice'>('mods'), [q, setQ] = useState('')
   const [pr, setPr] = useState<Presets | null>(null), prRef = useRef<Presets | null>(null), [enabled, setEnabled] = useState(true)
   useEffect(() => { window.api.visEnabled?.().then((v: boolean) => setEnabled(v !== false)) }, [])
   const toggleAll = async (v: boolean) => { setEnabled(v); await window.api.visEnabled?.(v); say(v ? 'Визуалы включены — со следующего запуска игры' : 'Визуалы выключены — игра запустится без них') }
@@ -120,7 +120,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     {!premium && <div className="card rounded-2xl p-4 mb-4 flex items-center gap-3"><span className="cmd-ic"><Icon n="lock" s={16} /></span><div className="text-sm flex-1"><b>Можно всё настроить заранее.</b> <span className="muted">В игре визуалы включатся, как только на аккаунте появится PREMIUM — лаунчер проверяет подписку при каждом запуске.</span></div></div>}
 
     <div className="flex items-center gap-3 mb-4 flex-wrap">
-      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['crosshair', 'Прицел', 'plus'], ['marks', 'Метки', 'servers'], ['binds', 'Бинды команд', 'keyboard'], ['layout', 'Расположение HUD', 'move'], ['configs', 'Конфиги', 'folder'], ['abbr', 'Сокращения', 'rules']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
+      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['crosshair', 'Прицел', 'plus'], ['marks', 'Метки', 'servers'], ['binds', 'Бинды команд', 'keyboard'], ['voice', 'Диктор', 'music'], ['configs', 'Конфиги', 'folder'], ['abbr', 'Сокращения', 'rules']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
       <div className="flex-1" />
       <div className="flex items-center gap-2 text-sm"><span className="muted">Клавиши в игре:</span>
         {(['menu', 'zoom'] as const).map((k) => <button key={k} className={'btn !py-1.5 ' + (listenKey === k ? 'btn-on' : '')} onClick={() => setListenKey(k)}>{k === 'menu' ? 'Меню' : 'Зум'} <kbd className="ml-1">{listenKey === k ? '…' : pretty(keys[k])}</kbd></button>)}</div>
@@ -148,7 +148,8 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
               <button className={'pill !py-1 ' + (bindFor === m.id ? 'on' : '')} title="Клавиша включения в игре" onClick={() => setBindFor(bindFor === m.id ? '' : m.id)}><Icon n="keyboard" s={13} />{bindFor === m.id ? 'Нажмите клавишу…' : keyName(mc.bind)}</button>
               {m.s.length > 0 && <button className="pill !py-1 ml-auto" onClick={() => setOpen(ex ? '' : m.id)}><Icon n="sliders" s={13} />Настройки<span className={'transition ' + (ex ? 'rotate-180' : '')}><Icon n="chevron" s={12} /></span></button>}</div>
             {ex && <div className="mt-3 pt-3 flex flex-col gap-3 fade" style={{ borderTop: '1px solid var(--line)' }}>{m.s.map((s) => <Setting key={s.id} mod={m.id} s={s} v={mc.s[s.id]} set={(v) => setS(m.id, s.id, v)} />)}
-              {m.s.length > 0 && <button className="pill self-end !text-xs" onClick={() => mod(m.id, { s: Object.fromEntries(m.s.map((x) => [x.id, x.def])) })}><Icon n="reset" s={12} />Сбросить настройки</button>}</div>}
+              <div className="flex gap-2 justify-end flex-wrap">{m.id === 'viewmodel' && ([['Сброс правой руки', false], ['Сброс левой руки', true]] as const).map(([t, left]) => <button key={t} className="pill !text-xs" onClick={() => mod(m.id, { s: { ...mc.s, ...Object.fromEntries(m.s.filter((x) => x.id !== 'split' && (/^l/.test(x.id) === left) && !(left && x.id === 'scale')).map((x) => [x.id, x.def])) } })}><Icon n="reset" s={12} />{t}</button>)}
+                {m.s.length > 0 && <button className="pill !text-xs" onClick={() => mod(m.id, { s: Object.fromEntries(m.s.map((x) => [x.id, x.def])) })}><Icon n="reset" s={12} />Сбросить всё</button>}</div></div>}
           </div></div> })}
       </div></div>}
 
@@ -178,7 +179,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
         <Switch on={c.theme.menu !== false} set={(v) => theme({ menu: v })} label="Свой стиль меню Minecraft" hint="Неоновые кнопки, логотип AsteriaLauncher вместо Minecraft, фон Asteria и без кнопки Realms" />
         <Switch on={!!c.theme.glare} set={(v) => theme({ glare: v })} label="Блик по панелям" hint="Иногда по панелям HUD пробегает светлый блик" />
         <Range label="Прозрачность подложки" min={0} max={1} step={0.05} v={c.theme.bg} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ bg: v })} />
-        <Range label="Размер HUD" min={0.6} max={1.6} step={0.05} v={c.theme.scale} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ scale: v })} />
+        <Range label="Размер HUD (шаг 25% — текст всегда чёткий)" min={0.75} max={2} step={0.25} v={Math.round(c.theme.scale * 4) / 4} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ scale: v })} />
       </div>
       <Tilt className="rounded-2xl overflow-hidden relative h-fit" max={4}><img src={bg} className="w-full aspect-video object-cover" /><div className="absolute inset-0"><Preview c={c} /></div></Tilt>
     </div>}
@@ -189,7 +190,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     {view === 'binds' && <BindsTab say={say} />}
     {view === 'crosshair' && c.modules.crosshair && <CrosshairTab m={c.modules.crosshair} on={(v) => mod('crosshair', { on: v })} set={(k, v) => setS('crosshair', k, v)} say={say} />}
 
-    {view === 'layout' && <Layout c={c} bg={bg} move={(id, x, y) => mod(id, { hud: [x, y] })} />}
+    {view === 'voice' && <VoiceTab say={say} />}
   </div>
 }
 
@@ -290,6 +291,30 @@ function OwnBg({ blur, setBlur, say }: { blur: boolean; setBlur: (v: boolean) =>
     <div className="flex-1 min-w-0"><b className="text-sm">Свой фон Minecraft</b><div className="muted text-[11px]">В главном меню — как есть, в остальных меню — размыто</div>
       <div className="mt-1"><Switch on={blur} set={setBlur} label="Размытие в меню" /></div></div>
     <div className="flex flex-col gap-1"><button className="btn !py-1 text-sm" onClick={pick}>Выбрать</button>{img && <button className="btn !py-1 text-sm" onClick={() => { window.api.bgSet(null, null); setImg(null) }}>Убрать</button>}</div></div>
+}
+/** the announcer: a Windows voice says "Функция «…» включена" and the alerts; phrases are made once here and played by the mod */
+const ALERT_PHRASES: [string, string][] = [['generic', 'Внимание'], ['hp', 'Мало здоровья'], ['armor', 'Броня ломается'], ['food', 'Вы проголодались'], ['totem', 'Тотем использован'], ['effect', 'Эффект заканчивается'], ['enemy_totem', 'Противник потерял тотем'], ['enemy_armor', 'У противника ломается броня']]
+const clean = (n: string) => n.replace(/\s*\([^)]*\)/g, '').trim()
+function VoiceTab({ say }: { say: (s: string) => void }) {
+  const [voices, setVoices] = useState<{ id: string; name: string; lang: string; gender: string }[]>([]), [voice, setVoice] = useState(''), [rate, setRate] = useState(1), [pitch, setPitch] = useState(1), [busy, setBusy] = useState(''), [err, setErr] = useState(''), [ready, setReady] = useState(false)
+  useEffect(() => { window.api.voiceList?.().then((r: any) => { if (r?.error) setErr(r.error); const l = r?.voices || []; setVoices(l); const ch = r?.chosen; setReady(!!ch)
+    setVoice(ch?.voice || (l.find((v: any) => /ru/i.test(v.lang)) || l[0])?.id || ''); if (ch) { setRate(+ch.rate || 1); setPitch(+ch.pitch || 1) } }) }, [])
+  const items = () => [...MODS.flatMap((m) => [{ id: 'on_' + m.id, text: 'Функция «' + clean(m.name) + '» включена' }, { id: 'off_' + m.id, text: 'Функция «' + clean(m.name) + '» выключена' }]), ...ALERT_PHRASES.map(([id, text]) => ({ id: 'alert_' + id, text }))]
+  const test = async () => { setBusy('test'); const u = await window.api.voiceTest({ voice, rate, pitch, text: 'Функция «Траектория» включена' }); setBusy(''); if (u) new Audio(u).play(); else say('Не удалось прослушать') }
+  const make = async () => { setBusy('make'); const r = await window.api.voiceMake({ voice, rate, pitch, items: items() }); setBusy(''); if (r?.error) return say(r.error); setReady(true); say('Озвучка готова: ' + r.count + ' фраз — в игре сразу') }
+  const vn = (v: any) => v.name.replace(/^Microsoft\s*/, '') + (v.gender === 'Male' ? ' · мужской' : v.gender === 'Female' ? ' · женский' : '') + (/ru/i.test(v.lang) ? '' : ' · ' + v.lang)
+  return <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>
+    <div className="card rounded-3xl p-5 flex flex-col gap-4"><div><b className="text-lg">Диктор</b><div className="muted text-sm">Голос называет функцию, когда вы её включаете или выключаете, и читает предупреждения: мало здоровья, ломается броня, противник потерял тотем.</div></div>
+      {err && <div className="text-sm" style={{ color: '#ff8a8a' }}>{err}</div>}
+      <div className="flex flex-col gap-2">{voices.map((v) => <button key={v.id} onClick={() => setVoice(v.id)} className="mcard !p-3 flex items-center gap-3 text-left" style={voice === v.id ? { outline: '2px solid var(--a1)' } : undefined}>
+        <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: voice === v.id ? 'linear-gradient(135deg,var(--a1),var(--a2))' : 'var(--chip)', color: voice === v.id ? '#fff' : undefined }}><Icon n="music" s={15} /></span><b className="text-sm">{vn(v)}</b></button>)}</div>
+      <label className="text-sm"><div className="flex justify-between"><span>Скорость</span><b>{rate.toFixed(2)}</b></div><input type="range" className="w-full" min={0.6} max={1.6} step={0.05} value={rate} onChange={(e) => setRate(+e.target.value)} /></label>
+      <label className="text-sm"><div className="flex justify-between"><span>Высота голоса</span><b>{pitch.toFixed(2)}</b></div><input type="range" className="w-full" min={0.5} max={1.5} step={0.05} value={pitch} onChange={(e) => setPitch(+e.target.value)} /></label>
+      <div className="flex gap-2 flex-wrap"><button className="btn" disabled={!voice || !!busy} onClick={test}><Icon n="play" s={14} /> {busy === 'test' ? 'Готовлю…' : 'Прослушать'}</button>
+        <button className="btn-add" disabled={!voice || !!busy} onClick={make}><span className="ic"><Icon n="music" s={13} /></span>{busy === 'make' ? 'Озвучиваю…' : ready ? 'Пересоздать озвучку' : 'Создать озвучку'}</button>
+        {ready && <button className="pill" onClick={async () => { await window.api.voiceClear(); setReady(false); say('Озвучка удалена') }}><Icon n="trash" s={13} />Убрать</button>}</div></div>
+    <div className="card rounded-3xl p-5 flex flex-col gap-2"><b>Что будет звучать</b><div className="muted text-xs mb-1">Включите «Диктор» в функциях визуалов. Громкость и что озвучивать — там же.</div>
+      {[...ALERT_PHRASES.map(([, t]) => t), 'Функция «Трейлы» включена', 'Функция «Прицел» выключена'].map((t) => <div key={t} className="mcard !p-2.5 text-sm flex items-center gap-2"><Icon n="music" s={12} />{t}</div>)}</div></div>
 }
 /** key -> command: pressed in the game, the command is sent (V -> /spawn) */
 function BindsTab({ say }: { say: (s: string) => void }) {

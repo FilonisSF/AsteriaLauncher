@@ -218,5 +218,25 @@
   "sounds": [
    "asteria_visuals:wv_close"
   ]
+ },
+ "wv_tother1": {
+  "sounds": [
+   "asteria_visuals:wv_tother1"
+  ]
+ },
+ "wv_tother2": {
+  "sounds": [
+   "asteria_visuals:wv_tother2"
+  ]
+ },
+ "wv_tother3": {
+  "sounds": [
+   "asteria_visuals:wv_tother3"
+  ]
+ },
+ "wv_tother4": {
+  "sounds": [
+   "asteria_visuals:wv_tother4"
+  ]
  }
 }

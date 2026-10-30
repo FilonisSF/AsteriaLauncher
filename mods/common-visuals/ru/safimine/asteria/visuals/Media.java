@@ -12,13 +12,13 @@ public final class Media {
     private Media() {}
     public static String title = "", artist = "", cover = "";
     public static boolean playing;
-    private static double pos, dur; private static long at, checked, mtime;
+    private static double pos, dur; private static long at, seen, checked, mtime; /* at: base of the smooth clock; seen: when the launcher last wrote */
 
     /** fresh track info, or false when nothing plays / the launcher stopped updating */
     public static boolean active() {
         long now = System.currentTimeMillis();
         if (now - checked > 100) { checked = now; read(); }
-        return playing && !title.isEmpty() && now - at < 8000;
+        return playing && !title.isEmpty() && now - seen < 8000;
     }
     /** playback position in seconds, moving smoothly between file updates */
     public static double pos() { return Math.min(dur, pos + (playing ? (System.currentTimeMillis() - at) / 1000.0 : 0)); }
@@ -35,14 +35,18 @@ public final class Media {
     /** 83 -> "1:23" */
     public static String time(double s) { int t = (int) Math.max(0, s); return (t / 60) + ":" + String.format("%02d", t % 60); }
     /** shown even when paused (the launcher still reports the track) */
-    public static boolean present() { long now = System.currentTimeMillis(); if (now - checked > 100) { checked = now; read(); } return !title.isEmpty() && now - at < 8000; }
+    public static boolean present() { long now = System.currentTimeMillis(); if (now - checked > 100) { checked = now; read(); } return !title.isEmpty() && now - seen < 8000; }
     private static void read() {
         try {
             File f = new File(V.dir(), "asteria-media.json"); if (!f.exists()) { playing = false; title = ""; return; }
             long m = f.lastModified(); if (m == mtime) return; mtime = m;
             JsonObject o = new JsonParser().parse(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8)).getAsJsonObject();
+            String was = title + "|" + artist; boolean wasPlaying = playing; double odur = dur, ran = pos();
             title = V.str(o, "title"); artist = V.str(o, "artist"); playing = V.b(o, "playing", false); cover = V.str(o, "cover");
-            pos = V.d(o, "pos", 0); dur = V.d(o, "dur", 0); at = (long) V.d(o, "at", System.currentTimeMillis());
+            double np = V.d(o, "pos", 0); long nat = (long) V.d(o, "at", System.currentTimeMillis()); dur = V.d(o, "dur", 0); seen = nat;
+            double sampleNow = np + (playing ? (System.currentTimeMillis() - nat) / 1000.0 : 0);
+            if (playing && wasPlaying && was.equals(title + "|" + artist) && odur == dur && Math.abs(sampleNow - ran) < 1.5) { pos = ran + (sampleNow - ran) * 0.08; at = System.currentTimeMillis(); } /* small noise: keep the smooth clock, pulled in by 8 % a sample */
+            else { pos = np; at = nat; }
         } catch (Exception e) { playing = false; }
     }
 }

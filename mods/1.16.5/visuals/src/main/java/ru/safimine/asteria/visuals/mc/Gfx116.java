@@ -79,7 +79,10 @@ public final class Gfx116 implements Gfx {
     @Override public void text(String s, float x, float y, int argb, boolean shadow) { flush();
         if (((argb >>> 24) & 255) < 5) return;
         RenderSystem.enableBlend();
-        Text tx = t(s, px()); float sx = snap(x), sy = snap(y); if (shadow) tr.drawWithShadow(m, tx, sx, sy, argb); else tr.draw(m, tx, sx, sy, argb);
+        Text tx = t(s, px()); float sx = snap(x), sy = snap(y);
+        if (shadow && V.font > 0) { float k = gs() * sc, d = Math.max(1, Math.round(k * 0.4f)) / k; int sh = ((int) (((argb >>> 24) & 255) * 0.7f) << 24) | ((argb & 0xF8F8F8) >> 3); /* own fonts: a crisp shadow exactly 1-2 screen pixels away (the vanilla one, 1 GUI unit at a fractional scale, smears the letters) */
+            tr.draw(m, tx, sx + d, sy + d, sh); shadow = false; }
+        if (shadow) tr.drawWithShadow(m, tx, sx, sy, argb); else tr.draw(m, tx, sx, sy, argb);
     }
     private static Identifier imgId; private static String imgKey;
     /** loads (or reuses) the png as a texture under a fixed id */
