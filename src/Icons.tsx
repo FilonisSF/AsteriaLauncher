@@ -43,4 +43,8 @@ export const FLAGS: Record<string, string> = {
   zh: f('<rect width="30" height="20" fill="#de2910"/><polygon points="5,3 6.2,6.6 10,6.6 7,8.8 8.1,12.4 5,10.2 1.9,12.4 3,8.8 0,6.6 3.8,6.6" fill="#ffde00"/>'),
   ja: f('<rect width="30" height="20" fill="#fff"/><circle cx="15" cy="10" r="6" fill="#bc002d"/>'), ko: f('<rect width="30" height="20" fill="#fff"/><path d="M9 10a6 6 0 0112 0z" fill="#cd2e3a"/><path d="M9 10a6 6 0 0012 0z" fill="#0047a0"/>'),
   nl: f(h(['#ae1c28', '#fff', '#21468b'])), cs: f('<rect width="30" height="10" fill="#fff"/><rect y="10" width="30" height="10" fill="#d7141a"/><polygon points="0,0 15,10 0,20" fill="#11457e"/>'),
+  ar: f('<rect width="30" height="20" fill="#006c35"/><path d="M7 8.5h16M8 11.5h14" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/><path d="M9 14.5h12" stroke="#fff" stroke-width="0.8"/>'),
+  hi: f(h(['#ff9933', '#fff', '#138808']) + '<circle cx="15" cy="10" r="2.4" fill="none" stroke="#000080" stroke-width="0.6"/>'), id: f(h(['#ce1126', '#fff'])),
+  vi: f('<rect width="30" height="20" fill="#da251d"/><polygon points="15,4 16.5,8.6 21.3,8.6 17.4,11.4 18.9,16 15,13.2 11.1,16 12.6,11.4 8.7,8.6 13.5,8.6" fill="#ff0"/>'),
+  th: f('<rect width="30" height="20" fill="#a51931"/><rect y="3.3" width="30" height="13.4" fill="#f4f5f8"/><rect y="6.7" width="30" height="6.6" fill="#2d2a4a"/>'),
 }

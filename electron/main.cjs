@@ -447,7 +447,7 @@ ipcMain.handle('skin:apply', async (_, variant) => { // Microsoft accounts only
     return r.ok ? { ok: true } : { error: 'Mojang отклонил запрос (' + r.status + '). Войдите в аккаунт заново' }
   } catch { return { error: 'Нет связи с Mojang' } }
 })
-const LANGMAP = { ru: 'ru_ru', en: 'en_us', uk: 'uk_ua', pl: 'pl_pl', de: 'de_de', es: 'es_es', fr: 'fr_fr', it: 'it_it', pt: 'pt_br', tr: 'tr_tr', zh: 'zh_cn', ja: 'ja_jp', ko: 'ko_kr', nl: 'nl_nl', cs: 'cs_cz' }
+const LANGMAP = { ru: 'ru_ru', en: 'en_us', uk: 'uk_ua', pl: 'pl_pl', de: 'de_de', es: 'es_es', fr: 'fr_fr', it: 'it_it', pt: 'pt_br', tr: 'tr_tr', zh: 'zh_cn', ja: 'ja_jp', ko: 'ko_kr', nl: 'nl_nl', cs: 'cs_cz', ar: 'ar_sa', hi: 'hi_in', id: 'id_id', vi: 'vi_vn', th: 'th_th' }
 function setOpts(dir, o) { // syncs the in-game language with the launcher language (options.txt)
   try { const f = path.join(dir, 'options.txt'); let t = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : ''
     for (const [k, v] of Object.entries(o)) { const re = new RegExp('^' + k + ':.*$', 'm'); t = re.test(t) ? t.replace(re, k + ':' + v) : (t ? t.replace(/\n?$/, '\n') : '') + k + ':' + v + '\n' }
