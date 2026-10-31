@@ -358,8 +358,11 @@ function AbbrTab() {
     <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>{ABBR.map(([a, n]) => <div key={a} className="flex items-center gap-3 rounded-xl p-2" style={{ background: 'var(--chip)' }}><b className="w-14 text-center rounded-lg py-1" style={{ background: 'linear-gradient(135deg,var(--a1),var(--a2))', color: '#fff' }}>{a}</b><span className="text-sm">{n}</span></div>)}</div></div>
 }
 /** the crosshair as the game draws it (Hud.crosshair), scaled up */
-function CrossPreview({ s, px = 8 }: { s: any; px?: number }) {
-  const st = +s.style, size = +s.size, gap = +s.gap, th = +s.thick, al = +s.alpha, ot = s.outline ? +s.othick : 0, col = s.color || '#fff', W = 30, c = W / 2, o = 'rgba(0,0,0,.85)'
+function CrossPreview({ s, px = 8, live = false }: { s: any; px?: number; live?: boolean }) {
+  // live: plays what the game does — the gap opens after a hit and closes with the cooldown ("dynamic"), the colour turns to "when you can hit"
+  const [t, setT] = useState(0); useEffect(() => { if (!live) return; let r = 0; const f = () => { setT(performance.now() / 1000); r = requestAnimationFrame(f) }; r = requestAnimationFrame(f); return () => cancelAnimationFrame(r) }, [live])
+  const ph = live ? t % 2.4 : 2, cool = Math.min(1, ph / 0.9), reachNow = live && s.reach !== false && ph > 1.2
+  const st = +s.style, size = +s.size, gap = +s.gap + (live && s.dynamic ? (1 - cool) * 4 : 0), th = +s.thick, al = +s.alpha, ot = s.outline ? +s.othick : 0, col = reachNow ? s.reachcolor || '#ff4d6a' : s.color || '#fff', W = 30, c = W / 2, o = 'rgba(0,0,0,.85)'
   const els: JSX.Element[] = []; const R = (x0: number, y0: number, x1: number, y1: number, key: string) => { if (ot) els.push(<rect key={key + 'o'} x={x0 - ot} y={y0 - ot} width={x1 - x0 + 2 * ot} height={y1 - y0 + 2 * ot} fill={o} />); els.push(<rect key={key} x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill={col} />) }
   if (st === 6) { const p = String(s.pattern || ''), n = Math.round(Math.sqrt(p.length)); if (n * n === p.length) for (let i = 0; i < p.length; i++) if (p[i] === '1') R(c - n * th / 2 + (i % n) * th, c - n * th / 2 + Math.floor(i / n) * th, c - n * th / 2 + (i % n + 1) * th, c - n * th / 2 + (Math.floor(i / n) + 1) * th, 'p' + i) }
   if (st === 0 || st === 1 || st === 5) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { if (st === 5 && dy < 0) continue
@@ -369,15 +372,18 @@ function CrossPreview({ s, px = 8 }: { s: any; px?: number }) {
   if (st === 1 || st === 2 || st === 4) { const r = Math.max(0.6, th * 0.75) * (st === 2 ? 1.4 : 1); if (ot) els.push(<circle key="do" cx={c} cy={c} r={r + ot} fill={o} />); els.push(<circle key="d" cx={c} cy={c} r={r} fill={col} />) }
   if (st === 8) els.push(<text key="i" x={c} y={c + 1.5} fontSize={4} textAnchor="middle" fill="#fff">PNG</text>)
   if (st === 7) els.push(<g key="v" opacity={0.9}><rect x={c - 4.5} y={c - 0.5} width={9} height={1} fill="#fff" /><rect x={c - 0.5} y={c - 4.5} width={1} height={9} fill="#fff" /></g>)
-  return <svg width={W * px} height={W * px} viewBox={`0 0 ${W} ${W}`} style={{ opacity: al, shapeRendering: 'crispEdges' }}>{els}</svg>
+  const round = st === 3 || st === 4 || st === 1 || st === 2
+  return <svg width={W * px} height={W * px} viewBox={`0 0 ${W} ${W}`} style={{ opacity: al, shapeRendering: round ? 'geometricPrecision' : 'crispEdges', transition: live ? undefined : 'opacity .15s' }}>
+    <g transform={`rotate(${+s.rotate || 0} ${c} ${c})`}>{els}</g></svg>
 }
 function CrosshairTab({ m, on, set, say }: { m: ModCfg; on: (v: boolean) => void; set: (k: string, v: any) => void; say: (s: string, k?: any) => void }) {
   const [xh, setXh] = useState<string | null>(null); useEffect(() => { window.api.xhGet?.().then(setXh) }, [])
   const sch = MODS.find((x) => x.id === 'crosshair')!, s = m.s, [bg, setBg] = useState(0), BGS = ['linear-gradient(160deg,#5b8c32,#2d4a1a)', 'linear-gradient(160deg,#87c6ff,#cfe9ff)', 'linear-gradient(160deg,#1b1b24,#050508)']
   return <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)' }}>
     <div className="card rounded-3xl p-5 flex flex-col gap-4">
-      <div className="flex items-center justify-between"><b className="text-lg">Прицел</b><Switch on={m.on} set={on} label="Свой прицел" /></div>
-      <div className="rounded-2xl flex items-center justify-center" style={{ height: 300, background: BGS[bg] }}><CrossPreview s={s} px={9} /></div>
+      <div className="flex items-center justify-between gap-4"><b className="text-lg">Прицел</b><div className="flex items-center gap-2"><span className="muted text-sm">{m.on ? 'Свой прицел включён' : 'Свой прицел выключен'}</span><Switch on={m.on} set={on} /></div></div>
+      <div className="rounded-2xl flex items-center justify-center relative" style={{ height: 300, background: BGS[bg] }}><CrossPreview s={s} px={9} live />
+        <span className="absolute left-3 bottom-2 text-[11px] text-white/70">Как в игре: {s.dynamic ? 'расширяется после удара, ' : ''}{s.reach !== false ? 'цвет меняется, когда можно ударить' : 'обычный цвет'}</span></div>
       <div className="flex gap-1.5 items-center"><span className="muted text-xs mr-1">Фон:</span>{['Трава', 'Небо', 'Ночь'].map((l, i) => <button key={l} className={'pill !py-0.5 ' + (bg === i ? 'on' : '')} onClick={() => setBg(i)}>{l}</button>)}
         <div className="flex-1" /><button className="pill" title="Цвет как у прицела Minecraft — серый и полупрозрачный — для любой формы прицела" onClick={() => { for (const [k, v] of [['color', '#d4d4d4'], ['alpha', 0.62], ['outline', false]] as [string, any][]) set(k, v) }}>Как в Minecraft</button>
         <button className="pill" onClick={async () => { const r = await window.api.shareMake('crosshair', s); r?.id ? say(r.long ? 'Код прицела скопирован — отправьте его другу целиком' : 'Код ' + r.id + ' скопирован — отправьте его другу') : say(r?.error || 'Не удалось', 'err') }}><Icon n="share" s={13} />Поделиться прицелом</button></div>
