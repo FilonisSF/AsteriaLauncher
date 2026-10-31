@@ -12,7 +12,7 @@ import java.util.List;
  */
 public final class Gui {
     private Gui() {}
-    static final float W = 440, H = 276, SIDE = 116;
+    static final float W = 440, H = 300, SIDE = 116;
     private static String cat = "hud", search = ""; private static boolean searchFocus;
     private static float scroll, scrollTarget, openT; private static long openedAt;
     private static String expanded = null; private static V.Mod listening = null; private static V.S textEdit = null;
@@ -40,7 +40,7 @@ public final class Gui {
         float a = D.ease(openT);
         D.rect(0, 0, screenW, screenH, D.alpha(0x02060A, (int) (150 * a)));
         // a scale that is a whole number of half screen pixels: the text stays as sharp as in the HUD (no zoom animation for the same reason)
-        { float k = g.pxScale() * 2, fit = Math.min(1.2f * V.menuScale, Math.min((screenW - 24) / W, (screenH - 24) / H)); sw = Math.max(1, (float) Math.floor(fit * k)) / k; } // bigger on big screens: letters as readable as in Lunar
+        { float k = g.pxScale() * 2, fit = Math.min(1.5f * V.menuScale, Math.min((screenW - 24) / W, (screenH - 24) / H)); sw = Math.max(1, (float) Math.floor(fit * k)) / k; } // bigger on big screens: letters as readable as in Lunar
         ox = (screenW - W * sw) / 2; oy = (screenH - H * sw) / 2 + (1 - a) * 12;
         float lmx = (mx - ox) / sw, lmy = (my - oy) / sw;
         g.push(ox, oy, sw);
@@ -247,9 +247,6 @@ public final class Gui {
         y = themeSlider("Прозрачность панелей", V.bg, 0.15f, 0.95f, Math.round(V.bg * 100) + "%", x0, y, x1, mx, 0);
         y = themeSlider("Размер HUD", V.scale, 0.5f, 2f, Math.round(V.scale * 100) + "%", x0, y, x1, mx, 1);
         y = themeSlider("Размер меню Asteria", V.menuScale, 0.6f, 1.4f, Math.round(V.menuScale * 100) + "%", x0, y, x1, mx, 2);
-        y += 6;
-        D.panel(x0, y, x1, y + 36, 6); D.mark(x0 + 4, y + 8, 20);
-        D.gradText("Так выглядят панели HUD", x0 + 28, y + 9, true); D.textS("Настройки тем сохраняются сразу и видны в лаунчере", x0 + 28, y + 21, 0.75f, 0xFF9FB3C0);
     }
     // ------------------------------------------------------------------ configs (made in the launcher)
     private static void configs(Gfx g, float mx, float my) {
@@ -284,7 +281,7 @@ public final class Gui {
         D.g.text("Стиль панелей", x0, y + 3, 0xFFB9CBD4, false);
         float cw = (x1 - x0) / STYLES.length; // all styles in one row under the title
         for (int i = 0; i < STYLES.length; i++) { String o = STYLES[i]; float px = x0 + i * cw; boolean on = V.hudStyle == i; final int idx = i; float ts = Math.min(0.8f, (cw - 8) / Math.max(1, D.w(o)));
-            D.round(px, y + 15, px + cw - 2, y + 29, 4, on ? V.a1() : 0x18FFFFFF, on ? V.a2() : 0x18FFFFFF); D.textS(o, px + (cw - 2 - D.w(o) * ts) / 2, y + 22 - 4 * ts, ts, on ? 0xFFFFFFFF : 0xFFB9CBD4);
+            D.round(px, y + 15, px + cw - 2, y + 29, 4, on ? V.a1() : 0x18FFFFFF, on ? V.a2() : 0x18FFFFFF); D.textS(o, px + (cw - 2 - D.w(o) * ts) / 2, y + 22 - 4 * ts, ts, on ? 0xFF06121C : 0xFFB9CBD4);
             hit(px, y + 15, px + cw - 2, y + 29, "style", () -> { V.hudStyle = idx; V.changed(); }); }
         return y + 34;
     }

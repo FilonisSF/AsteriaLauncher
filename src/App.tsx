@@ -455,7 +455,6 @@ export default function App() {
                   <div className="flex gap-3 items-center flex-wrap">
                     <button className={'playbtn ' + (running ? 'stop' : '')} disabled={dling} onClick={mainBtn}><Icon n={running ? 'close' : needDl ? 'download' : 'play'} s={20} fill={!running && !needDl} />{mainLabel}</button>
                     <Dropdown value={ver} set={setVer} options={verOpts} w={260} className="!bg-white/15 !border-white/20 !text-white !h-[50px] !rounded-2xl backdrop-blur" />
-                    <button className="btn !bg-white/15 !text-white !border-white/20 !h-[50px] !rounded-2xl backdrop-blur flex items-center gap-2" onClick={() => { setVer(rec); play(rec, true) }}><Icon n="servers" s={16} />{t('join')}</button>
                   </div></div>
                 <div className="herocards">{conf.news.slice(0, 2).map((n: any) => <button key={n.id} className="hcard" onClick={() => setNews(n.id)}><NewsImg v={n.image} cls="w-11 h-11 rounded-xl object-cover shrink-0" />
                   <span className="min-w-0 flex-1 text-left"><b className="block text-[13px] truncate" style={{ color: 'var(--a2)' }}>{tx(n.title)}</b><span className="block text-[11px] text-white/70 truncate">{tx(n.text)}</span></span><Icon n="right" s={14} /></button>)}</div></div>

@@ -137,20 +137,23 @@ public final class Menu {
     /** top = bottom of the lowest button of the pause menu: the card goes right under all buttons (new ones included); no room -> top right corner */
     public static void pauseMusic(Gfx g, int W, int H, float mx, float my, boolean down, float top) {
         D.g = g; PB.clear(); PBC.clear(); if (!Media.present()) { wasDown = down; return; }
-        float w = 204, h = 74, x = W - w - 8, y = 8; if (top > 0 && top + 10 + h < H - 4) { x = (W - w) / 2; y = top + 10; }
-        D.panel(x, y, x + w, y + h, 8);
-        java.io.File cv = Media.coverFile(); if (cv == null || !g.image(Media.cover, cv, x + 6, y + 6, 36, 36)) { D.round(x + 6, y + 6, x + 42, y + 42, 7, V.a1(), V.a2()); D.icon("music", x + 16, y + 16, 16, 0xFFFFFFFF); }
-        String t = Media.title; while (D.w(t) > w - 56 && t.length() > 3) t = t.substring(0, t.length() - 2); if (!t.equals(Media.title)) t += "…";
-        g.text(t, x + 48, y + 8, 0xFFFFFFFF, true); D.textS(Media.artist.isEmpty() ? (Media.active() ? "Играет" : "Пауза") : Media.artist, x + 48, y + 20, 0.8f, 0xFFDCE6EE);
+        float w = 220, h = 80, x = W - w - 8, y = 8; if (top > 0 && top + 10 + h < H - 4) { x = (W - w) / 2; y = top + 10; }
+        D.panel(x, y, x + w, y + h, 10);
+        java.io.File cv = Media.coverFile(); if (cv == null || !g.image(Media.cover, cv, x + 8, y + 8, 38, 38)) { D.round(x + 8, y + 8, x + 46, y + 46, 8, V.a1(), V.a2()); D.icon("music", x + 19, y + 19, 16, 0xFFFFFFFF); }
+        String t = Media.title; while (D.w(t) > w - 62 && t.length() > 3) t = t.substring(0, t.length() - 2); if (!t.equals(Media.title)) t += "…";
+        g.text(t, x + 54, y + 10, 0xFFFFFFFF, true); D.textS(Media.artist.isEmpty() ? (Media.active() ? "Играет" : "Пауза") : Media.artist, x + 54, y + 22, 0.8f, 0xFFDCE6EE);
         double d = Media.dur(), p = Media.pos(); float f = d > 0 ? (float) Math.min(1, p / d) : 0;
-        Hud.timeBar(x + 48, y + 33, x + w - 8, d > 0 || p > 0 ? Media.time(p) : "", d > 0 ? Media.time(d) : "", f);
-        String[][] b = {{"prev", "prev"}, {Media.active() ? "pause" : "play", "toggle"}, {"next", "next"}, {"vol-", "voldown"}, {"mute", "mute"}, {"vol+", "volup"}};
-        float bx = x + 8, by = y + 50, bw = (w - 16) / b.length;
-        for (String[] k : b) { boolean hov = mx >= bx && mx < bx + bw - 3 && my >= by && my < by + 18;
-            D.round(bx, by, bx + bw - 3, by + 18, 6, hov ? D.a(V.a1(), 0.5f) : 0x22FFFFFF, hov ? D.a(V.a2(), 0.5f) : 0x22FFFFFF);
-            if (k[0].startsWith("vol")) { String s = k[0].equals("vol+") ? "+" : "−"; g.text(s, bx + (bw - 3 - D.w(s)) / 2, by + 5, 0xFFFFFFFF, false); }
-            else D.icon(k[0].equals("mute") ? "volume" : k[0], bx + (bw - 3 - 10) / 2, by + 4, 10, 0xFFFFFFFF);
-            PB.add(new float[]{bx, by, bx + bw - 3, by + 18}); PBC.add(k[1]); bx += bw; }
+        Hud.timeBar(x + 54, y + 34, x + w - 10, d > 0 || p > 0 ? Media.time(p) : "", d > 0 ? Media.time(d) : "", f);
+        // controls like the launcher player: quiet icons around a round gradient play button, a soft circle only under the one you point at
+        String[][] b = {{"vol-", "voldown"}, {"prev", "prev"}, {Media.active() ? "pause" : "play", "toggle"}, {"next", "next"}, {"vol+", "volup"}};
+        float cy = y + 63, cx0 = x + w / 2, step = 30;
+        for (int i = 0; i < b.length; i++) { String[] k = b[i]; boolean play = i == 2; float cx = cx0 + (i - 2) * step + (i < 2 ? -6 : i > 2 ? 6 : 0), r = play ? 11 : 9;
+            boolean hov = (mx - cx) * (mx - cx) + (my - cy) * (my - cy) <= r * r;
+            if (play) { D.circle(cx, cy, r + (hov ? 0.8f : 0), V.a1()); D.circle(cx, cy, r - 0.6f + (hov ? 0.8f : 0), D.mix(V.a1(), V.a2(), 0.6f)); D.icon(k[0], cx - 5, cy - 5, 10, 0xFFFFFFFF); }
+            else { if (hov) D.circle(cx, cy, r, D.a(V.a2(), 0.25f));
+                if (k[0].startsWith("vol")) { D.icon("volume", cx - 6, cy - 4.5f, 9, 0xFFDCE6EE); String sgn = k[0].equals("vol+") ? "+" : "−"; D.textS(sgn, cx + 3, cy - 4, 0.8f, 0xFFFFFFFF); }
+                else D.icon(k[0], cx - 5, cy - 5, 10, 0xFFFFFFFF); }
+            PB.add(new float[]{cx - r, cy - r, cx + r, cy + r}); PBC.add(k[1]); }
         if (down && !wasDown) for (int i = 0; i < PB.size(); i++) { float[] r = PB.get(i); if (mx >= r[0] && mx < r[2] && my >= r[1] && my < r[3]) { Media.cmd(PBC.get(i)); break; } }
         wasDown = down;
     }
@@ -169,6 +172,10 @@ public final class Menu {
             if (Fx.DEBUG && System.currentTimeMillis() - dbgBg > 4000) { dbgBg = System.currentTimeMillis(); System.out.println("[Asteria debug] bg title=" + onTitle + " file=" + f + " size=" + java.util.Arrays.toString(sz)); }
             if (sz != null && sz[0] > 0 && sz[1] > 0) { float s = Math.max(w / (float) sz[0], h / (float) sz[1]), bw = sz[0] * s, bh = sz[1] * s;
                 if (g.image((f == blur ? "bgb:" : "bg:") + f.lastModified(), f, (w - bw) / 2, (h - bh) / 2, bw, bh)) { D.vgrad(0, 0, w, h, D.alpha(0x02070A, onTitle ? 30 : 90), D.alpha(0x02070A, onTitle ? 90 : 150)); return; } } }
+        // every other menu (servers, settings, a lost connection): the SafiMine art, blurred and a little darkened — never a black screen
+        if (!onTitle) { float s = Math.max(w / 640f, h / 360f), bw = 640 * s, bh = 360 * s;
+            g.texture("textures/gui/menu_bg_blur.png", 640, 360, (w - bw) / 2, (h - bh) / 2, bw, bh);
+            D.vgrad(0, 0, w, h, D.alpha(0x02070A, 80), D.alpha(0x02070A, 150)); return; }
         if (V.menuBg == 1) { float s = Math.max(w / 1280f, h / 720f), bw = 1280 * s, bh = 720 * s;
             g.texture("textures/gui/menu_bg.png", 1280, 720, (w - bw) / 2, (h - bh) / 2, bw, bh);
             D.vgrad(0, 0, w, h, D.alpha(0x02070A, 70), D.alpha(0x02070A, 140)); return; }

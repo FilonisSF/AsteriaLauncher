@@ -82,6 +82,8 @@ public final class Gfx121 implements Gfx {
         if (shadow && V.font > 0) { float k = gs() * sc, d = Math.max(1, Math.round(k * 0.4f)) / k; int sh = ((int) (((argb >>> 24) & 255) * 0.7f) << 24) | ((argb & 0xF8F8F8) >> 3); /* own fonts: a crisp shadow exactly 1-2 screen pixels away (the vanilla one, 1 GUI unit at a fractional scale, smears the letters) */
             m.push(); m.translate(d, d, 0); ctx.drawText(tr, tx, 0, 0, sh, false); m.pop(); shadow = false; }
         ctx.drawText(tr, tx, 0, 0, argb, shadow);
+        // own fonts are drawn one screen pixel wide and looked thin: a second pass one screen pixel to the right gives them weight
+        if (V.font > 0) { float b = 1f / Math.max(1f, gs() * sc); m.push(); m.translate(b, 0, 0); ctx.drawText(tr, tx, 0, 0, argb, false); m.pop(); }
         m.pop();
     }
     private static Identifier imgId; private static String imgKey;

@@ -395,3 +395,8 @@ button.pill:hover{background:color-mix(in srgb,var(--a2) 14%,var(--pill-bg));col
 .mp-play:hover{transform:scale(1.07)}.mp-play:active{transform:scale(.94)}
 .spin-soft{animation:mpBreath 3.5s ease-in-out infinite}@keyframes mpBreath{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
 .mp-bar>div{transition:width .25s linear}
+/* the player's buttons: the hover fill fits the button (icon + sign), the round play button keeps its glow inside the card */
+.mp2 .mp-btn{width:auto;min-width:28px;height:28px;padding:0 6px;gap:1px}
+.mp2{padding-bottom:12px}
+.mp-play{box-shadow:0 3px 10px color-mix(in srgb,var(--a2) 35%,transparent);background-clip:padding-box;border:0;outline:none}
+.mp-play:focus-visible{outline:2px solid var(--a2);outline-offset:2px}

@@ -74,8 +74,8 @@ public final class D {
     static void glass(float x1, float y1, float x2, float y2, float r) {
         r = Math.max(r, Math.min(9, (y2 - y1) / 2));
         if (V.shadow) for (int i = 4; i >= 1; i--) round(x1 - i * 0.4f, y1 + i * 0.7f, x2 + i * 0.4f, y2 + i * 1.1f, r + i, alpha(0x000000, 14 / i));
-        round(x1, y1, x2, y2, r, alpha(0x0B1320, (int) (38 + 60 * V.bg)), alpha(0x0B1320, (int) (52 + 70 * V.bg)));       // a light veil: text stays readable on any background
-        round(x1, y1, x2, y2, r, alpha(0xFFFFFF, 30), alpha(0xFFFFFF, 10));                                              // clear glass body
+        round(x1, y1, x2, y2, r, alpha(0x081019, (int) (120 + 95 * V.bg)), alpha(0x081019, (int) (135 + 100 * V.bg)));   // smoked glass: white text stays readable even on a bright sky
+        round(x1, y1, x2, y2, r, alpha(0xFFFFFF, 12), alpha(0xFFFFFF, 4));                                               // clear glass body
         round(x1 + 1.2f, y1 + 1.2f, x2 - 1.2f, y1 + Math.min((y2 - y1) * 0.5f, 14), Math.max(0, r - 1.2f), alpha(0xFFFFFF, 22), alpha(0xFFFFFF, 0)); // top light
         rim(x1, y1, x2, y2, r, 0.9f, 190, 45);                                                                          // specular rim
         rim(x1 + 1.1f, y1 + 1.1f, x2 - 1.1f, y2 - 1.1f, Math.max(0, r - 1.1f), 0.8f, 40, 12);                           // inner refraction line

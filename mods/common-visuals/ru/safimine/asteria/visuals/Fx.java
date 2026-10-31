@@ -245,11 +245,12 @@ public final class Fx {
         long now = System.currentTimeMillis(); java.util.Random rn = new java.util.Random(seed / 3000);
         if (v > 0.06) { double nx = vx / v, nz = vz / v, side = (seed & 1) == 0 ? 1 : -1; // behind and a bit aside: out of the way in a fight
             f.spot = new double[]{o[0] - nx * 2.1 - nz * 0.8 * side, o[2] - nz * 2.1 + nx * 0.8 * side}; f.wanderAt = now + 1500; }
-        else if (f.spot == null || now > f.wanderAt) { double a = rn.nextDouble() * Math.PI * 2, d = 1.3 + rn.nextDouble() * 1.1; f.spot = new double[]{o[0] + Math.cos(a) * d, o[2] + Math.sin(a) * d}; f.wanderAt = now + 2500 + rn.nextInt(3500); }
+        else if (f.spot == null || now > f.wanderAt) { double a = rn.nextDouble() * Math.PI * 2, d = 1.3 + rn.nextDouble() * 1.1; f.spot = new double[]{o[0] + Math.cos(a) * d, o[2] + Math.sin(a) * d}; f.wanderAt = now + 4500 + rn.nextInt(5000); } // a calm stroll now and then
         double dx = f.spot[0] - f.pos[0], dz = f.spot[1] - f.pos[2], d = Math.sqrt(dx * dx + dz * dz), far = Math.sqrt(Math.pow(o[0] - f.pos[0], 2) + Math.pow(o[2] - f.pos[2], 2));
         // smooth: the speed changes gradually (no jerks), walking pace when wandering, a bit faster than the owner when catching up
-        double max = Math.max(0.07, Math.min(0.42, v * 1.05 + (far > 4 ? 0.1 : 0) + (far > 8 ? 0.15 : 0))), want = d < 0.15 ? 0 : Math.min(max, d * 0.11);
-        f.vx += ((d > 0 ? dx / d * want : 0) - f.vx) * 0.2; f.vz += ((d > 0 ? dz / d * want : 0) - f.vz) * 0.2;
+        // following: a little faster than the owner; standing owner: a slow walking pace (it dashed around at the catch-up speed before), and only a far pet hurries back
+        double max = v > 0.06 ? Math.max(0.07, Math.min(0.42, v * 1.05 + (far > 4 ? 0.1 : 0) + (far > 8 ? 0.15 : 0))) : far > 5 ? 0.14 : 0.04, want = d < 0.15 ? 0 : Math.min(max, d * 0.08);
+        f.vx += ((d > 0 ? dx / d * want : 0) - f.vx) * 0.12; f.vz += ((d > 0 ? dz / d * want : 0) - f.vz) * 0.12;
         f.pos[0] += f.vx; f.pos[2] += f.vz; double step = Math.sqrt(f.vx * f.vx + f.vz * f.vz);
         if (step > 0.015) { double wantY = Math.toDegrees(Math.atan2(-f.vx, f.vz)), dd = ((wantY - f.yaw) % 360 + 540) % 360 - 180; f.yaw += dd * 0.18; }
         else { double wantY = Math.toDegrees(Math.atan2(-(o[0] - f.pos[0]), o[2] - f.pos[2])), dd = ((wantY - f.yaw) % 360 + 540) % 360 - 180; f.yaw += dd * 0.06; } // standing: looks at you
@@ -341,7 +342,7 @@ public final class Fx {
         if (!on || screenOpen && V.bool("tapemouse", "menus")) { if (tapeWas) { g.autoMouse(tapeHeld < 0 ? btn : tapeHeld, 0, false); tapeWas = false; tapeHeld = -1; } return; }
         if (tapeHeld >= 0 && tapeHeld != btn) { g.autoMouse(tapeHeld, 0, false); tapeHeld = -1; } // the button was changed while holding
         tapeWas = true;
-        if (mode == 2) { g.autoMouse(btn, 1, false); tapeHeld = btn; return; }
+        if (mode == 2 || mode == 0 && btn == 1) { g.autoMouse(btn, 1, false); tapeHeld = btn; return; } // the right button is held: eating, drinking, a shield or a bow need the press to last
         if (tapeHeld >= 0) { g.autoMouse(tapeHeld, 0, false); tapeHeld = -1; }
         if (mode == 0 && btn == 0) { if (g.cooldown() >= 0.98f && ++tapeTick > 1) { tapeTick = 0; g.autoMouse(0, -1, true); } return; }
         if (++tapeTick >= Math.max(1, (int) V.num("tapemouse", "interval"))) { tapeTick = 0; g.autoMouse(btn, -1, true); }
@@ -357,8 +358,10 @@ public final class Fx {
             else { if (V.on("killeffect") && targetPos != null && now0 - targetAt < 5000) kill(targetPos, targetH, now0);
                 if (V.on("sounds") && V.mode("sounds", "kill") > 0 && now0 - targetAt < 5000) sound(KILL_SOUNDS[V.mode("sounds", "kill") - 1], (float) V.num("sounds", "volume"));
                 if (V.on("killmsg") && now0 - targetAt < 5000 && now0 - killMsgAt > 3000 && g.isPlayer(target)) { killMsgAt = now0;
-                    String nick = g.playerName(target), txt = V.text("killmsg", "text").replace("{name}", nick).trim(); int adr = V.mode("killmsg", "address");
-                    if (adr == 1 && !txt.contains(nick)) txt = nick + ", " + txt; else if (adr == 2 && !txt.contains(nick)) txt = txt + ", " + nick;
+                    // only a real player: server NPCs are fake players whose names carry colour codes, and a "§" in chat gets you kicked ("Недопустимые символы")
+                    String nick = g.playerName(target); if (nick == null || !nick.matches("\\w{3,16}")) nick = null;
+                    String txt = nick == null ? "" : V.text("killmsg", "text").replace("{name}", nick).replaceAll("[\\u00A7\\p{Cntrl}]", "").trim(); int adr = V.mode("killmsg", "address");
+                    if (nick != null && !txt.isEmpty()) { if (adr == 1 && !txt.contains(nick)) txt = nick + ", " + txt; else if (adr == 2 && !txt.contains(nick)) txt = txt + ", " + nick; }
                     if (!txt.isEmpty()) { if (V.mode("killmsg", "chat") == 1 && !txt.startsWith("!")) txt = "!" + txt; final String m = txt; try { g.chat(m); } catch (Throwable ignored) {} } }
                 target = null; }
         }
