@@ -119,6 +119,18 @@ public final class Hud {
                 D.round(x, y, x + 18, y + 18, 3.5f, sel ? D.a(V.a1(), 0.55f) : 0x2AFFFFFF, sel ? D.a(V.a2(), 0.55f) : 0x2AFFFFFF); slot(game, inv[c], x + 1, y + 1, 16); } }
     }
     private static Object lastTotem;
+    /** "Свой хотбар и инвентарь" also styles the inventory screen (its "screen" setting) */
+    public static boolean styledInventory() { return V.on("hotbar") && V.bool("hotbar", "screen"); }
+    /** the inventory screen: one Asteria panel over the vanilla picture, a soft tile under every slot, a dark stage for the player */
+    public static void inventoryScreen(Gfx g, int x, int y, int w, int h, java.util.List<int[]> slots) {
+        D.g = g; D.frame();
+        D.panel(x, y, x + w, y + h, 10, false);
+        D.round(x + 25, y + 7, x + 76, y + 79, 8, D.alpha(0x05080D, 170)); // the player's stage
+        D.round(x + 25, y + 7, x + 76, y + 79, 8, D.a(V.a1(), 0.10f), D.a(V.a2(), 0.04f));
+        for (int[] sl : slots) { float sx = x + sl[0] - 1, sy = y + sl[1] - 1; D.round(sx, sy, sx + 18, sy + 18, 4, 0x2EFFFFFF); D.round(sx + 0.5f, sy + 0.5f, sx + 17.5f, sy + 17.5f, 3.5f, D.alpha(0x070B12, 150)); }
+        D.icon("chevR", x + 136, y + 29, 12, D.a(V.a2(), 0.9f)); // crafting arrow
+        D.g.text("Крафт", x + 97, y + 6, 0xFFB9CBD4, false);
+    }
     private static int totemCount(Game game, Object[] inv) { int n = 0; for (Object st : inv) if (st != null && game.itemId(st).endsWith("totem_of_undying")) n += game.count(st); Object off = game.offhand(); if (off != null && game.itemId(off).endsWith("totem_of_undying")) n += game.count(off); return n; }
     private static void totems(Game game, Object[] inv) {
         int n = 0; Object one = null;

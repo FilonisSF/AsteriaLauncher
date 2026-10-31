@@ -1,0 +1,18 @@
+{
+ "providers": [
+  {
+   "type": "ttf",
+   "file": "asteria_visuals:oswald.ttf",
+   "shift": [
+    0,
+    1
+   ],
+   "size": 9,
+   "oversample": 1
+  },
+  {
+   "type": "reference",
+   "id": "minecraft:default"
+  }
+ ]
+}

@@ -17,6 +17,7 @@ import { Worlds } from './Worlds'
 import { LookPreview } from './LookPreview'
 import { BackupCard, UninstallCard } from './Backup'
 import { LegalCard } from './Legal'
+import { askConfirm } from './confirm'
 /** first start: the language of Windows if the launcher has it (Russian for ru/be/kk), otherwise English */
 const deviceLang = () => { try { const l = (navigator.languages?.[0] || navigator.language || 'ru').slice(0, 2).toLowerCase(); if (['ru', 'be', 'kk'].includes(l)) return 'ru'; return LANGS.some(([k]) => k === l) ? l : 'en' } catch { return 'ru' } }
 import { EventsBlock } from './Clans'
@@ -41,7 +42,10 @@ const CAPES = glob(cos, 'cape-'), SKINS = glob(cos, 'skin-'), POSTERS = Object.f
 const NAV: [string, string][] = [['home', 'home'], ['versions', 'versions'], ['mods', 'mods'], ['visuals', 'sparkles'], ['skins', 'skins'], ['worlds', 'cube'], ['profile', 'user'], ['servers', 'servers'], ['screenshots', 'image'], ['settings', 'settings']]
 const SHORT: Record<string, string> = { home: 'Главная', versions: 'Версии', mods: 'Моды', visuals: 'Визуалы', skins: 'Скины', worlds: 'Миры', profile: 'Профиль', servers: 'Серверы', screenshots: 'Скрины', settings: 'Настройки' }
 const ACCENTS: Record<string, [string, string]> = { aqua: ['#0ea5e9', '#22d3ee'], blue: ['#2563eb', '#60a5fa'], violet: ['#7c3aed', '#c084fc'], pink: ['#db2777', '#f9a8d4'], rose: ['#e11d48', '#fb7185'],
-  red: ['#dc2626', '#f87171'], orange: ['#ea580c', '#fdba74'], amber: ['#d97706', '#fcd34d'], lime: ['#65a30d', '#bef264'], emerald: ['#059669', '#34d399'], teal: ['#0d9488', '#5eead4'], slate: ['#475569', '#cbd5e1'] }
+  red: ['#dc2626', '#f87171'], orange: ['#ea580c', '#fdba74'], amber: ['#d97706', '#fcd34d'], lime: ['#65a30d', '#bef264'], emerald: ['#059669', '#34d399'], teal: ['#0d9488', '#5eead4'], slate: ['#475569', '#cbd5e1'],
+  // two-colour gradients
+  aurora: ['#10b981', '#a78bfa'], sunset: ['#f97316', '#ec4899'], ocean: ['#0369a1', '#2dd4bf'], galaxy: ['#4f46e5', '#e879f9'], gold: ['#b45309', '#fde68a'], ice: ['#38bdf8', '#e0f2fe'],
+  cherry: ['#be123c', '#fda4af'], lavender: ['#8b5cf6', '#f5d0fe'], toxic: ['#65a30d', '#facc15'], fire: ['#dc2626', '#fbbf24'], neon: ['#ff3cac', '#2b86c5'], mint: ['#14b8a6', '#bbf7d0'] }
 const CATS = ['optimization', 'utility', 'decoration', 'adventure', 'worldgen', 'technology', 'library']
 const usePref = (k: string, d: string): [string, (v: string) => void] => { const [v, s] = useState(() => { try { return localStorage.getItem(k) ?? d } catch { return d } }); return [v, (x) => { try { localStorage.setItem(k, x) } catch {} s(x) }] }
 let ART: Record<string, string> = {} // official Mojang art by version, filled at start
@@ -257,7 +261,7 @@ export default function App() {
   const PARTNERS = [{ name: 'GrumWorld', ip: 'mc.GrumWorld.space', port: 25565, partner: true, imageLocal: grumImg, iconLocal: grumIcon, tag: 'Гриф · 1.16–26.2', verLabel: '1.16–26.2', // verLabel: what the server accepts; the game starts on the recommended version
     desc: 'Новый уровень грифа: честный геймплей, своя валюта Грумы, кланы, войны и альянсы. Умный игрок здесь сильнее богатого. Сайт: GrumWorld.space · бот: @grumworld_bot',
     links: [['Сайт GrumWorld.space', 'https://grumworld.space', 'globe'], ['Бот в Telegram — @grumworld_bot', 'https://t.me/grumworld_bot', 'telegram']] }]
-  const servers: any[] = useMemo(() => [{ name: conf.server.name, ip: conf.server.ip, port: conf.server.port || 25565, version: rec, desc: about, image: '', main: true }, ...PARTNERS,
+  const servers: any[] = useMemo(() => [{ name: conf.server.name, ip: conf.server.ip, port: conf.server.port || 25565, version: rec, verLabel: '1.16.5–1.21.x', desc: about, image: '', main: true }, ...PARTNERS,
     ...(conf.servers || []).filter((s: any) => s.ip && s.ip !== conf.server.ip), ...mySrv.map((s) => ({ ...s, mine: true }))].filter((s, i, a) => a.findIndex((x) => x.ip.toLowerCase() === s.ip.toLowerCase()) === i), [conf, about, mySrv])
   useEffect(() => { const a = accent === 'custom' ? [custom, custom] : ACCENTS[accent] ?? ACCENTS.aqua; const r = document.documentElement; r.style.setProperty('--a1', a[0]); r.style.setProperty('--a2', a[1]); r.dataset.theme = theme }, [accent, theme, custom])
   const refresh = () => api.accounts().then(setAcc)
@@ -287,6 +291,9 @@ export default function App() {
     try { setCapeS(localStorage.getItem('cape:' + acc.active) ?? '') } catch {}
     setSkin((await api.skinCurrent?.().catch(() => null)) || ''); setMiniSkin((await api.miniGet?.().catch(() => null)) || null) })() }, [acc.active])
   const refreshVst = () => api.verStatus?.(ver).then(setVst).catch(() => {})
+  const [lOnline, setLOnline] = useState<number | null>(null)
+  useEffect(() => { const f = () => api.launcherOnline?.().then((n: number | null) => setLOnline(n)); f(); const id = setInterval(f, 60000); return () => clearInterval(id) }, [])
+  const [altFor, setAltFor] = useState<{ id: string; name: string; ver: string; join: boolean } | null>(null)
   const [alts, setAlts] = useState<string[]>([]); useEffect(() => { api.alts?.().then((l: string[]) => setAlts(l || [])); return api.onAlts?.((l: string[]) => setAlts(l || [])) }, [])
   const [invite, setInvite] = useState<any>(null)
   const [shotAsk, setShotAsk] = useState(false), [worldsView, setWorldsView] = useState('mine')
@@ -383,6 +390,7 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col relative">
+      <div className="app-art" style={{ backgroundImage: `url(${hero})` }} />{/* the SafiMine art, heavily blurred, behind every page: the glass panels always have something to blur */}
       <div className="aurora"><i /><i /><i /></div><div className="grain" />
       {invite && <div className="fixed right-5 bottom-5 z-[95] card rounded-3xl p-4 w-[340px] shadow-2xl" style={{ borderColor: 'var(--a1)' }}>
         <div className="flex items-center gap-3"><span className="cmd-ic !w-11 !h-11 shrink-0" style={{ color: '#4ade80' }}><Icon n="user" s={20} /></span>
@@ -393,7 +401,7 @@ export default function App() {
       {menu && <div className="fixed inset-0 z-20" onClick={() => setMenu('')} />}
       {/* ---------- title bar */}
       <div className="drag h-12 flex items-center justify-between px-4 relative z-30 gap-3">
-        <span className="w-[180px] muted text-xs font-semibold tracking-wide hidden xl:block">{conf.server.name} · {st.online ? st.players + ' онлайн' : t('maint')}</span>
+        <span className="min-w-[180px] whitespace-nowrap muted text-xs font-semibold tracking-wide hidden xl:block">{conf.server.name} · {st.online ? st.players + ' онлайн' : t('maint')}{lOnline != null && lOnline > 0 && <> · <span style={{ color: 'var(--a2)' }}>{lOnline} с лаунчером</span></>}</span>
         <SearchBar open={() => setPal(true)} />
         <div className="nodrag flex items-center gap-2">
           <div className="relative"><button className="topchip" onClick={() => setMenu(menu === 'lang' ? '' : 'lang')}><img src={FLAGS[lang]} className="w-5 h-3.5 rounded-sm" />{lang.toUpperCase()}</button>
@@ -476,7 +484,7 @@ export default function App() {
           {tab === 'mods' && <div onDragOver={(e) => { if (kind === 'mod' && fabricOk && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropOn(true) } }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDropOn(false) }} onDrop={onDrop} className="relative">
             {dropOn && <div className="dropzone-full"><Icon n="upload" s={34} /><b className="text-lg mt-2">Отпустите, чтобы добавить моды</b><span className="text-sm opacity-80">Они попадут в «Мои моды» и в выбранные сборки</span></div>}
             <PageHead title={kind === 'map' ? 'Карты' : t(kind === 'mod' ? 'mods' : kind === 'shader' ? 'shaders' : 'packs')} sub={`Для Minecraft ${ver}${profiles.active?.version === ver ? ' · профиль «' + profiles.active.name + '»' : ''}`}
-              right={<div className="flex gap-2 items-center"><Dropdown value={ver} set={setVer} options={verOpts} w={260} /><div className="seg">{[['mod', t('mods')], ['resourcepack', t('packs')], ['shader', t('shaders')]].map(([k, n]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => { setKind(k); setHits([]); setMods([]) }}>{n}</button>)}<button className={kind === 'map' ? 'on' : ''} onClick={() => { setKind('map'); setHits([]); setMods([]) }}>Карты</button></div></div>} />
+              right={<div className="flex gap-2 items-center"><Dropdown value={ver} set={setVer} options={verOpts} w={260} /><div className="seg">{[['mod', t('mods')], ['resourcepack', t('packs')], ['shader', t('shaders')]].map(([k, n]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => { setKind(k); setHits([]); setMods([]) }}>{n}</button>)}</div></div>} />
             {kind === 'shader' && <p className="muted text-sm mb-3">{t('shadersHint')}</p>}
             {kind === 'map' ? <MapsCatalog ver={ver} say={say} openWorlds={() => { setWorldsView('mine'); setTab('worlds') }} /> : kind === 'mod' && !fabricOk ? <div className="hero !min-h-[260px]"><VImg v={ver} cls="bg" /><div className="relative p-8 text-white min-h-[260px] flex flex-col justify-end">
               <h2 className="text-3xl font-black">Моды для {ver} пока недоступны</h2><p className="text-white/80 text-sm mt-2 mb-5 max-w-xl">Для этой версии лаунчер запускает чистую игру. Моды из каталога, FPS-буст и Asteria работают на версиях с Fabric — переключитесь в один клик:</p>
@@ -566,8 +574,8 @@ export default function App() {
                 <Avatar name={sm ? 'Steve' : a.name} s={36} skin={!sm && a.id === acc.active ? skin || undefined : undefined} /><div className="flex-1 min-w-0"><b className="block truncate">{nick(a.name)}</b><span className="muted text-xs">{a.type === 'microsoft' ? 'Microsoft' : 'Offline'}</span></div>
                 {a.id !== acc.active && <button className="btn !py-1.5 text-sm" onClick={async () => { await api.selectAccount(a.id); refresh() }}>Выбрать</button>}
                 {a.id !== acc.active && (alts.includes(a.id) ? <button className="pill !text-xs" title="Закрыть это окно игры" onClick={() => api.altStop(a.id)}><Icon n="close" s={11} />Окно</button>
-                  : <button className="pill !text-xs" title={'Открыть ещё одно окно Minecraft ' + ver + ' под этим аккаунтом и зайти на SafiMine'} onClick={async () => { const r = await api.altLaunch({ accountId: a.id, version: ver, join: true }); if (r?.error) say(r.error, 'err'); else say(nick(a.name) + ': второе окно запускается') }}><Icon n="play" s={11} />Ещё окно</button>)}
-                <button className="iconbtn" title={t('logout')} onClick={async () => { await api.removeAccount(a.id); refresh() }}><Icon n="trash" s={15} /></button></div>)}
+                  : <button className="pill !text-xs" title="Открыть ещё одно окно Minecraft под этим аккаунтом" onClick={() => setAltFor({ id: a.id, name: a.name, ver, join: false })}><Icon n="play" s={11} />Ещё окно</button>)}
+                <button className="iconbtn" title={t('logout')} onClick={async () => { if (!(await askConfirm('Удалить аккаунт «' + nick(a.name) + '»?', { ok: 'Удалить' }))) return; await api.removeAccount(a.id); refresh() }}><Icon n="trash" s={15} /></button></div>)}
                 {!acc.list.length && <p className="muted text-sm">Аккаунтов пока нет — добавьте offline-ник или войдите через Microsoft.</p>}</div></div>
               <div className="card rounded-3xl p-5"><div className="font-bold mb-3">{t('localStats')}</div><div className="grid grid-cols-3 gap-3 mb-4"><Stat l={t('playtime')} v={hrs + ' ' + t('hours')} /><Stat l={t('launches')} v={String(stats.launches ?? 0)} /><Stat l={t('mods')} v={String(mods.length)} /></div>
                 {Object.entries(stats.perVer ?? {}).map(([v, ms]: any) => <div key={v} className="flex items-center gap-3 mb-2 text-sm"><span className="w-16">{v}</span><div className="flex-1 h-2 rounded-full" style={{ background: 'var(--chip)' }}><div className="h-2 rounded-full" style={{ width: Math.min(100, ms / Math.max(1, stats.playMs) * 100) + '%', background: 'linear-gradient(90deg,var(--a1),var(--a2))' }} /></div><span className="muted w-14 text-right">{(ms / 3600000).toFixed(1)} {t('hours')}</span></div>)}</div></div></div></div>}
@@ -663,6 +671,12 @@ export default function App() {
       {edit && <SkinStudio mode={edit === 'skin' ? 'skin' : 'cape'} src={edit === 'skin' ? skinUrl : (capeUrl || '')} skin={skinUrl} cape={capeUrl} slim={variant === 'slim'} pickImage={() => api.pickImage()} onClose={() => setEdit('')}
         onSave={async (d) => { const kind = edit === 'skin' ? 'skin' : 'cape'; if (kind === 'skin') { setSkin(d); addSkin(d) } else { const it = { id: 'my' + Date.now().toString(36), data: d }; setMyCapes([it, ...myCapes]); setCape(it.id) } setEdit(''); const r = await api.saveTexture({ data: kind === 'cape' ? await withElytra(d) : d, kind, slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }} />}
       <Palette cmds={cmds} open={pal} setOpen={setPal} />
+      {altFor && <Modal open onClose={() => setAltFor(null)} w={440} title={'Ещё окно: ' + nick(altFor.name)}>
+        <div className="flex flex-col gap-3"><p className="muted text-sm">Вторая игра запустится рядом с основной под этим аккаунтом — можно в другой версии.</p>
+          <Dropdown value={altFor.ver} w={380} set={(v) => setAltFor({ ...altFor, ver: v })} options={verOpts} />
+          <Check on={altFor.join} set={(v) => setAltFor({ ...altFor, join: v })} label="Сразу зайти на SafiMine" />
+          <div className="flex gap-2 justify-end"><button className="btn" onClick={() => setAltFor(null)}>Отмена</button>
+            <button className="btn btn-primary flex items-center gap-2" onClick={async () => { const a = altFor; setAltFor(null); const r = await api.altLaunch({ accountId: a.id, version: a.ver, join: a.join }); if (r?.error) say(r.error, 'err'); else say(nick(a.name) + ': окно ' + a.ver + ' запускается') }}><Icon n="play" s={14} />Запустить</button></div></div></Modal>}
       {friend.open && <Modal open onClose={() => setFriend({ open: false, code: '', busy: false })} title="Код от друга">
         <p className="muted text-sm mb-3">Друг нажал «Поделиться» — сборкой модов, скином, плащом или прицелом — и прислал вам 6 символов.</p>
         <input className="w-full text-center font-mono text-2xl tracking-[.3em]" autoFocus value={friend.code} placeholder="K7Q2XD" onChange={(e) => { const v = e.target.value.trim(); setFriend({ ...friend, code: v.startsWith('ASH1:') ? v : v.toUpperCase().slice(0, 6), got: undefined }) }} />

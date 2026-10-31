@@ -70,10 +70,10 @@ public class VisualsClient implements ClientModInitializer {
     /** chat messages of ours (.метка ...) stay in the client */
     public static boolean chat(String msg) { return Fx.chatCommand(Game120.I, msg); }
     /** our font for every text of Minecraft (theme "font for all text"): minecraft:default -> asteria_visuals:f<N>s<scale> */
-    private static final Identifier[][] ALL = new Identifier[16][7];
+    private static final Identifier[][] ALL = new Identifier[32][7];
     public static Identifier allFont(Identifier id) {
         if (!V.allFont || V.font <= 0 || id == null || !"minecraft".equals(id.getNamespace()) || !("default".equals(id.getPath()) || "uniform".equals(id.getPath()))) return id; // the main and the "uniform" font: menus, chat, mods
-        int i = Math.min(15, V.font), k = Math.max(1, Math.min(6, (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor())));
+        int i = Math.min(31, V.font), k = Math.max(1, Math.min(6, (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor())));
         if (ALL[i][k] == null) ALL[i][k] = new Identifier("asteria_visuals", "f" + i + "s" + k); return ALL[i][k];
     }
     public static int category(Object stack) { return Game120.I.category(stack); }

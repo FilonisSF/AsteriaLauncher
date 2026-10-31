@@ -820,9 +820,10 @@ public final class Fx {
     static void drawPet(R3 r, double[] pp, int kind, double size, long now, Follow f, float lt) {
         double mv = Math.min(1, f.speed * 9), bob = Math.sin(now / 420.0) * 0.06 + Math.abs(Math.sin(f.phase)) * 0.12 * mv, s = 0.22 * size; int c = V.grad(0.2f);
         if (lt > 0.5f) { r.beginTex("particles/bloom/bloom_soft", true); tq(r, pp[0], pp[1] + bob, pp[2], s * 2.2, 0, D.a(c, 0.18f * lt)); r.end(); } // a faint glow only in the light
+        int tint = shade(D.mix(V.grad((float) ((now / 4000.0) % 1)), 0xFFFFFFFF, 0.18f), lt); // the white line pictures take the theme colours, slowly shimmering
         Object tex = r.asset(PETS[Math.max(0, Math.min(PETS.length - 1, kind))]);
-        if (tex != null) { r.beginSkin(tex); tq(r, pp[0], pp[1] + bob, pp[2], s, Math.sin(now / 700.0) * 0.12 - mv * 0.12, shade(0xFFFFFFFF, lt)); r.end(); }
-        else { r.beginTex(PETS[Math.max(0, Math.min(PETS.length - 1, kind))], true); tq(r, pp[0], pp[1] + bob, pp[2], s, Math.sin(now / 900.0) * 0.15, shade(0xFFFFFFFF, lt)); r.end(); }
+        if (tex != null) { r.beginSkin(tex); tq(r, pp[0], pp[1] + bob, pp[2], s, Math.sin(now / 700.0) * 0.12 - mv * 0.12, tint); r.end(); }
+        else { r.beginTex(PETS[Math.max(0, Math.min(PETS.length - 1, kind))], true); tq(r, pp[0], pp[1] + bob, pp[2], s, Math.sin(now / 900.0) * 0.15, tint); r.end(); }
     }
     /** glowing ring floating above the head, slowly turning and bobbing */
     /** a point given in the player's own frame (blocks from the feet: x left, y up along the body, z forward) in the world; an elytra flyer lies along the flight */
@@ -1117,6 +1118,11 @@ public final class Fx {
             case 6: { float e = ease(swing); return new float[]{0.12f - 0.28f * e, 0.03f * s, -0.06f * s, -30 * s2, 70 - 140 * e, -35 * s}; } // wide sweep from right to left
             case 7: return new float[]{-0.04f * s, 0.02f * s, -0.42f * s2, -8 * s, 0, 0};              // stab: straight forward
             case 8: return new float[]{-0.08f, 0.04f, 0, -25 - 35 * s2, -35, 25 + 15 * s};            // soft block: sword held across, a gentle tap
+            case 9: { float e = ease(swing); return new float[]{0.1f - 0.26f * e, 0.12f * s - 0.1f * e * s, -0.1f * s, 35 * s - 95 * e * s2, 40 - 80 * e, -55 * s}; }         // diagonal slash: from the upper right down to the lower left
+            case 10: { float up = swing < 0.35f ? swing / 0.35f : 1, down = swing < 0.35f ? 0 : ease((swing - 0.35f) / 0.65f); return new float[]{0, 0.16f * up - 0.24f * down, -0.06f * up - 0.08f * down, 60 * up - 150 * down, 0, 0}; } // overhead: lifted high, then a heavy blow
+            case 11: { float e = ease(swing); return new float[]{-0.06f * s, 0.03f * s, -0.38f * s2, -15 * s, -80 * e + 80 * e * e, -20 * s}; } // lunge: forward with a turn of the blade
+            case 12: { float e = ease(swing); return new float[]{0, 0.03f * s, -0.12f * s, -20 * s, -360 * e, 30 * s}; }     // whirl: a full turn of the blade with a slight tilt
+            case 13: { float b = (float) (Math.sin(swing * Math.PI * 3) * Math.exp(-swing * 3.5)); return new float[]{-0.04f * b, 0.06f * b, -0.1f * s, -55 * b - 20 * s, 12 * b, -10 * b}; } // spring: a sharp hit that bounces back
             default: return null;
         }
     }

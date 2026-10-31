@@ -1,1 +1,18 @@
-{"providers":[{"type":"ttf","file":"asteria_visuals:pacifico.ttf","shift":[0,1],"size":9,"oversample":6},{"type":"reference","id":"minecraft:default"}]}
+{
+ "providers": [
+  {
+   "type": "ttf",
+   "file": "asteria_visuals:pacifico.ttf",
+   "shift": [
+    0,
+    0.0
+   ],
+   "size": 9,
+   "oversample": 6
+  },
+  {
+   "type": "reference",
+   "id": "minecraft:default"
+  }
+ ]
+}

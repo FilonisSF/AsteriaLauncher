@@ -81,25 +81,42 @@ export function Modal({ open, onClose, children, w = 560, title }: { open: boole
 
 /** Ctrl+F: jump anywhere / run an action by typing. */
 export type Cmd = { id: string; label: string; hint?: string; icon: string; run: () => void }
+const norm = (x: string) => x.toLowerCase().replace(/ё/g, 'е')
+/** the part of the label that matched, lit in the accent colour */
+function Hl({ text, q }: { text: string; q: string }) {
+  const w = norm(q).split(/\s+/).filter(Boolean)[0]; const k = w ? norm(text).indexOf(w) : -1
+  if (k < 0) return <>{text}</>
+  return <>{text.slice(0, k)}<span style={{ color: 'var(--a2)' }}>{text.slice(k, k + w.length)}</span>{text.slice(k + w.length)}</>
+}
+const GROUP = (c: Cmd) => c.id.startsWith('v-') ? 'Версии' : c.id.startsWith('srv') ? 'Серверы' : c.label.startsWith('Открыть') ? 'Разделы' : 'Действия'
 export function Palette({ cmds, open, setOpen }: { cmds: Cmd[]; open: boolean; setOpen: (v: boolean) => void }) {
-  const [q, setQ] = useState(''), [i, setI] = useState(0)
+  const [q, setQ] = useState(''), [i, setI] = useState(0), [recent, setRecent] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('cmdRecent') || '[]') } catch { return [] } })
   useEffect(() => { const k = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.code === 'KeyF') { e.preventDefault(); setOpen(!open) } }; addEventListener('keydown', k); return () => removeEventListener('keydown', k) }, [open])
   useEffect(() => { setQ(''); setI(0) }, [open])
   if (!open) return null
-  const list = q ? cmds.filter((c) => (c.label + ' ' + (c.hint || '')).toLowerCase().includes(q.toLowerCase())).slice(0, 9) : cmds.slice(8, 17)
-  const go = (c?: Cmd) => { if (!c) return; setOpen(false); c.run() }
-  return <div className="fixed inset-0 z-[95] flex justify-center modal-bg" style={{ paddingTop: '14vh' }} onMouseDown={() => setOpen(false)}>
-    <div className="glass rounded-3xl p-2 w-[560px] h-fit pop-in" onMouseDown={(e) => e.stopPropagation()}>
-      <div className="relative"><span className="absolute left-4 top-3.5 muted"><Icon n="search" s={18} /></span>
-        <input autoFocus className="w-full !pl-11 !py-3 !text-base !border-0 !shadow-none !bg-transparent" placeholder="Куда перейти или что сделать…" value={q} onChange={(e) => { setQ(e.target.value); setI(0) }}
-          onKeyDown={(e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setI((i + 1) % Math.max(1, list.length)) } else if (e.key === 'ArrowUp') { e.preventDefault(); setI((i - 1 + list.length) % Math.max(1, list.length)) } else if (e.key === 'Enter') go(list[i]); else if (e.key === 'Escape') setOpen(false) }} /></div>
-      {!q && <div className="grid grid-cols-4 gap-1.5 px-2 pt-2 pb-1" style={{ borderTop: '1px solid var(--line)' }}>{cmds.slice(0, 8).map((c) =>
+  // every word must be found (in any order); a label that starts with the query comes first
+  const words = norm(q).split(/\s+/).filter(Boolean)
+  const list = q ? cmds.map((c) => { const t = norm(c.label + ' ' + (c.hint || '')); return { c, ok: words.every((w) => t.includes(w)), score: (norm(c.label).startsWith(words[0] || '') ? 0 : 1) + t.indexOf(words[0] || '') / 100 } })
+      .filter((x) => x.ok).sort((x, y) => x.score - y.score).map((x) => x.c).slice(0, 12)
+    : [...recent.map((id) => cmds.find((c) => c.id === id)).filter(Boolean) as Cmd[], ...cmds.slice(8, 17).filter((c) => !recent.includes(c.id))].slice(0, 9)
+  const go = (c?: Cmd) => { if (!c) return; const r = [c.id, ...recent.filter((x) => x !== c.id)].slice(0, 4); setRecent(r); try { localStorage.setItem('cmdRecent', JSON.stringify(r)) } catch {} setOpen(false); c.run() }
+  let lastGroup = ''
+  return <div className="fixed inset-0 z-[95] flex justify-center modal-bg" style={{ paddingTop: '12vh' }} onMouseDown={() => setOpen(false)}>
+    <div className="palette pop-in" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="palette-in"><span className="palette-ic"><Icon n="search" s={17} /></span>
+        <input autoFocus className="flex-1 !p-0 !text-[17px] !border-0 !shadow-none !bg-transparent !outline-none" placeholder="Найти раздел, версию, сервер или действие…" value={q} onChange={(e) => { setQ(e.target.value); setI(0) }}
+          onKeyDown={(e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setI((i + 1) % Math.max(1, list.length)) } else if (e.key === 'ArrowUp') { e.preventDefault(); setI((i - 1 + list.length) % Math.max(1, list.length)) } else if (e.key === 'Enter') go(list[i]); else if (e.key === 'Escape') setOpen(false) }} />
+        <kbd>Esc</kbd></div>
+      {!q && <div className="grid grid-cols-4 gap-2 px-3 pt-3">{cmds.slice(0, 8).map((c) =>
         <button key={c.id} className="quick-tile" onClick={() => go(c)}><span className="cmd-ic"><Icon n={c.icon} s={17} /></span><span className="text-[12px] font-semibold leading-tight text-center line-clamp-2">{c.label.replace(/^Открыть:\s*/, '')}</span></button>)}</div>}
-      {!q && list.length > 0 && <div className="label px-3 pt-2">Ещё команды</div>}
-      <div className="flex flex-col gap-0.5 p-1" style={q ? { borderTop: '1px solid var(--line)' } : {}}>{list.map((c, n) => <button key={c.id} className={'row ' + (n === i ? 'sel' : '')} onMouseEnter={() => setI(n)} onClick={() => go(c)}>
-        <span className="cmd-ic"><Icon n={c.icon} s={16} /></span><span className="flex-1 font-semibold text-sm">{c.label}</span>{c.hint && <span className="muted text-xs">{c.hint}</span>}</button>)}
-        {!list.length && <div className="muted text-sm p-3">Ничего не найдено</div>}</div>
-      <div className="muted text-[11px] px-3 pb-1.5 pt-1 flex gap-3"><span><kbd>↑</kbd> <kbd>↓</kbd> выбрать</span><span><kbd>Enter</kbd> открыть</span><span><kbd>Esc</kbd> закрыть</span></div></div></div>
+      <div className="flex flex-col gap-0.5 p-2 max-h-[46vh] overflow-auto">
+        {!q && list.length > 0 && <div className="label px-2 pt-1 pb-1">{recent.length ? 'Недавние и частые' : 'Ещё команды'}</div>}
+        {list.map((c, n) => { const g = GROUP(c), head = q && g !== lastGroup; lastGroup = g
+          return <div key={c.id}>{head && <div className="label px-2 pt-2 pb-1">{g}</div>}
+            <button className={'row w-full ' + (n === i ? 'sel' : '')} onMouseEnter={() => setI(n)} onClick={() => go(c)}>
+              <span className="cmd-ic"><Icon n={c.icon} s={16} /></span><span className="flex-1 font-semibold text-sm text-left"><Hl text={c.label} q={q} /></span>{c.hint && <span className="muted text-xs">{c.hint}</span>}{n === i && <Icon n="right" s={14} />}</button></div> })}
+        {!list.length && <div className="muted text-sm p-4 text-center">Ничего не найдено — попробуйте другое слово</div>}</div>
+      <div className="palette-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> выбрать</span><span><kbd>Enter</kbd> открыть</span><span className="ml-auto">Ctrl + F — в любом месте</span></div></div></div>
 }
 
 /** loader marks used on version cards */

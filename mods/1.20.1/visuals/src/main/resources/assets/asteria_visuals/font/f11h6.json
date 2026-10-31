@@ -1,0 +1,18 @@
+{
+ "providers": [
+  {
+   "type": "ttf",
+   "file": "asteria_visuals:comfortaa.ttf",
+   "shift": [
+    0,
+    0.67
+   ],
+   "size": 8.5,
+   "oversample": 3
+  },
+  {
+   "type": "reference",
+   "id": "minecraft:default"
+  }
+ ]
+}

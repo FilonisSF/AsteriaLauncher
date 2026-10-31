@@ -11,7 +11,7 @@ const ago = (t: number) => { const d = (Date.now() - t) / 60000; return d < 60 ?
 
 /** Worlds: own worlds of every version (play straight into one, copy to another version, export, delete), import, maps catalog, friends and playing together */
 export function Worlds({ ver, versions, play, say, running, initial }: { initial?: 'mine' | 'maps' | 'friends'; ver: string; versions: { value: string; label: string }[]; play: (v: string, join?: boolean, server?: any, extra?: any) => void; say: (s: string, k?: 'ok' | 'err' | 'info') => void; running: boolean }) {
-  const [view, setView] = useState<'mine' | 'maps' | 'friends'>(initial || 'mine')
+  const [view, setView] = useState<'mine' | 'maps' | 'friends'>(initial === 'maps' ? 'mine' : initial || 'mine')
   const [worlds, setWorlds] = useState<World[]>([]), [maps, setMaps] = useState<MapItem[]>([]), [target, setTarget] = useState(ver), [busy, setBusy] = useState('')
   const [together, setTogether] = useState(false), [q, setQ] = useState(''), [ask, setAsk] = useState<World | null>(null)
   const load = () => api.worlds().then(setWorlds)
@@ -21,7 +21,7 @@ export function Worlds({ ver, versions, play, say, running, initial }: { initial
   const imp = async () => { const r = await api.worldImport(target); if (!r) return; if (r.error) return say(r.error, 'err'); say('Мир «' + r.name + '» добавлен в ' + target); load() }
   const getMap = async (m: MapItem) => { setBusy(m.url); const v = m.ver && versions.some((x) => x.value === m.ver) ? m.ver : target; const r = await api.mapGet(m.url, v, m.name); setBusy('')
     if (r.error) return say(r.error, 'err'); say('Карта «' + r.name + '» установлена в ' + v); load(); setView('mine') }
-  const tabs: [typeof view, string, string][] = [['mine', 'Мои миры', 'folder'], ['maps', 'Карты', 'download'], ['friends', 'Друзья', 'user']]
+  const tabs: [typeof view, string, string][] = [['mine', 'Мои миры', 'folder'], ['friends', 'Друзья', 'user']] // the maps catalogue was taken out
   return <div>
     <div className="ph"><div><h1 className="grad-text">Миры</h1><div className="sub">Свои миры всех версий, карты и игра вместе с друзьями</div></div>
       <div className="flex gap-2 items-center flex-wrap justify-end"><Dropdown value={target} set={setTarget} options={versions} w={220} /><div className="seg">{tabs.map(([k, n, i]) => <button key={k} className={(view === k ? "on " : "") + "whitespace-nowrap"} onClick={() => setView(k)}><Icon n={i} s={13} /> {n}</button>)}</div></div></div>

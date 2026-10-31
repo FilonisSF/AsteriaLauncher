@@ -69,8 +69,9 @@ export async function buildCape(front: string, back: string, K = 8): Promise<str
 export function GifCapeMaker({ src, onDone, onCancel, onError }: { src: string; onDone: (png: string, frames: number) => void; onCancel: () => void; onError: (m: string) => void }) {
   const [first, setFirst] = useState(''), [busy, setBusy] = useState(false), frames = useRef<{ bmp: ImageBitmap | VideoFrame; w: number; h: number }[]>([])
   useEffect(() => { (async () => { try {
+      // a data: picture is decoded here, not fetched: the page's CSP has no data: in connect-src, and fetch(data:) failed in the built launcher
       const D = (window as any).ImageDecoder; if (!D) return onError('Эта версия лаунчера не умеет читать GIF')
-      const blob = await (await fetch(src)).blob(), dec = new D({ data: blob.stream(), type: 'image/gif' }); await dec.tracks.ready
+      const blob = src.startsWith('data:') ? new Blob([Uint8Array.from(atob(src.slice(src.indexOf(',') + 1)), (ch) => ch.charCodeAt(0))], { type: 'image/gif' }) : await (await fetch(src)).blob(), dec = new D({ data: blob.stream(), type: 'image/gif' }); await dec.tracks.ready
       const n = Math.min(16, dec.tracks.selectedTrack.frameCount), step = Math.max(1, Math.ceil(dec.tracks.selectedTrack.frameCount / 16)) // up to 16 frames: small enough to keep and upload
       for (let i = 0; i < n * step && i < dec.tracks.selectedTrack.frameCount; i += step) { const r = await dec.decode({ frameIndex: i }); frames.current.push({ bmp: r.image, w: r.image.displayWidth, h: r.image.displayHeight }) }
       const f = frames.current[0], c = document.createElement('canvas'); c.width = f.w; c.height = f.h; c.getContext('2d')!.drawImage(f.bmp as any, 0, 0); setFirst(c.toDataURL('image/png'))

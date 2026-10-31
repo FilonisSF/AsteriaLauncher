@@ -54,7 +54,7 @@ public final class V {
     public static boolean lite = false;
     /** own background picture: blurred on screens other than the title screen */
     public static boolean bgBlur = true;
-    public static final String[] FONTS = {"Minecraft", "Ubuntu", "Montserrat Alt", "Balsamiq (мило)", "Pangolin (мило)", "Neucha (от руки)", "Marmelad", "Pacifico", "Russo One", "Philosopher", "Unbounded"};
+    public static final String[] FONTS = {"Minecraft", "Ubuntu", "Montserrat Alt", "Balsamiq (мило)", "Pangolin (мило)", "Neucha (от руки)", "Marmelad", "Pacifico", "Russo One", "Philosopher", "Unbounded", "Comfortaa", "Rubik", "Nunito", "Exo 2", "Press Start (пиксели)", "Caveat (от руки)", "Lobster", "Oswald"};
 
     public static Mod mod(String id) { return BY.get(id); }
     public static boolean on(String id) { Mod m = BY.get(id); return m != null && m.on && licensed(); }
@@ -118,7 +118,7 @@ public final class V {
             if (pid == null) pid = java.lang.management.ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
             Files.write(new File(file.getParentFile(), "asteria-alive").toPath(), (pid + "|" + now).getBytes(StandardCharsets.UTF_8)); } catch (Throwable ignored) {} }
         if (dirtyAt > 0 && now - dirtyAt > 400) { dirtyAt = 0; write(); }
-        if (now - lastCheck < 700) return;
+        if (now - lastCheck < 250) return; // a launcher change (time of day, colours...) shows within a quarter second
         lastCheck = now;
         reload(false); reloadPresets();
     }

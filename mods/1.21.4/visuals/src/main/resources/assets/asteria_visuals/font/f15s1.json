@@ -1,0 +1,18 @@
+{
+ "providers": [
+  {
+   "type": "ttf",
+   "file": "asteria_visuals:pressstart2p.ttf",
+   "shift": [
+    0,
+    1.0
+   ],
+   "size": 6.5,
+   "oversample": 1
+  },
+  {
+   "type": "reference",
+   "id": "minecraft:default"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "providers": [
+  {
+   "type": "ttf",
+   "file": "asteria_visuals:pressstart2p.ttf",
+   "shift": [
+    0,
+    1.0
+   ],
+   "size": 6.5,
+   "oversample": 4
+  },
+  {
+   "type": "legacy_unicode",
+   "sizes": "minecraft:font/glyph_sizes.bin",
+   "template": "minecraft:font/unicode_page_%s.png"
+  }
+ ]
+}

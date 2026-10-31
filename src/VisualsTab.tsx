@@ -1,3 +1,4 @@
+import { askConfirm } from './confirm'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import schema from '../mods/common-visuals/resources/asteria/schema.json'
 import { Icon } from './Icons'
@@ -24,23 +25,28 @@ type Preset = { id: string; name: string; cfg: VisCfg }
 type Presets = { active: string; list: Preset[] }
 const uid = () => Math.random().toString(36).slice(2, 10)
 /** ready themes: colours + HUD style + font + transparency in one click (fonts: 0 Minecraft ... 8 Russo One, see FONTS) */
+// hud: 0 crystal, 1 constellation, 2 minimal, 3 glass; font: index in FONTS
 const THEMES: { name: string; t: Partial<Theme> }[] = [
-  { name: 'Asteria', t: { accent: '#22d3ee', accent2: '#3b82f6', hud: 0, font: 8, bg: 0.55, chroma: false, glare: true } },
-  { name: 'Неон', t: { accent: '#f0abfc', accent2: '#22d3ee', hud: 1, font: 8, bg: 0.7, chroma: false, glare: true } },
-  { name: 'Сакура', t: { accent: '#fda4af', accent2: '#f0abfc', hud: 0, font: 4, bg: 0.45, chroma: false, glare: true } },
-  { name: 'Океан', t: { accent: '#38bdf8', accent2: '#14b8a6', hud: 2, font: 8, bg: 0.5, chroma: false, glare: false } },
-  { name: 'Закат', t: { accent: '#fb923c', accent2: '#f43f5e', hud: 1, font: 8, bg: 0.6, chroma: false, glare: true } },
-  { name: 'Лес', t: { accent: '#4ade80', accent2: '#a3e635', hud: 2, font: 5, bg: 0.55, chroma: false, glare: false } },
-  { name: 'Лёд', t: { accent: '#e0f2fe', accent2: '#7dd3fc', hud: 0, font: 8, bg: 0.4, chroma: false, glare: true } },
-  { name: 'Золото', t: { accent: '#facc15', accent2: '#f59e0b', hud: 1, font: 9, bg: 0.65, chroma: false, glare: true } },
-  { name: 'Вампир', t: { accent: '#ef4444', accent2: '#7f1d1d', hud: 2, font: 8, bg: 0.75, chroma: false, glare: false } },
-  { name: 'Космос', t: { accent: '#a78bfa', accent2: '#6366f1', hud: 1, font: 10, bg: 0.6, chroma: false, glare: true } },
-  { name: 'Мята', t: { accent: '#6ee7b7', accent2: '#5eead4', hud: 0, font: 3, bg: 0.45, chroma: false, glare: false } },
-  { name: 'Монохром', t: { accent: '#f1f5f9', accent2: '#64748b', hud: 2, font: 8, bg: 0.7, chroma: false, glare: false } },
-  { name: 'Конфета', t: { accent: '#f472b6', accent2: '#facc15', hud: 0, font: 4, bg: 0.5, chroma: false, glare: true } },
-  { name: 'Радуга', t: { accent: '#22d3ee', accent2: '#a855f7', hud: 1, font: 8, bg: 0.6, chroma: true, glare: true } },
-  { name: 'Ретро', t: { accent: '#fde047', accent2: '#22c55e', hud: 2, font: 0, bg: 0.6, chroma: false, glare: false } },
-  { name: 'Лава', t: { accent: '#fb7185', accent2: '#f97316', hud: 0, font: 8, bg: 0.6, chroma: false, glare: true } },
+  { name: 'Asteria', t: { accent: '#22d3ee', accent2: '#6366f1', hud: 0, font: 8, bg: 0.55, chroma: false, glare: true, shadow: true, blur: true } },
+  { name: 'Аврора', t: { accent: '#34d399', accent2: '#a78bfa', hud: 3, font: 12, bg: 0.45, chroma: false, glare: true, shadow: true, blur: true } },
+  { name: 'Неон-Токио', t: { accent: '#ff3cac', accent2: '#2b86c5', hud: 1, font: 14, bg: 0.7, chroma: false, glare: true, shadow: true, blur: true } },
+  { name: 'Киберпанк', t: { accent: '#fcee0a', accent2: '#00f0ff', hud: 2, font: 18, bg: 0.75, chroma: false, glare: false, shadow: true, blur: false } },
+  { name: 'Сакура', t: { accent: '#ffb7c5', accent2: '#f0abfc', hud: 3, font: 11, bg: 0.4, chroma: false, glare: true, shadow: false, blur: true } },
+  { name: 'Глубокий океан', t: { accent: '#38bdf8', accent2: '#0d9488', hud: 3, font: 13, bg: 0.5, chroma: false, glare: true, shadow: true, blur: true } },
+  { name: 'Закат', t: { accent: '#fb923c', accent2: '#e11d48', hud: 1, font: 12, bg: 0.6, chroma: false, glare: true, shadow: true, blur: true } },
+  { name: 'Изумруд', t: { accent: '#10b981', accent2: '#84cc16', hud: 0, font: 13, bg: 0.55, chroma: false, glare: true, shadow: true, blur: true } },
+  { name: 'Лёд', t: { accent: '#e0f2fe', accent2: '#60a5fa', hud: 3, font: 11, bg: 0.35, chroma: false, glare: true, shadow: false, blur: true } },
+  { name: 'Королевское золото', t: { accent: '#fde68a', accent2: '#d97706', hud: 0, font: 9, bg: 0.65, chroma: false, glare: true, shadow: true, blur: true } },
+  { name: 'Вампир', t: { accent: '#f43f5e', accent2: '#7f1d1d', hud: 2, font: 17, bg: 0.75, chroma: false, glare: false, shadow: true, blur: false } },
+  { name: 'Галактика', t: { accent: '#c084fc', accent2: '#4f46e5', hud: 1, font: 10, bg: 0.6, chroma: false, glare: true, shadow: true, blur: true } },
+  { name: 'Мята', t: { accent: '#6ee7b7', accent2: '#5eead4', hud: 3, font: 13, bg: 0.4, chroma: false, glare: false, shadow: false, blur: true } },
+  { name: 'Монохром', t: { accent: '#f8fafc', accent2: '#64748b', hud: 2, font: 12, bg: 0.7, chroma: false, glare: false, shadow: true, blur: false } },
+  { name: 'Конфета', t: { accent: '#f472b6', accent2: '#facc15', hud: 0, font: 4, bg: 0.5, chroma: false, glare: true, shadow: false, blur: true } },
+  { name: 'Радуга', t: { accent: '#22d3ee', accent2: '#a855f7', hud: 1, font: 14, bg: 0.6, chroma: true, glare: true, shadow: true, blur: true } },
+  { name: 'Ретро-аркада', t: { accent: '#fde047', accent2: '#22c55e', hud: 2, font: 15, bg: 0.65, chroma: false, glare: false, shadow: false, blur: false } },
+  { name: 'Лава', t: { accent: '#fb7185', accent2: '#f97316', hud: 1, font: 8, bg: 0.6, chroma: false, glare: true, shadow: true, blur: true } },
+  { name: 'Дневник', t: { accent: '#fcd34d', accent2: '#fb7185', hud: 3, font: 16, bg: 0.45, chroma: false, glare: false, shadow: false, blur: true } },
+  { name: 'Шёлк', t: { accent: '#f5d0fe', accent2: '#c4b5fd', hud: 3, font: 7, bg: 0.4, chroma: false, glare: true, shadow: false, blur: true } },
 ]
 /** ready-made starting points for a new config */
 const TEMPLATES: { name: string; desc: string; make: () => VisCfg }[] = [
@@ -50,9 +56,14 @@ const TEMPLATES: { name: string; desc: string; make: () => VisCfg }[] = [
   { name: 'PvP', desc: 'Всё для боя: цель, броня, клавиши, зум', make: () => only(['island', 'info', 'keystrokes', 'armor', 'effects', 'targethud', 'notifications', 'crosshair', 'targetesp', 'hitparticles', 'damagenumbers', 'killeffect', 'sounds', 'hotbar', 'inventory', 'totems', 'cooldowns', 'blockhighlight', 'fullbright', 'zoom', 'totem'], { hud: 2, bg: 0.6 }) },
   { name: 'Красота', desc: 'Шлейфы, частицы, шляпа и радужная тема', make: () => only(['island', 'music', 'notifications', 'trails', 'jumpcircles', 'jumpparticles', 'ambient', 'halo', 'pet', 'targetesp', 'hitparticles', 'killeffect', 'swing', 'dash', 'totem', 'skycolor', 'zoom'], { hud: 1, chroma: true, glare: true }) },
 ]
-const FONTS = ['Minecraft (пиксельный)', 'Ubuntu', 'Montserrat Alt', 'Balsamiq (мило)', 'Pangolin (мило)', 'Neucha (от руки)', 'Marmelad', 'Pacifico', 'Russo One', 'Philosopher', 'Unbounded']
+const FONTS = ['Minecraft (пиксельный)', 'Ubuntu', 'Montserrat Alt', 'Balsamiq (мило)', 'Pangolin (мило)', 'Neucha (от руки)', 'Marmelad', 'Pacifico', 'Russo One', 'Philosopher', 'Unbounded', 'Comfortaa', 'Rubik', 'Nunito', 'Exo 2', 'Press Start (пиксели)', 'Caveat (от руки)', 'Lobster', 'Oswald']
 // closest font the launcher itself has, so the preview looks like the game
-const PREVIEW_FONT = ['ui-monospace,Consolas,monospace', '"Manrope Variable",sans-serif', '"Manrope Variable",sans-serif', '"Comic Sans MS","Manrope Variable",sans-serif', '"Comic Sans MS","Manrope Variable",sans-serif', '"Segoe Print","Manrope Variable",sans-serif', '"Manrope Variable",sans-serif', '"Segoe Script","Manrope Variable",cursive', '"Unbounded Variable",sans-serif', 'Georgia,serif', '"Unbounded Variable",sans-serif']
+// the theme previews use the very fonts of the mod (loaded once from its resources), Minecraft's pixel font stays a monospace stand-in
+const FONT_FILES = ['', 'ubuntu', 'montserrat', 'balsamiq', 'pangolin', 'neucha', 'marmelad', 'pacifico', 'russo', 'philosopher', 'unbounded', 'comfortaa', 'rubik', 'nunito', 'exo2', 'pressstart2p', 'caveat', 'lobster', 'oswald']
+const TTF = import.meta.glob('../mods/common-visuals/resources/assets/asteria_visuals/font/*.ttf', { eager: true, query: '?url', import: 'default' }) as Record<string, string>
+if (typeof document !== 'undefined' && !document.getElementById('ast-fonts')) { const st = document.createElement('style'); st.id = 'ast-fonts'
+  st.textContent = FONT_FILES.map((n, i) => { const u = Object.entries(TTF).find(([k]) => k.endsWith('/' + n + '.ttf'))?.[1]; return u ? `@font-face{font-family:"AstF${i}";src:url("${u}") format("truetype");font-display:swap}` : '' }).join(''); document.head.appendChild(st) }
+const PREVIEW_FONT = FONT_FILES.map((n, i) => i === 0 ? 'ui-monospace,Consolas,monospace' : `"AstF${i}","Manrope Variable",sans-serif`)
 const fontIdx = (f: any) => typeof f === 'number' ? Math.min(f, FONTS.length - 1) : f === false ? 0 : 8 // old configs stored a boolean; Russo One by default
 function only(ids: string[], theme: Partial<Theme> = {}): VisCfg { const d = visDefaults(); for (const m of MODS) d.modules[m.id].on = ids.includes(m.id); d.theme = { ...d.theme, ...theme }; return d }
 function merge(saved: any): VisCfg {
@@ -90,7 +101,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
   useEffect(() => { window.api.optsGet(ver).then((o: any) => setKeys({ menu: o['key_key.asteria.menu'] || 'key.keyboard.right.shift', zoom: o['key_key.asteria.zoom'] || 'key.keyboard.c' })) }, [ver])
   // every edit also lands in the active preset
   const save = (n: VisCfg) => { setC(n); last.current = Date.now(); const p = prRef.current; if (p) { const q = { ...p, list: p.list.map((x) => x.id === p.active ? { ...x, cfg: n } : x) }; prRef.current = q; setPr(q) }
-    clearTimeout(tm.current); tm.current = setTimeout(() => write(n), 300) }
+    clearTimeout(tm.current); tm.current = setTimeout(() => write(n), 120) }
   const write = async (n: VisCfg) => { last.current = Date.now(); const r = await window.api.visSet(n); wrote.current = Date.now(); if (prRef.current) window.api.visPresetsSet?.(prRef.current); if (r?.live) say('Применено в игре') }
   // switching a config writes at once (no 300 ms wait): quick clicks always end on the last one picked
   const setPresets = (p: Presets, apply?: VisCfg) => { prRef.current = p; setPr(p); window.api.visPresetsSet?.(p); if (apply) { save(apply); clearTimeout(tm.current); write(apply) } }
@@ -220,7 +231,7 @@ function Configs({ c, pr, set, say }: { c: VisCfg; pr: Presets; set: (p: Presets
           <button className="pill !py-1" title="Дублировать" onClick={() => add(p.name + ' (копия)', JSON.parse(JSON.stringify(p.cfg)))}><Icon n="copy" s={13} /></button>
           <button className="pill !py-1" title="Поделиться: скопировать код" disabled={busy === p.id} onClick={() => share(p)}><Icon n="share" s={13} />{busy === p.id ? '…' : 'Поделиться'}</button>
           <button className="pill !py-1" title="Сохранить в файл .asteria" onClick={async () => { if (await window.api.visExport(payload(p), p.name)) say('Файл сохранён') }}><Icon n="download" s={13} /></button>
-          {pr.list.length > 1 && <button className="pill !py-1" title="Удалить" onClick={() => { if (!confirm('Удалить конфиг «' + p.name + '»?')) return; const list = pr.list.filter((x) => x.id !== p.id); if (act) set({ active: list[0].id, list }, list[0].cfg); else set({ ...pr, list }) }}><Icon n="trash" s={13} /></button>}
+          {pr.list.length > 1 && <button className="pill !py-1" title="Удалить" onClick={async () => { if (!(await askConfirm('Удалить конфиг «' + p.name + '»?', { ok: 'Удалить' }))) return; const list = pr.list.filter((x) => x.id !== p.id); if (act) set({ active: list[0].id, list }, list[0].cfg); else set({ ...pr, list }) }}><Icon n="trash" s={13} /></button>}
         </div> })}
       <p className="muted text-xs mt-1">Все изменения сохраняются в активный конфиг. В игре конфиги переключаются в меню Asteria → «Конфиги».</p>
     </div>

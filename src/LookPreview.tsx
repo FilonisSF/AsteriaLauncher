@@ -78,7 +78,12 @@ export function LookPreview({ skin, slim, height = 470, cape, hint = true, bare 
       const wingsOn = c?.on && (+c.s?.wings || 0) > 0
       if (cape && !wingsOn) { const ci = await loadImg(cape); if (ci) list.push(...capeQuads(ci)) } // wings take the cape's place, as in the game
       if (c?.on) for (const [k, pre] of [['wings', 'w'], ['hat', 'h'], ['back', 'b']] as const) { const i = +c.s?.[k] || 0; if (i > 0) list.push(...fromMesh(await mesh(pre + '-' + i))) }
-      const pk = +p?.s?.kind; if (p?.on && pk !== 16 && pk !== 9) { const sc = Math.max(0.5, Math.min(2, +p.s?.size || 1)); list.push(...fromMesh((await mesh('pet-' + pk)).map((v, i) => (i % 13 === 12 ? v : v * sc)), 15, 6)) }
+      const pk = +p?.s?.kind; if (p?.on && pk !== 16 && pk !== 9) { const sc = Math.max(0.5, Math.min(2, +p.s?.size || 1)), q = fromMesh((await mesh('pet-' + pk)).map((v, i) => (i % 13 === 12 ? v : v * sc)), 15, 6)
+        if (pk <= 8) { // the white line pictures are tinted with the visuals theme, top colour to bottom colour, like in the game
+          const th = vis?.theme || {}, hex = (h: string, d: number[]) => /^#[0-9a-f]{6}$/i.test(h || '') ? [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)) : d
+          const a1 = hex(th.accent, [34, 211, 238]), a2 = hex(th.accent2, [99, 102, 241]), ys = q.flatMap((x) => [x.p[1], x.p[4], x.p[7], x.p[10]]), y0 = Math.min(...ys), y1 = Math.max(...ys)
+          for (const x of q) { const t = ((x.p[1] + x.p[7]) / 2 - y0) / Math.max(1e-6, y1 - y0), sh = x.c[0] / 255; x.c = [0, 1, 2].map((k) => Math.min(255, (a2[k] + (a1[k] - a2[k]) * t) * 0.82 * sh + 255 * 0.18 * sh)).concat(x.c[3]) } }
+        list.push(...q) }
       if (alive) quads.current = { solid: list.filter((q) => q.c[3] > 250), glass: list.filter((q) => q.c[3] <= 250), v: quads.current.v + 1 } }
     img.src = skin; return () => { alive = false } }, [skin, slim, vis, cape, bare])
   // WebGL with a depth buffer: small details on a face (eyes, stripes) no longer flicker in and out while turning, and it is light for the computer

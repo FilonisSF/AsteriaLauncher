@@ -28,7 +28,7 @@ public final class D {
     public static void round(float x1, float y1, float x2, float y2, float r, int cl, int cr) {
         r = Math.max(0, Math.min(r, Math.min(x2 - x1, y2 - y1) / 2));
         if (r < 0.5f) { hgrad(x1, y1, x2, y2, cl, cr); return; }
-        int seg = r > 4 ? 8 : 5, n = seg * 4 + 4;
+        int seg = r > 8 ? 14 : r > 4 ? 10 : 6, n = seg * 4 + 4; // round corners stay round on big GUI scales
         float[] xy = new float[n * 2]; int[] col = new int[n]; int k = 0;
         float[][] corners = {{x1 + r, y1 + r, 180}, {x2 - r, y1 + r, 270}, {x2 - r, y2 - r, 0}, {x1 + r, y2 - r, 90}}; // clockwise on screen
         for (float[] c : corners) for (int i = 0; i <= seg; i++) {
@@ -38,7 +38,7 @@ public final class D {
         }
         g.poly(xy, col);
         // feather: a strip from the edge (full colour) to 0.6 px outside (transparent)
-        float f = 0.6f; float[] sx = new float[(n + 1) * 4]; int[] sc = new int[(n + 1) * 2]; k = 0;
+        float f = feather(); float[] sx = new float[(n + 1) * 4]; int[] sc = new int[(n + 1) * 2]; k = 0;
         for (float[] c : corners) for (int i = 0; i <= seg; i++) {
             double ang = Math.toRadians(c[2] + 90.0 * i / seg); float ca = (float) Math.cos(ang), sa = (float) Math.sin(ang);
             int idx = k / 2; sx[k * 2] = xy[idx * 2]; sx[k * 2 + 1] = xy[idx * 2 + 1]; sc[k] = col[idx]; k++;
@@ -161,7 +161,9 @@ public final class D {
         if (p > 0.01f) round(x1 + 1, y1 + 1, x2 - 1, y2 - 1, Math.max(0, r - 1), D.a(bright(V.a1(), 1.05f), p * 0.9f), D.a(V.a2(), p * 0.9f));
         if (y2 - y1 > 8) round(x1 + 2, y1 + 1.5f, x2 - 2, y1 + (y2 - y1) * 0.4f, Math.max(0, r - 2), alpha(0xFFFFFF, (int) (16 + 20 * p)));
     }
-    public static void circle(float cx, float cy, float rad, int c) { ring(cx, cy, 0, rad, c, c); }
+    /** the soft edge of every shape: about one real screen pixel, whatever the GUI scale (edges looked stair-stepped) */
+    static float feather() { return Math.max(0.3f, 1.1f / Math.max(1f, g.pxScale())); }
+    public static void circle(float cx, float cy, float rad, int c) { ring(cx, cy, 0, rad, c, c); if (rad > 1.2f) ring(cx, cy, rad, rad + feather(), c, c & 0x00FFFFFF); }
     /** ring / disc (inner radius 0 = disc); colour inner -> outer */
     public static void ring(float cx, float cy, float rin, float rout, int cin, int cout) {
         int seg = Math.max(12, (int) (rout * 3));
@@ -198,8 +200,11 @@ public final class D {
     }
     public static void line(float x1, float y1, float x2, float y2, float w, int c) {
         float dx = x2 - x1, dy = y2 - y1, l = (float) Math.sqrt(dx * dx + dy * dy); if (l < 0.001f) return;
-        float nx = -dy / l * w / 2, ny = dx / l * w / 2;
+        float nx = -dy / l * w / 2, ny = dx / l * w / 2, fx = -dy / l * feather(), fy = dx / l * feather(); int t = c & 0x00FFFFFF;
         g.poly(new float[]{x1 + nx, y1 + ny, x1 - nx, y1 - ny, x2 - nx, y2 - ny, x2 + nx, y2 + ny}, new int[]{c, c, c, c});
+        // soft sides: the line fades out over a pixel on both sides instead of a hard stair-stepped edge
+        g.poly(new float[]{x1 + nx + fx, y1 + ny + fy, x1 + nx, y1 + ny, x2 + nx, y2 + ny, x2 + nx + fx, y2 + ny + fy}, new int[]{t, c, c, t});
+        g.poly(new float[]{x1 - nx, y1 - ny, x1 - nx - fx, y1 - ny - fy, x2 - nx - fx, y2 - ny - fy, x2 - nx, y2 - ny}, new int[]{c, t, t, c});
     }
 
     // ------------------------------------------------------------------ text

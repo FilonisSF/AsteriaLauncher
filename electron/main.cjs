@@ -576,7 +576,10 @@ ipcMain.handle('game:alt', async (_, { accountId, version, join }) => {
     alts.set(accountId, p); p.on('close', () => { alts.delete(accountId); try { win?.webContents.send('alts', [...alts.keys()]) } catch {} }); try { win?.webContents.send('alts', [...alts.keys()]) } catch {}
     return { ok: true } } catch (e) { return { error: 'Не удалось запустить: ' + (e?.message || e) } } })
 ipcMain.handle('game:alts', () => [...alts.keys()])
-ipcMain.handle('game:altStop', (_, id) => { try { alts.get(id)?.kill() } catch {} return true })
+// the whole process tree: java may sit under a helper process, so a plain kill() left the window open
+ipcMain.handle('game:altStop', (_, id) => { const p = alts.get(id); if (!p) return true
+  try { require('child_process').execFile('taskkill', ['/PID', String(p.pid), '/T', '/F'], { windowsHide: true }, () => {}) } catch {} try { p.kill() } catch {}
+  setTimeout(() => { alts.delete(id); try { win?.webContents.send('alts', [...alts.keys()]) } catch {} }, 1500); return true })
 // ------------------------------------------------------------------ backup: everything of the launcher as one code (or a file)
 // "own": for moving to another computer (offline accounts and nick ownership included); "friend": only the setup (visuals, presets, binds, marks, skin and cape libraries), no accounts
 const BACKUP_SKIP = /^(trui:|installed$|visualsAt$|visPresetsAt$|remoteConf$|apiNow|perVer$|playMs$|launches$|friendNotes:|menuBg$)/
@@ -962,6 +965,8 @@ async function getToken(name) { const t = store.get('tokens', {}); if (t[name]) 
 // clans (SafiClan launcher-sync) and server events (AsteriaBridge); the last good answer is kept for offline starts
 const cachedGet = (key, url) => async () => { try { await resolveApi(); const r = await net.fetch(apiBase() + url, { signal: AbortSignal.timeout(7000) }); if (!r.ok) throw 0; const j = await r.json(); store.set(key, j); return j } catch { return store.get(key, null) } }
 ipcMain.handle('clans:get', cachedGet('clansCache', '/clans'))
+// how many people play through AsteriaLauncher right now (their heartbeat came in the last 2 minutes)
+ipcMain.handle('online:launcher', async () => { try { await resolveApi(); const r = await net.fetch(apiBase() + '/online', { signal: AbortSignal.timeout(6000) }); const l = await r.json(); return Array.isArray(l) ? l.length : null } catch { return null } })
 ipcMain.handle('events:get', cachedGet('eventsCache', '/events'))
 ipcMain.handle('player:get', async (_, name) => { try { await resolveApi(); return await (await net.fetch(`${apiBase()}/player/${name}`, { signal: AbortSignal.timeout(7000) })).json() } catch { return null } })
 const confFile = () => path.join(settings().dir, 'launcher-config.json')
@@ -998,10 +1003,12 @@ setInterval(() => { if (!win) return; const s = settings()
     let m = 0; try { m = fs.statSync(f).mtimeMs } catch { continue }
     const k = f, old = seenM.get(k); seenM.set(k, m)
     if (old !== undefined && m !== old) try { win.webContents.send('files', { kind, dir: d, ver: path.basename(d) }) } catch {} } }, 1000)
-ipcMain.handle('opts:get', (_, ver) => { const f = path.join(inst(settings(), ver), 'options.txt'), o = {}; try { for (const l of fs.readFileSync(f, 'utf8').split(/\r?\n/)) { const i = l.indexOf(':'); if (i > 0) o[l.slice(0, i)] = l.slice(i + 1) } } catch {} return o })
-ipcMain.handle('opts:set', (_, ver, patch) => { const d = inst(settings(), ver); fs.mkdirSync(d, { recursive: true }); setOpts(d, patch)
+/** the folder the settings of this version live in: the running game's own folder when it plays this version (a profile has its own) */
+const optsDir = (ver) => game && gameDirNow && (gameVer === ver || path.resolve(gameDirNow) === path.resolve(inst(settings(), ver))) ? gameDirNow : inst(settings(), ver)
+ipcMain.handle('opts:get', (_, ver) => { const f = path.join(optsDir(ver), 'options.txt'), o = {}; try { for (const l of fs.readFileSync(f, 'utf8').split(/\r?\n/)) { const i = l.indexOf(':'); if (i > 0) o[l.slice(0, i)] = l.slice(i + 1) } } catch {} return o })
+ipcMain.handle('opts:set', (_, ver, patch) => { const d = optsDir(ver); fs.mkdirSync(d, { recursive: true }); setOpts(d, patch)
   const ext = !game && extGame && alive(extGame.pid) && extGame.dir && path.resolve(extGame.dir) === path.resolve(d)
-  if ((game && gameVer === ver) || ext) { if (game) pendingOpts = { ...pendingOpts, ...patch }; try { fs.writeFileSync(path.join(d, 'asteria-live.flag'), String(Date.now())) } catch {} return { live: true, running: true } }
+  if ((game && d === gameDirNow) || ext) { if (game) pendingOpts = { ...pendingOpts, ...patch }; try { fs.writeFileSync(path.join(d, 'asteria-live.flag'), String(Date.now())) } catch {} return { live: true, running: true } }
   return { live: false, running: !!game } })
 ipcMain.handle('game:state', async () => { if (game) return { running: true, version: gameVer }; const e = await externalGame(); return { running: !!e, version: e?.version || null, external: !!e } })
 ipcMain.handle('rpc:test', () => ({ id: !!rpcId(), connected: !!rpc?.user }))

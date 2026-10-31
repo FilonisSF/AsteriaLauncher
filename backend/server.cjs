@@ -2,7 +2,7 @@
 // Admin panel:  http://<address>:8080/admin   (key is printed on start and saved to backend/data/admin-key.txt)
 // Env (optional): PORT=8080  ADMIN_KEY=...  STATS_KEY=...
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto')
-const VERSION = '1.6.2'
+const VERSION = '1.6.3'
 const DATA = path.join(__dirname, 'data'); fs.mkdirSync(DATA, { recursive: true })
 for (const d of ['premium', 'mods', 'skins']) fs.mkdirSync(path.join(DATA, d), { recursive: true })
 const rd = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(DATA, f), 'utf8')) } catch { return d } }

@@ -362,3 +362,20 @@ button.pill:hover{background:color-mix(in srgb,var(--a2) 14%,var(--pill-bg));col
 .ask{width:380px;border-radius:1.4rem;padding:1.4rem;background:var(--card,rgba(12,22,30,.96));border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.45)}
 .btn-danger{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;border-radius:.9rem;padding:.55rem 1rem;font-weight:700;color:#fff;background:linear-gradient(135deg,#f43f5e,#e11d48);box-shadow:0 8px 20px rgba(244,63,94,.35)}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* buttons: no white rim or highlight line on the coloured ones (they looked cut out); the gradient fills the whole pill */
+.btn.btn-primary,.btn-primary{border:0;padding-top:calc(.55rem + 1px);padding-bottom:calc(.55rem + 1px);box-shadow:0 8px 24px color-mix(in srgb,var(--a2) 34%,transparent)}
+.btn-add{border:0;box-shadow:0 8px 22px color-mix(in srgb,var(--a2) 32%,transparent)}
+.btn-add .ic{background:rgba(255,255,255,.2)}
+/* a small window: the side menu scrolls instead of pushing the account card and the player out of sight */
+.side{min-height:0;overflow-y:auto;scrollbar-width:none}.side::-webkit-scrollbar{display:none}
+@media (max-height:820px){.sitem{height:38px}.side{gap:8px;padding-top:12px}.side .brand{padding-bottom:8px}}
+@media (max-height:700px){.side .miniplayer{display:none}}
+@media (max-width:1180px){.side .miniplayer{display:none}}
+.app-art{position:fixed;inset:-60px;z-index:0;pointer-events:none;background-size:cover;background-position:center;filter:blur(38px) saturate(1.3);opacity:.32}
+[data-theme=light] .app-art{opacity:.22}
+/* the search: a solid glass window with an accent glow, clearly above the dimmed launcher */
+.palette{width:620px;max-width:92vw;height:fit-content;border-radius:26px;background:var(--pop-bg);backdrop-filter:blur(30px) saturate(1.3);border:1px solid color-mix(in srgb,var(--a2) 35%,var(--line));box-shadow:0 30px 80px rgba(0,0,0,.45),0 0 0 6px color-mix(in srgb,var(--a2) 10%,transparent)}
+.palette-in{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.palette-ic{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;flex:none;color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2))}
+.palette-foot{display:flex;gap:14px;align-items:center;padding:8px 16px 10px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}

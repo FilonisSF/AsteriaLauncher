@@ -113,12 +113,12 @@ public final class Gfx120 implements Gfx {
     @Override public void textTop(String s, float x, float y, int argb) { m.push(); m.translate(0, 0, 300); text(s, x, y, argb, true); m.pop(); }
     @Override public int width(String s) { return tr.getWidth(t(s)); }
     /** our smooth TTF font (assets/asteria_visuals/font/ui.json) unless the theme switches it off */
-    private static final Identifier[][] UI = new Identifier[16][13];
+    private static final Identifier[][] UI = new Identifier[32][13];
     /** GUI scale 1..6: the font variant rendered for exactly this many pixels per GUI pixel */
     private static int gs() { return Math.max(1, Math.min(6, (int) Math.round(net.minecraft.client.MinecraftClient.getInstance().getWindow().getScaleFactor()))); }
     private static Text t(String s) { return t(s, gs() * 2); }
     /** k = real screen pixels per GUI pixel (GUI scale x HUD scale): glyphs rasterised for exactly that size stay sharp */
-    private static Text t(String s, int k0) { if (V.font <= 0) return Text.literal(s); int i = Math.min(15, V.font), k = Math.max(2, Math.min(12, k0)); if (UI[i][k] == null) UI[i][k] = new Identifier("asteria_visuals", "f" + i + "h" + k); return Text.literal(s).setStyle(Style.EMPTY.withFont(UI[i][k])); }
+    private static Text t(String s, int k0) { if (V.font <= 0) return Text.literal(s); int i = Math.min(31, V.font), k = Math.max(2, Math.min(12, k0)); if (UI[i][k] == null) UI[i][k] = new Identifier("asteria_visuals", "f" + i + "h" + k); return Text.literal(s).setStyle(Style.EMPTY.withFont(UI[i][k])); }
     @Override public void item(Object stack, int x, int y) { flush(); ctx.drawItem((ItemStack) stack, x, y); }
     @Override public boolean effectIcon(Object type, int x, int y, int size) { flush();
         Sprite sp = c.getStatusEffectSpriteManager().getSprite((StatusEffect) type);
