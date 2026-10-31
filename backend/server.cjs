@@ -2,7 +2,7 @@
 // Admin panel:  http://<address>:8080/admin   (key is printed on start and saved to backend/data/admin-key.txt)
 // Env (optional): PORT=8080  ADMIN_KEY=...  STATS_KEY=...
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto')
-const VERSION = '1.6.4'
+const VERSION = '1.6.5'
 const DATA = path.join(__dirname, 'data'); fs.mkdirSync(DATA, { recursive: true })
 for (const d of ['premium', 'mods', 'skins']) fs.mkdirSync(path.join(DATA, d), { recursive: true })
 const rd = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(DATA, f), 'utf8')) } catch { return d } }
@@ -187,6 +187,7 @@ const server = http.createServer((req, res) => {
       return authed(n, j.token) ? json({ ok: true }) : json({ error: 'owned' }, 403)
     }
     if (url === '/friends') { // { name, token, act: 'get' | 'request' | 'answer' | 'remove', who?, accept? }
+      adopt(n, j.token) // a fresh backend (Render's free disk is wiped on restarts) takes the token the launcher already holds
       if (!authed(n, j.token)) return json({ error: 'owned' }, 403)
       let who = String(j.who || '')
       if (j.act === 'request') { const c = String(j.code || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), key = c.slice(0, 4) + '-' + c.slice(4, 8), owner = fbyCode[key]
@@ -213,6 +214,7 @@ const server = http.createServer((req, res) => {
       seenName[n] = j.name
       return json({ code: fcode(n), friends: me.f, incoming: me.in, outgoing: me.out, notes: me.notes.filter((x) => x.t > since), pres }) }
     if (url === '/heartbeat') {
+      adopt(n, j.token)
       if (tokens[n] && !authed(n, j.token)) return json({ error: 'owned' }, 403)
       online.set(n, Date.now()); seenDb[n] = Date.now(); presence.set(n, { ver: /^[0-9.]{3,10}$/.test(String(j.ver || '')) ? String(j.ver) : '', host: /^([a-z0-9-]+\.)+e4mc\.link$/.test(String(j.host || '')) ? String(j.host) : '', srv: /^[a-z0-9.-]{0,60}$/i.test(String(j.srv || '')) ? String(j.srv) : '' }); setCosm(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?(:m)?$/.test(String(j.pet || '')) ? String(j.pet) : '', fx: /^[a-z0-9:.,]{0,60}$/.test(String(j.fx || '')) ? String(j.fx || '') : '' }) // pet: "<kind>:<size>" from the visuals, '' = none; return json({ ok: true, ...planOf(n) })
     }
