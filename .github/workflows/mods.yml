@@ -6,6 +6,8 @@ on:
   push: { paths: ['mods/**', 'server-plugin/**', '.github/workflows/mods.yml'] }
   workflow_dispatch: {}
 permissions: { contents: write }
+# one upload at a time: a push to main and a version tag start together, and two --clobber uploads into one release broke each other
+concurrency: { group: mods-release, cancel-in-progress: false }
 jobs:
   release:
     runs-on: ubuntu-latest
