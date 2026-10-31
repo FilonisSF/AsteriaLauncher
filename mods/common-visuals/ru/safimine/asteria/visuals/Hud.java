@@ -151,14 +151,18 @@ public final class Hud {
         for (Object st : all) if (st != null && game.itemCooldown(st) > 0.001f && seen.add(game.itemId(st))) out.add(st);
         return out;
     }
-    private static final Map<String, float[]> CD = new HashMap<>(); // item -> last progress, time, speed
+    /** a cooldown: progress and time when it started, the time shown last (it only goes down) */
+    private static final class Cd { float f0, shown = Float.MAX_VALUE; long t0; }
+    private static final Map<String, Cd> CD = new HashMap<>();
     private static void cooldownList(Game game, List<Object> l) {
         D.panel(0, 0, 104, Math.max(1, l.size()) * 20 + 4, 5);
         float y = 2;
         long now = System.currentTimeMillis();
-        for (Object st : l) { float f = game.itemCooldown(st); String id = game.itemId(st); float[] r = CD.get(id);
-            if (r == null || f > r[0] + 0.02f) r = new float[]{f, now % 100000, 0}; else if (f < r[0]) { float dt = ((now % 100000) - r[1]) / 1000f; if (dt > 0.05f) { float rate = (r[0] - f) / dt; r[2] = r[2] == 0 ? rate : r[2] * 0.7f + rate * 0.3f; r[0] = f; r[1] = now % 100000; } }
-            CD.put(id, r); String left = r[2] > 0 ? String.format(java.util.Locale.ROOT, "%.1fс", f / r[2]) : "";
+        for (Object st : l) { float f = game.itemCooldown(st); String id = game.itemId(st); Cd r = CD.get(id);
+            if (r == null || f > r.f0 + 0.02f) { r = new Cd(); r.f0 = f; r.t0 = now; CD.put(id, r); } // a new cooldown started
+            // the whole length from the start (steady), not from the last two frames (it jumped back and forth); the number never goes up
+            float spent = r.f0 - f, el = (now - r.t0) / 1000f; String left = "";
+            if (spent > 0.03f && el > 0.15f) { float l2 = f * el / spent; r.shown = Math.min(r.shown, l2); left = String.format(java.util.Locale.ROOT, "%.1fс", Math.max(0, r.shown)); }
             D.g.item(st, 3, (int) y + 1);
             D.round(24, y + 8, 98 - (left.isEmpty() ? 0 : 24), y + 12, 2, 0x30FFFFFF); D.round(24, y + 8, 24 + (74 - (left.isEmpty() ? 0 : 24)) * f, y + 12, 2, V.a1(), V.a2());
             if (!left.isEmpty()) D.textS(left, 78, y + 6.5f, 0.8f, 0xFFFFFFFF);

@@ -245,6 +245,9 @@ function MiniPlayer() {
 export default function App() {
   const [tab, setTab] = useState('home'), [menu, setMenu] = useState(''), [addOpen, setAddOpen] = useState(false), [st, setSt] = useState<{ online: boolean; ping: number; players: number; max: number; checking?: boolean }>({ online: false, ping: 0, players: 0, max: 500, checking: true }) // checking: no answer yet — not "maintenance"
   const [lang, setLang] = usePref('lang', deviceLang()); useEffect(() => { setUiLang(lang) }, [lang]) // every Russian text left on screen follows the language too
+  // a light mode for weak computers: no glass blur, no moving background — on by itself on 4 cores / 4 GB or less, a switch in Settings
+  const [lite, setLite] = usePref('liteUi', ((navigator.hardwareConcurrency || 8) <= 4 || ((navigator as any).deviceMemory || 8) <= 4) ? '1' : '0')
+  useEffect(() => { document.documentElement.classList.toggle('lite', lite === '1') }, [lite])
   const [theme, setTheme] = usePref('theme', 'dark'), [accent, setAccent] = usePref('accent', 'aqua'), [fx, setFx] = usePref('fx', 'stars'), [custom, setCustom] = usePref('customAccent', '#22d3ee')
   const [look, setLook] = usePref('lookPreview', '1'), [skinSpin, setSkinSpin] = usePref('skinSpin', '1'), [ver, setVer] = usePref('ver', '1.16.5'), [capeId, setCapeS] = useState(''), [badgeId] = usePref('badge', 'crystal')
   const [acc, setAcc] = useState<{ list: any[]; active?: string }>({ list: [] }), [cfg, setCfg] = useState<any>(null), [sys, setSys] = useState({ totalMb: 16384 })
@@ -329,6 +332,7 @@ export default function App() {
   const [toastKind, setToastKind] = useState<'ok' | 'err' | 'info'>('ok')
   /** toast: 'ok' = done, 'err' = something went wrong (stays longer), 'info' = a neutral notice */
   const say = (m: string, kind: 'ok' | 'err' | 'info' = 'ok') => { setToast(m); setToastKind(kind); clearTimeout((say as any).t); (say as any).t = setTimeout(() => setToast(''), kind === 'err' ? 7000 : 4500) }
+  useEffect(() => api.onCrash?.((m: string) => { say(m, 'err'); setLogOpen(true) }), []) // the game crashed at the start: the reason in plain words and the log
   // screenshots: arrows (and ← →) flip through them
   const shotList = shots.filter((x) => x.name.toLowerCase().includes(shotQ.toLowerCase()))
   const shotStep = (d: number) => { if (!shotView || !shotList.length) return; const i = shotList.findIndex((x) => x.file === shotView.file); setShotView(shotList[(i + d + shotList.length) % shotList.length]) }
@@ -630,6 +634,7 @@ export default function App() {
               <Switch on={cfg.optimize !== false} set={(v) => setCfg({ ...cfg, optimize: v })} label="Оптимизация" hint="Sodium, Lithium, FerriteCore и др. Включена — удалённые моды скачаются снова; выключена — игра без них" /></div>
             <div className="card rounded-3xl p-5 flex flex-col gap-3"><div className="font-bold flex items-center gap-2"><Icon n="palette" s={16} />Внешний вид</div>
               <label className="text-sm"><div className="flex justify-between"><span>{t('uiScale')}</span><b>{uiscale}%</b></div><input type="range" min={70} max={130} step={5} value={uiscale} onChange={(e) => setUiscale(e.target.value)} className="w-full" /></label>
+              <Switch on={lite === '1'} set={(v) => setLite(v ? '1' : '0')} label="Лёгкий режим (для слабых ПК)" hint="Без размытия стекла и движущегося фона: лаунчер работает плавнее и ест меньше памяти" />
               <div className="text-sm">{t('effects')}</div><div className="flex gap-1.5 flex-wrap">{['none', 'snow', 'rain', 'leaves', 'stars', 'sparks'].map((k) => <button key={k} className={'pill ' + (fx === k ? 'on' : '')} onClick={() => setFx(k)}>{t('fx_' + k)}</button>)}</div>
               <div className="flex items-center justify-between"><span className="text-sm">Акцентный цвет</span><ColorPick value={accent === 'custom' ? custom : (ACCENTS[accent] ?? ACCENTS.aqua)[1]} set={(v) => { setCustom(v); setAccent('custom') }} size="sm" /></div></div>
             <div className="card rounded-3xl p-5 flex flex-col gap-3"><div className="font-bold flex items-center gap-2"><Icon n="discord" s={16} />Discord</div>

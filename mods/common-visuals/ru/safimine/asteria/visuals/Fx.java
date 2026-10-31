@@ -464,9 +464,17 @@ public final class Fx {
         if (V.on("hitparticles") && (id.endsWith(":crit") || id.endsWith(":enchanted_hit") || id.endsWith(":sweep_attack") || id.endsWith(":damage_indicator"))) return true;
         return V.on("totem") && V.bool("totem", "particles") && id.endsWith(":totem_of_undying");
     }
-    public static boolean muteVanilla(String id) { if (id == null) return false;
+    public static boolean muteVanilla(String id) { return muteVanilla(id, Double.NaN, 0, 0); }
+    /** x, y, z: where the sound plays — a "hurt" right at your feet is you being hit, which has its own setting */
+    public static boolean muteVanilla(String id, double x, double y, double z) { if (id == null) return false;
         if (id.contains("item.totem.use") && V.on("totem")) return true; // our totem animation has its own sound, not the vanilla blast
-        return V.on("sounds") && (V.bool("sounds", "mute") || V.mode("sounds", "hit") > 0) && (id.contains("entity.player.attack") || id.contains("entity.player.hurt") || id.contains("entity.generic.hurt")); }
+        boolean hurt = id.contains("entity.player.hurt") || id.contains("entity.generic.hurt");
+        if (hurt && game != null && !Double.isNaN(x)) { Object self = game.self(); if (self != null) { double[] p = game.pos(self, 1);
+            if (Math.abs(p[0] - x) < 1.2 && Math.abs(p[2] - z) < 1.2 && Math.abs(p[1] + 0.9 - y) < 1.6) { // you were hit: "Звук ударов по мне"
+                int k = V.on("sounds") ? V.mode("sounds", "selfhurt") : 0; if (k == 0) return false;
+                if (k >= 2 && k - 2 < HIT_SOUNDS.length) sound(HIT_SOUNDS[k - 2], (float) V.num("sounds", "volume"));
+                return true; } } }
+        return V.on("sounds") && (V.bool("sounds", "mute") || V.mode("sounds", "hit") > 0) && (id.contains("entity.player.attack") || hurt); }
     public static void sound(String id, float vol) { if (game != null) try { game.sound(id, vol, 0.95f + (float) Math.random() * 0.1f); } catch (Throwable ignored) {} }
     private static void jumpBurst(double[] p, boolean jump, long now) {
         int n = (int) V.num("jumpparticles", "count");

@@ -400,3 +400,9 @@ button.pill:hover{background:color-mix(in srgb,var(--a2) 14%,var(--pill-bg));col
 .mp2{padding-bottom:12px}
 .mp-play{box-shadow:0 3px 10px color-mix(in srgb,var(--a2) 35%,transparent);background-clip:padding-box;border:0;outline:none}
 .mp-play:focus-visible{outline:2px solid var(--a2);outline-offset:2px}
+
+/* light mode (weak computers): glass without blur, no moving background, calmer animations */
+.lite *,.lite *::before,.lite *::after{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.lite .aurora,.lite .grain,.lite .app-art,.lite .mp-bgart{display:none!important}
+.lite .glass,.lite .card,.lite .palette,.lite .ask{background-color:color-mix(in srgb,var(--card,#0b1a24) 96%,transparent)}
+.lite .spin-soft,.lite .mp-title .marq,.lite .mp-eq.on i{animation:none!important}

@@ -12,5 +12,5 @@ import ru.safimine.asteria.visuals.Fx;
 @Mixin(SoundManager.class)
 public class SoundMuteMixin {
     @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), cancellable = true, require = 0)
-    private void asteria$mute(SoundInstance s, CallbackInfo ci) { try { if (Fx.muteVanilla(String.valueOf(s.getId()))) ci.cancel(); } catch (Throwable ignored) {} }
+    private void asteria$mute(SoundInstance s, CallbackInfo ci) { try { if (Fx.muteVanilla(String.valueOf(s.getId()), s.getX(), s.getY(), s.getZ())) ci.cancel(); } catch (Throwable ignored) {} }
 }

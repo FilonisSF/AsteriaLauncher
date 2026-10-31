@@ -84,6 +84,8 @@ export function LookPreview({ skin, slim, height = 470, cape, hint = true, bare 
           const a1 = hex(th.accent, [34, 211, 238]), a2 = hex(th.accent2, [99, 102, 241]), ys = q.flatMap((x) => [x.p[1], x.p[4], x.p[7], x.p[10]]), y0 = Math.min(...ys), y1 = Math.max(...ys)
           for (const x of q) { const t = ((x.p[1] + x.p[7]) / 2 - y0) / Math.max(1e-6, y1 - y0), sh = x.c[0] / 255; x.c = [0, 1, 2].map((k) => Math.min(255, (a2[k] + (a1[k] - a2[k]) * t) * 0.82 * sh + 255 * 0.18 * sh)).concat(x.c[3]) } }
         if (pk <= 8) sprite = q; else list.push(...q) }
+      if (p?.on && pk === 9) { const k = 0.42 * Math.max(0.5, Math.min(2, +p.s?.size || 1)) // mini-me: a small copy of your skin beside you
+        list.push(...skinQuads(img, slim).map((q) => ({ p: q.p.map((v, i) => i % 3 === 0 ? v * k + 15 : i % 3 === 1 ? v * k : v * k + 6), c: q.c }))) }
       if (alive) quads.current = { solid: list.filter((q) => q.c[3] > 250), glass: list.filter((q) => q.c[3] <= 250), sprite, v: quads.current.v + 1 } }
     img.src = skin; return () => { alive = false } }, [skin, slim, vis, cape, bare])
   // WebGL with a depth buffer: small details on a face (eyes, stripes) no longer flicker in and out while turning, and it is light for the computer

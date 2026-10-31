@@ -5,8 +5,9 @@
   ${if} ${isUpdated}
     ReadRegStr $1 HKCU "Software\AsteriaLauncher" "DesktopShortcut"
     ${if} $1 != "0"
-      CreateShortCut "$DESKTOP\${PRODUCT_FILENAME}.lnk" "$INSTDIR\${PRODUCT_FILENAME}.exe"
+      CreateShortCut "$DESKTOP\${PRODUCT_FILENAME}.lnk" "$INSTDIR\${PRODUCT_FILENAME}.exe" "" "$INSTDIR\${PRODUCT_FILENAME}.exe" 0
       WriteRegStr HKCU "Software\AsteriaLauncher" "DesktopShortcut" "1"
+      System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)' ; Windows redraws the icon (it showed a blank one after an update)
     ${endif}
   ${else}
     WriteRegStr HKCU "Software\AsteriaLauncher" "DesktopShortcut" "0"
@@ -17,7 +18,7 @@
     ${StdUtils.ExecShellAsUser} $0 "$INSTDIR\${PRODUCT_FILENAME}.exe" "open" ""
   FunctionEnd
   Function AsteriaDesktop
-    CreateShortCut "$DESKTOP\${PRODUCT_FILENAME}.lnk" "$INSTDIR\${PRODUCT_FILENAME}.exe"
+    CreateShortCut "$DESKTOP\${PRODUCT_FILENAME}.lnk" "$INSTDIR\${PRODUCT_FILENAME}.exe" "" "$INSTDIR\${PRODUCT_FILENAME}.exe" 0
     WriteRegStr HKCU "Software\AsteriaLauncher" "DesktopShortcut" "1"
   FunctionEnd
   !define MUI_FINISHPAGE_RUN

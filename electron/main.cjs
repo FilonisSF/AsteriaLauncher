@@ -459,6 +459,18 @@ function findJava(s) { // javaw has no console window
   try { return require('child_process').execFileSync('where', ['javaw'], { encoding: 'utf8' }).split(/\r?\n/)[0].trim() || undefined } catch { return undefined }
 }
 let game = null, gameVer = null, gameDirNow = null, logBuf = [], pendingOpts = {}
+/** the game closed with an error soon after the start: look at the log and the newest crash report and say in plain words what happened */
+function crashReason(dir, code) {
+  let txt = logBuf.slice(-400).join('\n')
+  try { const cr = path.join(dir, 'crash-reports'), last = fs.readdirSync(cr).map((n) => path.join(cr, n)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0]; if (last && Date.now() - fs.statSync(last).mtimeMs < 180000) txt += '\n' + fs.readFileSync(last, 'utf8').slice(0, 20000) } catch {}
+  const t = txt.toLowerCase()
+  const why = /could not reserve enough space|outofmemoryerror|insufficient memory|native memory allocation/.test(t) ? 'Не хватило оперативной памяти. Уменьшите память для игры в Настройки → ОЗУ (или закройте браузер) и запустите снова.'
+    : /pixel format not accelerated|glfw error|opengl|wgl|no opengl context|gl_version|amd|intel.*driver|nvoglv/.test(t) && /error|exception/.test(t) ? 'Проблема с видеодрайвером. Обновите драйвер видеокарты (сайт NVIDIA / AMD / Intel) и запустите снова. Если не поможет — выключите «Оптимизацию» в настройках.'
+    : /sodium|lithium|iris|ferritecore|indium/.test(t) ? 'Мод оптимизации не подошёл к вашему компьютеру. Выключите «Оптимизацию» в Настройках и запустите снова.'
+    : /mixin apply failed|incompatible mod|duplicate mod|requires .* which is missing|modresolution/.test(t) ? 'Моды несовместимы между собой. Уберите последние добавленные моды в разделе «Моды» и запустите снова.'
+    : /unsupportedclassversion|java\.lang\.unsupported|has been compiled by a more recent version/.test(t) ? 'Не та версия Java. Очистите поле «Путь к Java» в Настройках — лаунчер скачает подходящую сам.'
+    : 'Игра закрылась с ошибкой (код ' + code + '). Откройте «Журнал игры» — там видно причину; можно отправить его разработчику.'
+  try { win?.webContents.send('crash', why) } catch {} }
 // "Now playing": a small PowerShell reader of the Windows media controls (electron/media.ps1) runs while the launcher is open.
 // The track goes to the launcher UI ('media' events) and, while a game runs, to <game dir>/config/asteria-media.json (+ cover png);
 // play/pause/next/prev come from the UI or from the mod (config/asteria-media-cmd.txt). -EncodedCommand: no script file, no policy prompt.
@@ -808,7 +820,8 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
       logBuf.push(String(m).trimEnd()); if (logBuf.length > 1000) logBuf.splice(0, 300)
       const e4 = /([a-z0-9-]+\.)+e4mc\.link/i.exec(String(m)); if (e4 && e4[0] !== hostNow) { hostNow = e4[0].toLowerCase(); try { win?.webContents.send('together', hostNow) } catch {} } // the world is open to friends
       if (!started) { started = true; t0 = Date.now(); gameDirNow = dir; coverWritten = {}; rpcGame(version, dir, join ? srv.host : null); send('', 0); try { win?.webContents.send('game', true) } catch {}; if (s.hideOnLaunch !== false) win?.minimize() } })
-    l.on('close', () => { if (hb) clearInterval(hb); beatNow = null; game = null; gameVer = null; gameDirNow = null; hostNow = ''
+    l.on('close', (code) => { const playedMs = t0 ? Date.now() - t0 : 0; if (code && playedMs < 120000) crashReason(dir, code) // a crash right at the start: tell the player why
+      if (hb) clearInterval(hb); beatNow = null; game = null; gameVer = null; gameDirNow = null; hostNow = ''
       fs.rmSync(path.join(dir, 'asteria-live.flag'), { force: true })
       if (Object.keys(pendingOpts).length) { setOpts(dir, pendingOpts); pendingOpts = {} } // the game may rewrite options.txt on exit: keep what was changed in the launcher
       if (t0) { const el = Date.now() - t0, pv = store.get('perVer', {}); store.set('playMs', store.get('playMs', 0) + el); pv[version] = (pv[version] || 0) + el; store.set('perVer', pv); store.set('launches', store.get('launches', 0) + 1) }

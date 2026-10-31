@@ -33,4 +33,7 @@ public class InGameHudMixin {
     private void asteria$hudEnd(DrawContext ctx, net.minecraft.client.render.RenderTickCounter tc, CallbackInfo ci) { if (!hudDrawn) { hudDrawn = true; VisualsClient.hud(ctx); } }
     @Inject(method = "renderScoreboardSidebar(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/scoreboard/ScoreboardObjective;)V", at = @At("HEAD"), cancellable = true, require = 0)
     private void asteria$noScoreboard(CallbackInfo ci) { if (ru.safimine.asteria.visuals.V.on("noscoreboard")) ci.cancel(); }
+    /** our "effects" panel replaces the vanilla effect icons in the top right corner (both showed at once) */
+    @Inject(method = "renderStatusEffectOverlay", at = @At("HEAD"), cancellable = true, require = 0)
+    private void asteria$noVanillaEffects(org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) { if (ru.safimine.asteria.visuals.V.on("effects")) ci.cancel(); }
 }

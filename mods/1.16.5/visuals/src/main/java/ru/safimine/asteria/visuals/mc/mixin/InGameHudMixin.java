@@ -32,4 +32,7 @@ public class InGameHudMixin {
     private void asteria$hudEnd(net.minecraft.client.util.math.MatrixStack m, float delta, CallbackInfo ci) { if (!hudDrawn) { hudDrawn = true; ru.safimine.asteria.visuals.mc.VisualsClient.hud(m); } }
     @Inject(method = "renderScoreboardSidebar(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/scoreboard/ScoreboardObjective;)V", at = @At("HEAD"), cancellable = true, require = 0)
     private void asteria$noScoreboard(CallbackInfo ci) { if (ru.safimine.asteria.visuals.V.on("noscoreboard")) ci.cancel(); }
+    /** our "effects" panel replaces the vanilla effect icons in the top right corner (both showed at once) */
+    @Inject(method = "renderStatusEffectOverlay", at = @At("HEAD"), cancellable = true, require = 0)
+    private void asteria$noVanillaEffects(org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) { if (ru.safimine.asteria.visuals.V.on("effects")) ci.cancel(); }
 }
