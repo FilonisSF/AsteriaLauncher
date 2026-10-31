@@ -600,7 +600,7 @@ function backupApply(json) { const b = JSON.parse(json); if (!b || b.v !== 1) th
   return { local: b.local || {}, mode: b.mode } }
 ipcMain.handle('backup:code', async (_, mode, local) => { try { await resolveApi().catch(() => {}); const data = backupMake(mode, local)
     const r = await net.fetch(apiBase() + '/backup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data }) }); const j = await r.json().catch(() => ({}))
-    if (!r.ok || !j.code) return { error: r.status === 404 ? 'Коды заработают после обновления сервера Asteria — пока сохраните в файл' : 'Сервер не принял: ' + (j.error || r.status) }
+    if (!r.ok || !j.code) return { error: r.status === 404 || j.error === 'bad name' ? 'Коды заработают после обновления сервера Asteria (он ещё старой версии) — пока сохраните в файл: кнопка «В файл»' : 'Сервер не принял: ' + (j.error || r.status) } // 'bad name': the old server has no /backup and answers from another route
     return { code: j.code.slice(0, 5) + '-' + j.code.slice(5) } } catch (e) { return { error: 'Сервер Asteria недоступен — сохраните в файл' } } })
 ipcMain.handle('backup:file', async (_, mode, local) => { const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), 'AsteriaLauncher-' + new Date().toISOString().slice(0, 10) + '.asteria-backup'), filters: [{ name: 'Сохранение AsteriaLauncher', extensions: ['asteria-backup'] }] })
   if (!r.filePath) return null; fs.writeFileSync(r.filePath, backupMake(mode, local)); shell.showItemInFolder(r.filePath); return { file: r.filePath } })

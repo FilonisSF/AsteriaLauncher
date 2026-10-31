@@ -69,12 +69,12 @@ function tris(list: Q[]) { const out = new Float32Array(list.length * 6 * 7); le
 
 /** bare: only the skin and the cape (the "Skin" view) — the same picture, size and light as the view with cosmetics */
 export function LookPreview({ skin, slim, height = 470, cape, hint = true, bare = false, spin = true }: { skin: string; slim: boolean; height?: number; cape?: string; hint?: boolean; bare?: boolean; spin?: boolean }) {
-  const cv = useRef<HTMLCanvasElement>(null), [vis, setVis] = useState<any>(null), quads = useRef<{ solid: Q[]; glass: Q[]; v: number }>({ solid: [], glass: [], v: 0 }), view = useRef({ yaw: 200, pitch: 12, drag: false, lx: 0, ly: 0, idle: 0 })
+  const cv = useRef<HTMLCanvasElement>(null), [vis, setVis] = useState<any>(null), quads = useRef<{ solid: Q[]; glass: Q[]; sprite: Q[]; v: number }>({ solid: [], glass: [], sprite: [], v: 0 }), view = useRef({ yaw: 200, pitch: 12, drag: false, lx: 0, ly: 0, idle: 0 })
   const spinRef = useRef(spin); spinRef.current = spin
   const load = () => window.api.visGet().then(setVis)
   useEffect(() => { load(); return window.api.onFiles?.((f: any) => { if (f.kind === 'vis') load() }) }, [])
   useEffect(() => { let alive = true; const img = new Image(); img.crossOrigin = 'anonymous'
-    img.onload = async () => { const m = bare ? {} : vis?.modules || {}, c = (m as any).cosmetics, p = (m as any).pet, list: Q[] = skinQuads(img, slim)
+    img.onload = async () => { const m = bare ? {} : vis?.modules || {}, c = (m as any).cosmetics, p = (m as any).pet, list: Q[] = skinQuads(img, slim); let sprite: Q[] = []
       const wingsOn = c?.on && (+c.s?.wings || 0) > 0
       if (cape && !wingsOn) { const ci = await loadImg(cape); if (ci) list.push(...capeQuads(ci)) } // wings take the cape's place, as in the game
       if (c?.on) for (const [k, pre] of [['wings', 'w'], ['hat', 'h'], ['back', 'b']] as const) { const i = +c.s?.[k] || 0; if (i > 0) list.push(...fromMesh(await mesh(pre + '-' + i))) }
@@ -83,15 +83,15 @@ export function LookPreview({ skin, slim, height = 470, cape, hint = true, bare 
           const th = vis?.theme || {}, hex = (h: string, d: number[]) => /^#[0-9a-f]{6}$/i.test(h || '') ? [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)) : d
           const a1 = hex(th.accent, [34, 211, 238]), a2 = hex(th.accent2, [99, 102, 241]), ys = q.flatMap((x) => [x.p[1], x.p[4], x.p[7], x.p[10]]), y0 = Math.min(...ys), y1 = Math.max(...ys)
           for (const x of q) { const t = ((x.p[1] + x.p[7]) / 2 - y0) / Math.max(1e-6, y1 - y0), sh = x.c[0] / 255; x.c = [0, 1, 2].map((k) => Math.min(255, (a2[k] + (a1[k] - a2[k]) * t) * 0.82 * sh + 255 * 0.18 * sh)).concat(x.c[3]) } }
-        list.push(...q) }
-      if (alive) quads.current = { solid: list.filter((q) => q.c[3] > 250), glass: list.filter((q) => q.c[3] <= 250), v: quads.current.v + 1 } }
+        if (pk <= 8) sprite = q; else list.push(...q) }
+      if (alive) quads.current = { solid: list.filter((q) => q.c[3] > 250), glass: list.filter((q) => q.c[3] <= 250), sprite, v: quads.current.v + 1 } }
     img.src = skin; return () => { alive = false } }, [skin, slim, vis, cape, bare])
   // WebGL with a depth buffer: small details on a face (eyes, stripes) no longer flicker in and out while turning, and it is light for the computer
   useEffect(() => { const c = cv.current; if (!c) return; const gl = c.getContext('webgl', { antialias: true, premultipliedAlpha: false, alpha: true }); if (!gl) return
     const sh = (t: number, src: string) => { const s = gl.createShader(t)!; gl.shaderSource(s, src); gl.compileShader(s); return s }
     const pg = gl.createProgram()!; gl.attachShader(pg, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pg, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pg); gl.useProgram(pg)
     const aP = gl.getAttribLocation(pg, 'p'), aC = gl.getAttribLocation(pg, 'c'), uRot = gl.getUniformLocation(pg, 'rot'), uView = gl.getUniformLocation(pg, 'view')
-    const bufS = gl.createBuffer(), bufG = gl.createBuffer(); let have = -1, nS = 0, nG = 0, raf = 0
+    const bufS = gl.createBuffer(), bufG = gl.createBuffer(), bufP = gl.createBuffer(); let have = -1, nS = 0, nG = 0, raf = 0
     const bind = (b: WebGLBuffer | null) => { gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(aP); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 28, 0); gl.enableVertexAttribArray(aC); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 28, 12) }
     const draw = () => { raf = requestAnimationFrame(draw); const W = c.clientWidth, H = c.clientHeight, dpr = devicePixelRatio || 1
       if (c.width !== W * dpr || c.height !== H * dpr) { c.width = W * dpr; c.height = H * dpr }
@@ -102,9 +102,13 @@ export function LookPreview({ skin, slim, height = 470, cape, hint = true, bare 
       // see-through parts (wings, jelly, glass) go back to front each frame, over the solid ones
       const g = q.glass.map((x) => { let z = 0; for (let i = 0; i < 12; i += 3) { const zr = -x.p[i] * sa + x.p[i + 2] * ca; z += x.p[i + 1] * sb + zr * cb } return { x, z } }).sort((m, n) => m.z - n.z).map((m) => m.x)
       const gd = tris(g); gl.bindBuffer(gl.ARRAY_BUFFER, bufG); gl.bufferData(gl.ARRAY_BUFFER, gd, gl.DYNAMIC_DRAW); nG = gd.length / 7
+      // a picture pet always faces you, as in the game: turned back around its own centre by the view's turn, bobbing a little
+      const sp = q.sprite.length ? tris(q.sprite.map((x) => { const p = x.p.slice(), bob = Math.sin(performance.now() / 420) * 0.8
+        for (let i = 0; i < 12; i += 3) { const dx = p[i] - 15, dz = p[i + 2] - 6; p[i] = 15 + dx * ca - dz * sa; p[i + 2] = 6 + dx * sa + dz * ca; p[i + 1] += bob } return { p, c: x.c } })) : new Float32Array(0)
+      gl.bindBuffer(gl.ARRAY_BUFFER, bufP); gl.bufferData(gl.ARRAY_BUFFER, sp, gl.DYNAMIC_DRAW); const nP = sp.length / 7
       gl.viewport(0, 0, c.width, c.height); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
       const k = H / 60; gl.uniform4f(uRot, ca, sa, cb, sb); gl.uniform3f(uView, 2 * k / W, 2 * k / H, (H * 0.34) / k) // the feet at 84 % of the height, like before
-      gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.BLEND); gl.depthMask(true); bind(bufS); gl.drawArrays(gl.TRIANGLES, 0, nS)
+      gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.BLEND); gl.depthMask(true); bind(bufS); gl.drawArrays(gl.TRIANGLES, 0, nS); if (nP) { bind(bufP); gl.drawArrays(gl.TRIANGLES, 0, nP) }
       gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); bind(bufG); gl.drawArrays(gl.TRIANGLES, 0, nG); gl.depthMask(true) }
     draw(); return () => cancelAnimationFrame(raf) }, [])
   const down = (e: React.PointerEvent) => { const v = view.current; v.drag = true; v.lx = e.clientX; v.ly = e.clientY; (e.target as HTMLElement).setPointerCapture(e.pointerId) }
