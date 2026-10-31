@@ -88,6 +88,8 @@ public interface Game {
     default boolean mainHandEmpty() { return false; }
     /** watching as a spectator: the game shows its own spectator bar instead of the hotbar */
     default boolean spectator() { return false; }
+    /** the auto-click (TapeMouse): button 0 = attack, 1 = use; hold keeps it down, click presses it once */
+    default void autoMouse(int button, int hold, boolean click) {} // hold: 1 down, 0 up, -1 leave it to the player
     /** wears elytra in the chest slot / is flying with them */
     default boolean elytraOf(Object e) { for (Item it : armorOf(e)) if (itemId(it.stack).endsWith("elytra")) return true; return false; }
     default boolean glidingOf(Object e) { return false; }

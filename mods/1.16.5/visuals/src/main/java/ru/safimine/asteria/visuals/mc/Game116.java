@@ -110,6 +110,8 @@ final class Game116 implements Game {
     @Override public boolean glidingOf(Object e) { return e instanceof net.minecraft.entity.LivingEntity && ((net.minecraft.entity.LivingEntity) e).isFallFlying(); }
     @Override public boolean mainHandEmpty() { return c.player == null || c.player.getMainHandStack().isEmpty(); }
     @Override public boolean spectator() { return c.player != null && c.player.isSpectator(); }
+    @Override public void autoMouse(int button, int hold, boolean click) { if (c.player == null) return; KeyBinding k = button == 0 ? c.options.keyAttack : c.options.keyUse;
+        if (hold >= 0) k.setPressed(hold == 1); if (click) KeyBinding.onKeyPressed(((ru.safimine.asteria.visuals.mc.mixin.BoundKeyAccessor) k).asteria$bound()); }
     @Override public boolean hitboxDebug() { try { return c.getEntityRenderDispatcher().shouldRenderHitboxes(); } catch (Throwable t) { return false; } }
     @Override public boolean onGroundOf(Object e) { return !(e instanceof Entity) || ((Entity) e).isOnGround(); }
     @Override public float headYawOf(Object e, float pt) { if (!(e instanceof net.minecraft.entity.LivingEntity)) return headYawOf(e); net.minecraft.entity.LivingEntity l = (net.minecraft.entity.LivingEntity) e; return net.minecraft.util.math.MathHelper.lerpAngleDegrees(pt, l.prevHeadYaw, l.headYaw); }

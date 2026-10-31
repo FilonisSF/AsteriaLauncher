@@ -208,10 +208,12 @@ function SearchBar({ open }: { open: () => void }) {
     <kbd>Ctrl</kbd><kbd>F</kbd></button>
 }
 
+/** where the music comes from, by the Windows media session id */
+const mediaApp = (id = '') => { const s = id.toLowerCase(); return s.includes('spotify') ? 'Spotify' : s.includes('yandex') ? 'Яндекс Музыка' : s.includes('telegram') ? 'Telegram' : s.includes('vk') ? 'VK Музыка' : s.includes('opera') ? 'Opera' : s.includes('chrome') ? 'Chrome' : s.includes('msedge') || s.includes('edge') ? 'Edge' : s.includes('firefox') ? 'Firefox' : s.includes('zune') || s.includes('media') ? 'Медиаплеер' : '' }
 function MiniPlayer() {
   const [m, setM] = useState<any>(null)
   useEffect(() => { api.mediaGet?.().then(setM); return api.onMedia?.(setM) }, [])
-  const [, tick] = useState(0); useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 500); return () => clearInterval(id) }, []) // the bar moves between updates
+  const [, tick] = useState(0); useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 250); return () => clearInterval(id) }, []) // the bar moves between updates
   const [hold, setHold] = useState<{ p: boolean; until: number } | null>(null)
   if (!m?.title) return <div className="mt-auto" /> // after every hook: React needs the same hooks on each render
   // a click shows the new state at once and holds it ~1.5 s: the player reports the old state a moment longer, which made the button flicker
@@ -219,25 +221,29 @@ function MiniPlayer() {
   const cmd = (c: string) => { api.mediaCmd(c); if (c === 'toggle') { setHold({ p: !playing, until: Date.now() + 1500 }); setM({ ...m, playing: !playing, pos, at: Date.now() }) } }
   // Telegram and the like give no length: then the played time is shown and the bar runs as a soft glow
   const raw = (m.pos || 0) + (playing && m.at ? (Date.now() - m.at) / 1000 : 0), pos = m.dur > 0 ? Math.min(m.dur, raw) : raw, f = m.dur > 0 ? pos / m.dur : 0
-  const t = (x: number) => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0')
-  return <div className="miniplayer mt-auto">
-    <div className="flex gap-2.5 items-center">
-      {m.cover ? <img src={m.cover} className="mp-cover" /> : <span className="mp-cover flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--a1),var(--a2))', color: '#fff' }}><Icon n="music" s={18} /></span>}
-      <div className="lbl min-w-0 flex-1"><b className="block truncate text-[12.5px] leading-tight">{m.title}</b><span className="block truncate text-[11px] mp-artist">{m.artist || (playing ? 'Играет' : 'Пауза')}</span></div></div>
-    <div className="lbl mt-2"><div className={'mp-bar' + (m.dur > 0 ? '' : playing ? ' live' : '')}><div style={{ width: (m.dur > 0 ? f * 100 : 100) + '%' }} /></div>
-      {m.dur > 0 ? <div className="flex justify-between text-[10px] muted mt-1 tabular-nums"><span>{t(pos)} / {t(m.dur)}</span><span>-{t(Math.max(0, m.dur - pos))}</span></div>
-        : pos > 0 && <div className="text-[10px] muted mt-1 tabular-nums">{t(pos)}</div>}
-      <div className="flex items-center justify-center gap-1.5 mt-1"><button className="mp-btn" title="Назад" onClick={() => cmd('prev')}><Icon n="prev" s={13} /></button>
-        <button className="mp-btn big" title={playing ? 'Пауза' : 'Играть'} onClick={() => cmd('toggle')}><Icon n={playing ? 'pause' : 'play'} s={14} fill={!playing} /></button>
-        <button className="mp-btn" title="Дальше" onClick={() => cmd('next')}><Icon n="next" s={13} /></button></div>
-      <div className="flex items-center justify-center gap-1 mt-1"><button className="mp-btn" title="Тише" onClick={() => cmd('voldown')}><b className="text-[12px]">−</b></button>
-        <button className="mp-btn" title="Без звука / со звуком" onClick={() => cmd('mute')}><Icon n="volume" s={12} /></button>
-        <button className="mp-btn" title="Громче" onClick={() => cmd('volup')}><b className="text-[12px]">+</b></button></div></div>
+  const t = (x: number) => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0'), app = mediaApp(m.app), long = (m.title || '').length > 22
+  return <div className="miniplayer mp2 mt-auto" key={m.key?.split('#')[0]}>
+    {m.cover && <div className="mp-bgart" style={{ backgroundImage: `url(${m.cover})` }} />}
+    <div className="relative flex gap-2.5 items-center">
+      <div className="relative shrink-0">{m.cover ? <img src={m.cover} className={'mp-cover ' + (playing ? 'spin-soft' : '')} /> : <span className="mp-cover flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--a1),var(--a2))', color: '#fff' }}><Icon n="music" s={18} /></span>}
+        <span className={'mp-eq ' + (playing ? 'on' : '')}><i /><i /><i /></span></div>
+      <div className="lbl min-w-0 flex-1">
+        <div className="mp-title"><b className={long ? 'marq' : ''}>{m.title}{long && <span className="pl-8">{m.title}</span>}</b></div>
+        <span className="block truncate text-[11px] mp-artist">{m.artist || (playing ? 'Играет' : 'Пауза')}</span>
+        {app && <span className="mp-app">{app}</span>}</div></div>
+    <div className="lbl relative mt-2.5"><div className={'mp-bar' + (m.dur > 0 ? '' : playing ? ' live' : '')}><div style={{ width: (m.dur > 0 ? f * 100 : 100) + '%' }} /></div>
+      <div className="flex justify-between text-[10px] muted mt-1 tabular-nums"><span>{pos > 0 || m.dur > 0 ? t(pos) : ''}</span><span>{m.dur > 0 ? '-' + t(Math.max(0, m.dur - pos)) : playing ? 'в эфире' : ''}</span></div>
+      <div className="flex items-center justify-between mt-1.5">
+        <button className="mp-btn" title="Тише" onClick={() => cmd('voldown')}><Icon n="volume" s={11} /><b className="text-[10px] -ml-0.5">−</b></button>
+        <div className="flex items-center gap-1.5"><button className="mp-btn" title="Назад" onClick={() => cmd('prev')}><Icon n="prev" s={14} /></button>
+          <button className="mp-play" title={playing ? 'Пауза' : 'Играть'} onClick={() => cmd('toggle')}><Icon n={playing ? 'pause' : 'play'} s={16} fill={!playing} /></button>
+          <button className="mp-btn" title="Дальше" onClick={() => cmd('next')}><Icon n="next" s={14} /></button></div>
+        <button className="mp-btn" title="Громче" onClick={() => cmd('volup')}><Icon n="volume" s={11} /><b className="text-[10px] -ml-0.5">+</b></button></div></div>
   </div>
 }
 
 export default function App() {
-  const [tab, setTab] = useState('home'), [menu, setMenu] = useState(''), [addOpen, setAddOpen] = useState(false), [st, setSt] = useState({ online: false, ping: 0, players: 0, max: 500 })
+  const [tab, setTab] = useState('home'), [menu, setMenu] = useState(''), [addOpen, setAddOpen] = useState(false), [st, setSt] = useState<{ online: boolean; ping: number; players: number; max: number; checking?: boolean }>({ online: false, ping: 0, players: 0, max: 500, checking: true }) // checking: no answer yet — not "maintenance"
   const [lang, setLang] = usePref('lang', deviceLang()); useEffect(() => { setUiLang(lang) }, [lang]) // every Russian text left on screen follows the language too
   const [theme, setTheme] = usePref('theme', 'dark'), [accent, setAccent] = usePref('accent', 'aqua'), [fx, setFx] = usePref('fx', 'stars'), [custom, setCustom] = usePref('customAccent', '#22d3ee')
   const [look, setLook] = usePref('lookPreview', '1'), [skinSpin, setSkinSpin] = usePref('skinSpin', '1'), [ver, setVer] = usePref('ver', '1.16.5'), [capeId, setCapeS] = useState(''), [badgeId] = usePref('badge', 'crystal')
@@ -401,7 +407,7 @@ export default function App() {
       {menu && <div className="fixed inset-0 z-20" onClick={() => setMenu('')} />}
       {/* ---------- title bar */}
       <div className="drag h-12 flex items-center justify-between px-4 relative z-30 gap-3">
-        <span className="min-w-[180px] whitespace-nowrap muted text-xs font-semibold tracking-wide hidden xl:block">{conf.server.name} · {st.online ? st.players + ' онлайн' : t('maint')}{lOnline != null && lOnline > 0 && <> · <span style={{ color: 'var(--a2)' }}>{lOnline} с лаунчером</span></>}</span>
+        <span className="min-w-[180px] whitespace-nowrap muted text-xs font-semibold tracking-wide hidden xl:block">{conf.server.name} · {st.online ? st.players + ' онлайн' : st.checking ? 'проверяем…' : t('maint')}{lOnline != null && lOnline > 0 && <> · <span style={{ color: 'var(--a2)' }}>{lOnline} с лаунчером</span></>}</span>
         <SearchBar open={() => setPal(true)} />
         <div className="nodrag flex items-center gap-2">
           <div className="relative"><button className="topchip" onClick={() => setMenu(menu === 'lang' ? '' : 'lang')}><img src={FLAGS[lang]} className="w-5 h-3.5 rounded-sm" />{lang.toUpperCase()}</button>
@@ -442,7 +448,7 @@ export default function App() {
             <div className="min-w-0">
               <div className="hero mb-6">{OVR.hero ? <img src={OVR.hero} className="bg" /> : ART[rec] ? <Pic src={ART[rec]} cls="bg object-cover" /> : <img src={hero} className="bg" />}
                 <div className="heroText relative h-full min-h-[330px] flex flex-col justify-end p-8 text-white">
-                  <div className="flex gap-2 mb-3"><span className="badge ast"><span className={'glow-dot ' + (st.online ? '' : 'off')} />{st.online ? `${st.players} игроков онлайн` : t('maint')}</span>{ver === rec && <span className="badge rec"><Gem s={11} glow={false} />{t('recommended')}</span>}</div>
+                  <div className="flex gap-2 mb-3"><span className="badge ast"><span className={'glow-dot ' + (st.online ? '' : 'off')} />{st.online ? `${st.players} игроков онлайн` : st.checking ? 'Проверяем сервер…' : t('maint')}</span>{ver === rec && <span className="badge rec"><Gem s={11} glow={false} />{t('recommended')}</span>}</div>
                   <div className="text-lg font-bold text-white/85">Добро пожаловать на</div>
                   <h1 className="text-6xl font-black tracking-tight leading-none" style={{ textShadow: '0 6px 40px rgba(0,0,0,.45)' }}>{conf.server.name.slice(0, Math.ceil(conf.server.name.length / 2))}<span style={{ color: 'var(--a2)' }}>{conf.server.name.slice(Math.ceil(conf.server.name.length / 2))}</span></h1>
                   <p className="max-w-xl text-white/85 text-sm mt-3 mb-6 leading-relaxed">{about}</p>
@@ -467,7 +473,7 @@ export default function App() {
             <aside className="flex flex-col gap-4 stagger">
               <div className="card rounded-3xl p-5"><div className="flex items-center gap-3 mb-3"><img src={avatar} className="w-12 h-12 rounded-2xl shadow-lg" /><div className="min-w-0"><div className="font-black text-lg leading-tight">{conf.server.name}</div><div className="muted text-xs truncate">{ip}</div></div>
                 <button className="iconbtn ml-auto" title={t('copyIP')} onClick={() => copy(conf.server.ip)}><Icon n="copy" s={15} /></button></div>
-                <div className="flex items-baseline gap-2"><span className="text-3xl font-black">{st.online ? st.players : '—'}</span><span className="muted text-sm">/ {st.max} · {st.online ? st.ping + ' ms' : t('maint')}</span></div>
+                <div className="flex items-baseline gap-2"><span className="text-3xl font-black">{st.online ? st.players : st.checking ? '…' : '—'}</span><span className="muted text-sm">/ {st.max} · {st.online ? st.ping + ' ms' : st.checking ? 'проверяем…' : t('maint')}</span></div>
                 <div className="h-2 rounded-full mt-3 overflow-hidden" style={{ background: 'var(--chip)' }}><div className="h-2 rounded-full transition-all duration-700" style={{ width: Math.min(100, st.players / st.max * 100) + '%', background: 'linear-gradient(90deg,var(--a1),var(--a2))' }} /></div>
                 <Spark data={hist} />
                 <button className="btn btn-primary w-full mt-3 flex items-center justify-center gap-2" onClick={() => { setVer(rec); play(rec, true) }}><Icon n="play" s={14} fill />{t('join')}</button></div>
@@ -594,10 +600,10 @@ export default function App() {
               <textarea rows={3} placeholder="Описание (необязательно)" value={srvForm.desc} onChange={(e) => setSrvForm({ ...srvForm, desc: e.target.value })} />
               <div className="flex gap-2 justify-end mt-2"><button className="btn" onClick={() => setSrvForm(null)}>Отмена</button><button className="btn-add" disabled={!/^[a-z0-9.\-]{3,80}$/i.test(srvForm.ip)} onClick={() => { const ip = srvForm.ip.replace(/:\d+$/, ''), port = +srvForm.port || +(srvForm.ip.match(/:(\d+)$/) || [])[1] || 25565
                 saveMySrv([...mySrv.filter((x) => x.ip !== ip), { name: srvForm.name || ip, ip, port, desc: srvForm.desc }]); setSrvForm(null); say('Сервер добавлен — он появится и в Minecraft') }}><span className="ic"><Icon n="plus" s={13} /></span>Добавить</button></div></div></div>}
-            <div className="grid grid-cols-2 gap-5 stagger">{servers.map((s) => { const r = s.main ? { ...st, online: st.online } : srvSt[s.ip]; return <Tilt key={s.ip} className="card rounded-3xl overflow-hidden" max={3}>
+            <div className="grid grid-cols-2 gap-5 stagger">{servers.map((s) => { const r = s.main ? (st.checking ? undefined : { ...st, online: st.online }) : srvSt[s.ip]; return <Tilt key={s.ip} className="card rounded-3xl overflow-hidden" max={3}>
               <div className="relative h-44">{s.image ? <Pic src={s.image} cls="w-full h-full object-cover" /> : <img src={s.imageLocal || (s.main ? hero : bgServer)} className="w-full h-full object-cover" />}<div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
                 <div className="absolute bottom-3 left-5 right-5 text-white flex items-end justify-between gap-3"><div className="flex items-center gap-3">{r?.icon ? <img src={r.icon} className="w-12 h-12 rounded-xl" /> : s.iconLocal ? <img src={s.iconLocal} className="w-12 h-12 rounded-xl" /> : s.main ? <img src={avatar} className="w-12 h-12 rounded-xl" /> : null}<div>{s.partner && <span className="badge ast mb-1 inline-flex"><Icon n="star" s={11} />Сотрудничество</span>}<div className="text-2xl font-black">{s.name}</div><div className="text-sm opacity-85 flex items-center gap-1.5">{sm ? '••••••' : s.ip}{s.port && +s.port !== 25565 ? ':' + s.port : ''} · <Icon n="star" s={12} fill />{s.verLabel || s.version || rec}</div></div></div>
-                  <span className="badge ast"><span className={'glow-dot ' + (r?.online ? '' : 'off')} />{r?.online ? `${r.players}/${r.max}` : r ? 'офлайн' : '…'}</span></div></div>
+                  <span className="badge ast"><span className={'glow-dot ' + (r?.online ? '' : 'off')} />{r?.online ? (r.max > 0 ? `${r.players}/${r.max}` : `${r.players} онлайн`) : r ? 'офлайн' : 'проверяем…'}</span></div></div>
               <div className="p-5">{(() => { const open = srvOpen === s.ip, links: [string, string, string][] = s.links || (s.main ? LINKS : []); return <button className="block w-full text-left mb-4 group" title={open ? 'Свернуть' : 'Подробнее'} onClick={() => setSrvOpen(open ? '' : s.ip)}>
                 <p className={'text-sm muted ' + (open ? '' : 'line-clamp-3')}>{tx(s.desc) || s.desc}</p>
                 {open && links.length > 0 && <div className="flex flex-wrap gap-1.5 mt-3" onClick={(e) => e.stopPropagation()}>{links.map(([n, u, i]) => <span key={u} role="link" className="pill !text-xs cursor-pointer" onClick={() => api.openLink(u)}><Icon n={i || 'link'} s={12} />{n}</span>)}</div>}

@@ -48,6 +48,7 @@ public class VisualsClient implements ClientModInitializer {
             Fx.zoomKey(ZOOM.isPressed() && c.currentScreen == null);
             if (c.player != null && V.on("autosprint") && c.options.keyForward.isPressed() && !c.player.isSneaking() && c.player.getHungerManager().getFoodLevel() > 6 && !c.player.isUsingItem()) c.player.setSprinting(true);
             Fx.commandBinds(Game116.I, c.currentScreen != null);
+            if (c.player != null) Fx.autoClick(Game116.I, c.currentScreen != null);
             while (M_TOGGLE.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("toggle"); while (M_NEXT.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("next"); while (M_PREV.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("prev");
             while (M_UP.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("volup"); while (M_DOWN.wasPressed()) ru.safimine.asteria.visuals.Media.cmd("voldown");
             while (MARK.wasPressed()) if (c.player != null && c.currentScreen == null) Fx.markKey(Game116.I, net.minecraft.client.gui.screen.Screen.hasShiftDown());

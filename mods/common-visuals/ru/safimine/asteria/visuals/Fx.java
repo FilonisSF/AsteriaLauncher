@@ -77,6 +77,13 @@ public final class Fx {
         saveMarks(); Hud.notify("Метки", "«" + name + "» поставлена", true); sound("blip", 0.5f);
     }
     /** chat: ".метка X Y Z [название]" / ".mark ..." adds a marker, ".метки очистить" removes all; true = the message is ours, don't send it */
+    /** three numbers in a row in a chat line ("тп на 100 80 -2010", "x: 12, y: 64, z: -5"): the coordinates, or null; the height must look like one */
+    private static final java.util.regex.Pattern XYZ = java.util.regex.Pattern.compile("(?<![\\w.])(-?\\d{1,8}(?:\\.\\d+)?)[\\s,;/]+(?:[yY]\\s*[:=]?\\s*)?(-?\\d{1,4}(?:\\.\\d+)?)[\\s,;/]+(?:[zZ]\\s*[:=]?\\s*)?(-?\\d{1,8}(?:\\.\\d+)?)(?![\\w.])");
+    public static String chatCoords(String line) {
+        if (line == null || !V.on("markers") || line.contains("⌖")) return null; java.util.regex.Matcher m = XYZ.matcher(line.replaceAll("(?i)\\b[xyz]\\s*[:=]\\s*", " "));
+        while (m.find()) { double y = Double.parseDouble(m.group(2)); if (y >= -64 && y <= 320) return m.group(1) + " " + m.group(2) + " " + m.group(3); }
+        return null;
+    }
     public static boolean chatCommand(Game g, String msg) {
         String s = msg.trim(), low = s.toLowerCase();
         if (!(low.startsWith(".метк") || low.startsWith(".mark"))) return false;
@@ -326,6 +333,19 @@ public final class Fx {
     }
     static final String[] PETS = {"trinket/cat","trinket/ghost","trinket/flame","trinket/gem","trinket/atom","trinket/flower","trinket/donut","trinket/ball","trinket/banana"};
 
+    // ------------------------------------------------------------------ auto-click (like TapeMouse, but simpler): AFK farms, auto-eating, holding a shield
+    private static int tapeTick, tapeHeld = -1; private static boolean tapeWas;
+    /** every tick: "по готовности" hits when the sword is fully charged, "каждые N тиков" clicks at a steady pace, "зажать" holds the button; never in menus */
+    public static void autoClick(Game g, boolean screenOpen) {
+        boolean on = V.on("tapemouse"); int btn = V.mode("tapemouse", "button"), mode = V.mode("tapemouse", "mode");
+        if (!on || screenOpen && V.bool("tapemouse", "menus")) { if (tapeWas) { g.autoMouse(tapeHeld < 0 ? btn : tapeHeld, 0, false); tapeWas = false; tapeHeld = -1; } return; }
+        if (tapeHeld >= 0 && tapeHeld != btn) { g.autoMouse(tapeHeld, 0, false); tapeHeld = -1; } // the button was changed while holding
+        tapeWas = true;
+        if (mode == 2) { g.autoMouse(btn, 1, false); tapeHeld = btn; return; }
+        if (tapeHeld >= 0) { g.autoMouse(tapeHeld, 0, false); tapeHeld = -1; }
+        if (mode == 0 && btn == 0) { if (g.cooldown() >= 0.98f && ++tapeTick > 1) { tapeTick = 0; g.autoMouse(0, -1, true); } return; }
+        if (++tapeTick >= Math.max(1, (int) V.num("tapemouse", "interval"))) { tapeTick = 0; g.autoMouse(btn, -1, true); }
+    }
     public static void tick(Game g) {
         game = g;
         Object self = g.self(); if (self == null) { TRAIL.clear(); return; }

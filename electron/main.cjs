@@ -61,7 +61,8 @@ let lastSt = null, failRun = 0
 async function poll() {
   const r = await srvStatus(HOST, PORT)
   if (r.online) { failRun = 0; lastSt = { online: true, ping: r.ping || 0, players: r.players || 0, max: r.max || 500 } }
-  else if (++failRun >= 2 || !lastSt) lastSt = { online: false, ping: 0, players: 0, max: lastSt?.max || 500 }
+  else if (++failRun >= 2) lastSt = { online: false, ping: 0, players: 0, max: lastSt?.max || 500 }
+  else if (!lastSt) { win?.webContents.send('status', { checking: true, online: false, ping: 0, players: 0, max: 500 }); setTimeout(poll, 4000); return } // the first answer is late: "checking", not "maintenance", and ask again soon
   win?.webContents.send('status', lastSt)
 }
 ipcMain.handle('srv:status', (_, host, port) => srvStatus(host, port))
@@ -462,7 +463,7 @@ let game = null, gameVer = null, gameDirNow = null, logBuf = [], pendingOpts = {
 // The track goes to the launcher UI ('media' events) and, while a game runs, to <game dir>/config/asteria-media.json (+ cover png);
 // play/pause/next/prev come from the UI or from the mod (config/asteria-media-cmd.txt). -EncodedCommand: no script file, no policy prompt.
 let mediaProc = null, media = { playing: false }, mediaCover = null, mediaCoverKey = '', coverWritten = {}, mediaRetry = 0
-const mediaScript = () => fs.readFileSync(path.join(__dirname, 'media.ps1'), 'utf8')
+const mediaScript = () => fs.readFileSync(path.join(__dirname, 'media.ps1'), 'utf8').replace(/^\uFEFF/, '') // a byte-order mark at the start broke the whole -EncodedCommand script (no music at all)
 const enc = (t) => Buffer.from(t, 'utf16le').toString('base64')
 function liveGameDir() { if (game && gameDirNow) return gameDirNow; return extGame?.dir || null }
 function mediaStart() {

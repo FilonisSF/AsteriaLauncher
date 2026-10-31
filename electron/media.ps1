@@ -1,4 +1,4 @@
-﻿# "Now playing" for AsteriaLauncher: the Windows media controls (Spotify, Yandex Music, browsers...).
+# "Now playing" for AsteriaLauncher: the Windows media controls (Spotify, Yandex Music, browsers...).
 # Reader mode (default): one UTF-8 JSON line every ~1.5 s: title, artist, playing, pos, dur, app, key;
 #   "cover" (base64 PNG, 128x128) is added only when the track changes.
 # Commands: the launcher writes 'toggle' | 'next' | 'prev' into the file in $env:ASTERIA_MEDIA_CMD; the reader runs it
