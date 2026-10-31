@@ -97,8 +97,9 @@ function Friends({ play, say, running }: { play: (v: string, join?: boolean, ser
   return <div className="flex flex-col gap-3">
     {host && <div className="card rounded-3xl p-4 flex items-center gap-3"><Icon n="link" s={18} /><div className="flex-1"><b>Ваш мир открыт для друзей</b><div className="muted text-xs">Адрес: {host} — друзья увидят кнопку «Присоединиться»</div></div>
       <button className="pill" onClick={() => { navigator.clipboard.writeText(host); say('Адрес скопирован') }}><Icon n="copy" s={13} />Копировать</button></div>}
-    {d?.code && <div className="card rounded-3xl p-4 flex items-center gap-3"><Icon n="user" s={18} /><div className="flex-1"><b>Ваш код дружбы</b><div className="muted text-xs">Дайте его другу — по нику добавить нельзя, только по коду</div></div>
-      <span className="font-mono text-lg font-bold tracking-widest">{d.code}</span><button className="pill" onClick={() => { navigator.clipboard.writeText(d.code!); say('Код скопирован') }}><Icon n="copy" s={13} />Копировать</button></div>}
+    {/* always on top: your own code (it comes from the Asteria server; until then the card says so) */}
+    <div className="card rounded-3xl p-4 flex items-center gap-3"><Icon n="user" s={18} /><div className="flex-1"><b>Мой код дружбы</b><div className="muted text-xs">{d?.code ? 'Дайте его другу — по нику добавить нельзя, только по коду' : 'Код появится, как только сервер Asteria ответит'}</div></div>
+      <span className="font-mono text-lg font-bold tracking-widest">{d?.code || '····-····'}</span>{d?.code && <button className="pill" onClick={() => { navigator.clipboard.writeText(d.code!); say('Код скопирован') }}><Icon n="copy" s={13} />Копировать</button>}</div>
     <div className="card rounded-3xl p-4 flex gap-2 items-center"><input className="flex-1 font-mono tracking-widest uppercase" maxLength={9} placeholder="Код дружбы друга: XXXX-XXXX" value={nick} onChange={(e) => setNick(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
       <button className="btn-add" onClick={add}><span className="ic"><Icon n="plus" s={14} /></span>Отправить заявку</button></div>
     {err && <div className="card rounded-2xl p-3 text-sm" style={{ color: '#ff8a8a' }}>{err}</div>}

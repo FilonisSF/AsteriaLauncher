@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import ru.safimine.asteria.core.Asteria;
 
-/** Skin, cape (also on the elytra) and arm model of AsteriaLauncher players; the own ones come straight from the launcher's files. */
+/** Skin, cape (not on the elytra) and arm model of AsteriaLauncher players; the own ones come straight from the launcher's files. */
 @Mixin(PlayerListEntry.class)
 public abstract class PlayerListEntryMixin {
     private String asteria$name() { return ((PlayerListEntry) (Object) this).getProfile().getName(); }
@@ -20,7 +20,7 @@ public abstract class PlayerListEntryMixin {
     @Inject(method = "getCapeTexture", at = @At("HEAD"), cancellable = true)
     private void asteria$cape(CallbackInfoReturnable<Identifier> cir) { Object id = Asteria.cape(asteria$name()); if (id != null) cir.setReturnValue((Identifier) id); }
     @Inject(method = "getElytraTexture", at = @At("HEAD"), cancellable = true)
-    private void asteria$elytra(CallbackInfoReturnable<Identifier> cir) { Object id = Asteria.cape(asteria$name()); if (id != null) cir.setReturnValue((Identifier) id); }
+    private void asteria$elytra(CallbackInfoReturnable<Identifier> cir) { if (Asteria.cape(asteria$name()) != null) cir.setReturnValue(new Identifier("textures/entity/elytra.png")); } // our cape stays off the elytra: the plain elytra texture
     @Inject(method = "getModel", at = @At("HEAD"), cancellable = true)
     private void asteria$model(CallbackInfoReturnable<String> cir) { if (Asteria.skin(asteria$name()) != null) cir.setReturnValue(Asteria.slim(asteria$name()) ? "slim" : "default"); }
 }

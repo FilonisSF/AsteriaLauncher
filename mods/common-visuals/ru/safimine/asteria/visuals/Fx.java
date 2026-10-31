@@ -60,9 +60,14 @@ public final class Fx {
     public static void markKey(Game g, boolean clear) {
         if (!V.on("markers")) return; marksServer(g);
         if (clear) { if (!MARKS.isEmpty()) { MARKS.clear(); saveMarks(); Hud.notify("Метки", "Все метки убраны", false); sound("pop", 0.5f); } return; }
-        double[] at = g.lookAt(256); if (at == null) { Hud.notify("Метки", "Посмотрите на блок", false); return; }
-        // the marker nearest to where you look (within 6 blocks of that spot) is removed
-        Mark near = null; double best = 6; for (Mark m : MARKS) { double d = Math.abs(m.x - at[0]) + Math.abs(m.y - at[1]) + Math.abs(m.z - at[2]); if (d < best) { best = d; near = m; } }
+        // a marker whose beam is under the crosshair is removed: the beam is aimed at sideways only (a few degrees around it, wider up close)
+        Mark near = null; double[] c = CAM; if (c != null) { double best = 1e9, yaw = Math.toRadians(c[3]), lx = -Math.sin(yaw), lz = Math.cos(yaw);
+            for (Mark m : MARKS) { double dx = m.x - c[0], dz = m.z - c[2], d = Math.sqrt(dx * dx + dz * dz); if (d < 0.3) { near = m; break; }
+                double ang = Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, (dx * lx + dz * lz) / d)))), tol = Math.max(3.5, Math.toDegrees(Math.atan(1.6 / d)));
+                if (ang < tol && ang / tol < best) { best = ang / tol; near = m; } } }
+        double[] at = near != null ? null : g.lookAt(256); if (near == null && at == null) { Hud.notify("Метки", "Посмотрите на блок", false); return; }
+        // or the marker nearest to the block you look at (within 6 blocks)
+        if (near == null) { double best = 6; for (Mark m : MARKS) { double d = Math.abs(m.x - at[0]) + Math.abs(m.y - at[1]) + Math.abs(m.z - at[2]); if (d < best) { best = d; near = m; } } }
         if (near != null) { MARKS.remove(near); saveMarks(); Hud.notify("Метки", "Метка «" + (near.name.isEmpty() ? "без названия" : near.name) + "» убрана", false); sound("pop", 0.5f); return; }
         addMark(at[0], at[1], at[2], "Метка " + (MARKS.size() + 1));
     }
@@ -109,11 +114,12 @@ public final class Fx {
     private static Object target; private static long targetAt, killMsgAt;
     // ------------------------------------------------------------------ hitboxes
     private static void hitboxes(R3 r, Game g, float pt) {
-        Object tgt = target(g); double range = V.num("hitboxes", "range"); Object self = g.self(); double[] me = g.pos(self, pt);
+        // the target colour: the one under the crosshair within reach (you can hit it now)
+        Object reach = g.crosshairEntity(); double range = V.num("hitboxes", "range"); Object self = g.self(); double[] me = g.pos(self, pt);
         List<Object> list = new ArrayList<>(); if (V.bool("hitboxes", "players")) list.addAll(g.players()); if (V.bool("hitboxes", "mobs")) for (Object e : g.living(range)) if (!list.contains(e)) list.add(e);
         float al = (float) V.num("hitboxes", "alpha"), fa = (float) V.num("hitboxes", "fillalpha");
         for (Object e : list) { if (e == self || !g.alive(e)) continue; double[] p = g.pos(e, pt); if (Math.abs(p[0] - me[0]) + Math.abs(p[2] - me[2]) > range * 1.5) continue;
-            double w = g.width(e) / 2, h = g.height(e); int col = V.bool("hitboxes", "target") && e == tgt ? V.color("hitboxes", "tcolor") : V.color("hitboxes", "color");
+            double w = g.width(e) / 2, h = g.height(e); int col = V.bool("hitboxes", "target") && e == reach ? V.color("hitboxes", "tcolor") : V.color("hitboxes", "color");
             double x0 = p[0] - w, y0 = p[1], z0 = p[2] - w, x1 = p[0] + w, y1 = p[1] + h, z1 = p[2] + w;
             if (V.bool("hitboxes", "fill") && fa > 0) { int fc = D.a(col, fa); r.begin(R3.QUADS, true);
                 double[][] f = {{x0,y0,z0,x1,y0,z0,x1,y1,z0,x0,y1,z0},{x0,y0,z1,x0,y1,z1,x1,y1,z1,x1,y0,z1},{x0,y0,z0,x0,y1,z0,x0,y1,z1,x0,y0,z1},{x1,y0,z0,x1,y0,z1,x1,y1,z1,x1,y1,z0},{x0,y1,z0,x1,y1,z0,x1,y1,z1,x0,y1,z1}};
@@ -131,7 +137,7 @@ public final class Fx {
         if (kind == 1 && a[1] < 0.1) return;
         // start from the interpolated eye and the camera's own angles: no shaking while walking or turning
         float pt = r.partial(); Object self = g.self(); double[] pNow = g.pos(self, pt), pTick = g.pos(self, 1); boolean fp = g.perspective() == 0;
-        double yawD = fp ? r.camYaw() : a[5], pitD = fp ? r.camPitch() : a[6];
+        int pv = g.perspective(); double yawD = pv == 2 ? r.camYaw() + 180 : r.camYaw(), pitD = pv == 2 ? -r.camPitch() : r.camPitch(); // the camera turns every frame, the player only every tick
         double ex = a[2] + (pNow[0] - pTick[0]), ey = a[3] + (pNow[1] - pTick[1]), ez = a[4] + (pNow[2] - pTick[2]);
         double yaw = Math.toRadians(yawD), pit = Math.toRadians(pitD - (kind == 5 ? 20 : 0)); double vx = -Math.sin(yaw) * Math.cos(pit) * speed, vy = -Math.sin(pit) * speed, vz = Math.cos(yaw) * Math.cos(pit) * speed;
         double x = ex - Math.cos(yaw) * 0.16, y = ey - 0.1, z = ez - Math.sin(yaw) * 0.16;
@@ -144,14 +150,20 @@ public final class Fx {
                     hit = new double[]{ox, oy, oz}; break; } }
             if (hit != null) { pts.add(hit); break; }
             x = nx; y = ny; z = nz; pts.add(new double[]{x, y, z}); vx *= drag; vy = vy * drag - grav; vz *= drag; if (y < -64) break; }
-        // a thin ribbon facing the camera in the theme colours: invisible near the eyes, fading in after ~2 blocks
+        // a smooth curve through the tick points (Catmull-Rom, 6 pieces per tick), then a thin ribbon facing the camera in the theme colours: invisible near the eyes, fading in after ~2 blocks
+        if (pts.size() > 2) { List<double[]> sm = new ArrayList<>(); int m = pts.size();
+            for (int i = 0; i < m - 1; i++) { double[] p0 = pts.get(Math.max(0, i - 1)), p1 = pts.get(i), p2 = pts.get(i + 1), p3 = pts.get(Math.min(m - 1, i + 2)); int parts = i == m - 2 && hit != null ? 1 : 6;
+                for (int k = 0; k < parts; k++) { double t = k / (double) parts, t2 = t * t, t3 = t2 * t; double[] q = new double[3];
+                    for (int c = 0; c < 3; c++) q[c] = 0.5 * (2 * p1[c] + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3);
+                    sm.add(q); } }
+            sm.add(pts.get(m - 1)); pts = sm; }
         double[] cam = r.cam(); int n = pts.size(); if (n < 2) return; double len = 0; int custom = V.color("trajectories", "color"); boolean theme = V.bool("trajectories", "theme");
         r.begin(R3.STRIP, true);
         for (int i = 0; i < n; i++) { double[] p = pts.get(i), q = pts.get(Math.min(n - 1, i + 1)), o = pts.get(Math.max(0, i - 1)); if (i > 0) len += dist(o, p);
             double dx = q[0] - o[0], dy = q[1] - o[1], dz = q[2] - o[2], cx = p[0] - cam[0], cy = p[1] - cam[1], cz = p[2] - cam[2];
             double sx = dy * cz - dz * cy, sy = dz * cx - dx * cz, sz = dx * cy - dy * cx, sl = Math.sqrt(sx * sx + sy * sy + sz * sz); if (sl < 1e-6) { sx = 1; sy = 0; sz = 0; sl = 1; }
             double w = 0.028; sx = sx / sl * w; sy = sy / sl * w; sz = sz / sl * w;
-            float fade = (float) Math.min(1, Math.max(0, (len - 1.2) / 2.0)) * (float) Math.min(1, (n - 1 - i) / 6.0 + 0.35); int c = theme ? V.grad(i / (float) n) : custom;
+            float fade = (float) Math.min(1, Math.max(0, (len - 1.2) / 2.0)) * (float) Math.min(1, (n - 1 - i) / 36.0 + 0.35); int c = theme ? V.grad(i / (float) n) : custom;
             r.v(p[0] - sx, p[1] - sy, p[2] - sz, D.a(c, 0.85f * fade)); r.v(p[0] + sx, p[1] + sy, p[2] + sz, D.a(c, 0.85f * fade)); }
         r.end();
         if (hit != null && V.bool("trajectories", "landing")) { // a ring lying on the face that is hit, a little above it (never inside the block)
@@ -182,6 +194,8 @@ public final class Fx {
     private static final java.util.Map<String, Long> ALERTED = new java.util.HashMap<>(); private static int lastTotems = -1; private static long alertAll;
     private static boolean once(String k, long now, long gap) { Long t = ALERTED.get(k); if (t != null && now - t < gap) return false; ALERTED.put(k, now); return true; }
     /** another player near you used a totem of undying (from the game's status packet) */
+    /** the server told that a totem saved us (status 35 on our own player) */
+    static volatile long selfPopAt; public static void selfTotem() { selfPopAt = System.currentTimeMillis(); }
     public static void otherTotem(String name) { if (!V.on("alerts") || !V.bool("alerts", "enemytotem")) return; long now = System.currentTimeMillis();
         if (once("etot" + name, now, 1500)) Hud.alert(name + " потерял тотем", "Противник использовал тотем бессмертия", 0xFFFACC15, "star", "enemy_totem"); }
     private static void alerts(Game g, long now) {
@@ -191,7 +205,7 @@ public final class Fx {
         if (V.bool("alerts", "hp")) { float hp = g.hp(self); if (hp > 0 && hp <= V.num("alerts", "hpval") * 2 && once("hp", now, 8000)) Hud.alert("Мало здоровья!", String.format(java.util.Locale.ROOT, "%.1f ❤", hp / 2).replace("❤", "сердца"), 0xFFFF4D6A, "heart", "hp"); }
         if (V.bool("alerts", "food")) { int f = g.food(); if (f >= 0 && f <= 6 && once("food", now, 30000)) Hud.alert("Голод", "Поешьте — бег скоро отключится", 0xFFF59E0B, "shop", "food"); }
         if (V.bool("alerts", "totem")) { int tot = 0; for (Object st : g.inventory()) if (st != null && g.itemId(st).endsWith("totem_of_undying")) tot += g.count(st); Object off = g.offhand(); if (off != null && g.itemId(off).endsWith("totem_of_undying")) tot += g.count(off);
-            if (lastTotems >= 0 && tot < lastTotems) Hud.alert("Тотем использован", tot == 0 ? "Тотемов больше нет!" : "Осталось: " + tot, tot == 0 ? 0xFFFF4D6A : 0xFFFACC15, "shield"); lastTotems = tot; }
+            if (lastTotems >= 0 && tot < lastTotems && now - selfPopAt < 2500) Hud.alert("Тотем использован", tot == 0 ? "Тотемов больше нет!" : "Осталось: " + tot, tot == 0 ? 0xFFFF4D6A : 0xFFFACC15, "shield"); lastTotems = tot; }
         if (V.bool("alerts", "effect")) for (Game.Effect e : g.effects()) if (e.ticks > 0 && e.ticks < 100 && once("ef" + e.name, now, 20000)) Hud.alert("Эффект заканчивается", e.name + " — 5 сек", 0xFF60A5FA, "clock", "effect");
         // other players near you: their armour almost broken
         if (V.bool("alerts", "enemyarmor")) for (Object e : g.players()) { if (e == self || !g.alive(e)) continue; double[] p = g.pos(e, 1), me = g.pos(self, 1); if (Math.abs(p[0] - me[0]) + Math.abs(p[2] - me[2]) > 40) continue;
@@ -205,19 +219,20 @@ public final class Fx {
     static Game G; // for the pets' ground height
     /** top of the ground under x, z near y (pets stand on it instead of sinking into slopes and steps) */
     static double groundY(double x, double y, double z) { if (G == null) return y; int by = (int) Math.floor(y);
-        // the real top of what is under the pet: full blocks, slabs, stairs, carpets (sampled inside the block), with room above it
-        for (int k = by + 2; k >= by - 5; k--) { if (!G.solid(x, k + 0.04, z)) continue; double top = k + 0.0625;
+        // the real top of what is under the pet: full blocks, slabs, stairs, carpets (sampled inside the block), with room above it;
+        // at most a step up (it climbed walls and tree trunks into the sky before) and far down (after flying with the owner)
+        for (int k = (int) Math.floor(y + 0.2); k >= by - 48; k--) { if (!G.solid(x, k + 0.04, z)) continue; double top = k + 0.0625;
             for (double h : new double[]{0.95, 0.8, 0.6, 0.45, 0.3, 0.15}) if (G.solid(x, k + h, z)) { top = k + Math.min(1, h + 0.05); break; }
             if (!G.solid(x, top + 0.3, z)) return top; }
         return y; }
     private static Follow selfF; private static final java.util.Map<String, Follow> OTHER_F = new java.util.HashMap<>();
     /** the same for everyone: the owner's nick + the clock in 3 s steps, so the pet wanders to the same spots on every screen */
     static long petSeed(String owner, long now) { return (now / 3000) * 3000 + (owner == null ? 0 : owner.toLowerCase().hashCode() & 0x7FFFFFFFL) * 3000; }
-    static boolean onGroundKind(int k) { return k == MINI || (k >= 10 && k != 14 && k != 17); } // 16 = own model: walks // 3D pets walk, the pictures and the bee float
+    static boolean onGroundKind(int k) { return k == MINI || (k >= 10 && k != 14 && k != 17 && k != 20); } // 16 = own model: walks // 3D pets walk, the pictures and the bee float
     /** one tick of a pet near its owner: wanders around when the owner stands, follows behind (never in front) when the owner moves */
     static void follow(Follow f, double[] o, boolean ground, long seed) {
         double oy = o[1] + (ground ? 0 : 1.35);
-        if (f.pos == null || Math.abs(f.pos[0] - o[0]) + Math.abs(f.pos[2] - o[2]) > 16) { f.pos = new double[]{o[0] - 1.5, oy, o[2] - 1.5}; f.prev = f.pos.clone(); f.owner = o.clone(); }
+        if (f.pos == null || Math.abs(f.pos[0] - o[0]) + Math.abs(f.pos[2] - o[2]) > 16) { f.pos = new double[]{o[0] - 1.5, ground ? groundY(o[0] - 1.5, o[1] + 0.5, o[2] - 1.5) : oy, o[2] - 1.5}; f.prev = f.pos.clone(); f.owner = o.clone(); } // a walker lands on the ground, not in the air next to a flying owner
         f.prev = f.pos.clone();
         double vx = o[0] - f.owner[0], vz = o[2] - f.owner[2], v = Math.sqrt(vx * vx + vz * vz); f.owner = o.clone();
         long now = System.currentTimeMillis(); java.util.Random rn = new java.util.Random(seed / 3000);
@@ -420,7 +435,15 @@ public final class Fx {
         }
     }
     /** true = don't play this Minecraft sound (our hit sounds replace the vanilla attack sounds) */
-    public static boolean muteVanilla(String id) { return id != null && id.contains("entity.player.attack") && V.on("sounds") && V.bool("sounds", "mute") && V.mode("sounds", "hit") > 0; }
+    /** the game's own hit sounds: the swing / crit / sweep and the "hurt" of the one you hit (servers send them too) */
+    /** vanilla particles that our own effects replace: crits / sweeps / damage hearts under "hit particles", the totem cloud under "totem animation" */
+    public static boolean muteParticle(String id) {
+        if (V.on("hitparticles") && (id.endsWith(":crit") || id.endsWith(":enchanted_hit") || id.endsWith(":sweep_attack") || id.endsWith(":damage_indicator"))) return true;
+        return V.on("totem") && V.bool("totem", "particles") && id.endsWith(":totem_of_undying");
+    }
+    public static boolean muteVanilla(String id) { if (id == null) return false;
+        if (id.contains("item.totem.use") && V.on("totem")) return true; // our totem animation has its own sound, not the vanilla blast
+        return V.on("sounds") && (V.bool("sounds", "mute") || V.mode("sounds", "hit") > 0) && (id.contains("entity.player.attack") || id.contains("entity.player.hurt") || id.contains("entity.generic.hurt")); }
     public static void sound(String id, float vol) { if (game != null) try { game.sound(id, vol, 0.95f + (float) Math.random() * 0.1f); } catch (Throwable ignored) {} }
     private static void jumpBurst(double[] p, boolean jump, long now) {
         int n = (int) V.num("jumpparticles", "count");
@@ -478,11 +501,12 @@ public final class Fx {
         if (!FX_OF.isEmpty()) for (Object e : g.players()) { String fx = FX_OF.get(g.playerName(e).toLowerCase()); if (fx == null || !g.alive(e)) continue;
             if (fx.contains("halo")) halo(r, g, e, pt, now); if (fx.contains("hat,") || fx.endsWith("hat")) hat(r, g, e, pt, now, g.yawOf(e));
             if (V.bool("cosmetics", "others") && fx.contains("c:")) try { String[] c = fx.substring(fx.indexOf("c:") + 2).split("[,;]")[0].split("\\."); double[] q = g.pos(e, pt);
-                Cosmetics.who = g.playerName(e).toLowerCase(); Cosmetics.draw(r, q, g.bodyYawOf(e, pt), g.headYawOf(e, pt), g.pitchOf(e, pt), g.sneakingOf(e), g.height(e), Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2]), c.length > 3 ? (int) Long.parseLong(c[3], 16) : -1, !g.onGroundOf(e), lit(g, q), now); } catch (Throwable ex) { err("cosmetics", ex); } finally { Cosmetics.who = ""; } }
-        if (V.on("cosmetics") && g.thirdPerson()) try { double[] q = g.pos(self, pt);
-            Cosmetics.draw(r, q, g.bodyYawOf(self, pt), g.headYawOf(self, pt), g.pitchOf(self, pt), g.sneakingOf(self), g.height(self), V.mode("cosmetics", "wings"), V.mode("cosmetics", "hat"), V.mode("cosmetics", "back"), V.bool("cosmetics", "tint") ? -1 : V.color("cosmetics", "color"), !g.onGround(), lit(g, q), now); } catch (Throwable ex) { err("cosmetics", ex); }
+                Cosmetics.who = g.playerName(e).toLowerCase(); if (g.glidingOf(e)) Cosmetics.glide = 90 + g.pitchOf(e, pt); Cosmetics.draw(r, q, g.bodyYawOf(e, pt), g.headYawOf(e, pt), g.pitchOf(e, pt), g.sneakingOf(e), g.height(e), Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2]), c.length > 3 ? (int) Long.parseLong(c[3], 16) : -1, !g.onGroundOf(e), lit(g, q), now); } catch (Throwable ex) { err("cosmetics", ex); } finally { Cosmetics.who = ""; Cosmetics.glide = Double.NaN; } }
+        boolean wingElytra = V.on("elytrawings") && g.elytraOf(self); // the wing-elytra are the wings then: no second pair from the cosmetics
+        if (V.on("cosmetics") && g.thirdPerson()) try { double[] q = g.pos(self, pt); if (g.glidingOf(self)) Cosmetics.glide = 90 + g.pitchOf(self, pt);
+            Cosmetics.draw(r, q, g.bodyYawOf(self, pt), g.headYawOf(self, pt), g.pitchOf(self, pt), g.sneakingOf(self), g.height(self), wingElytra ? 0 : V.mode("cosmetics", "wings"), V.mode("cosmetics", "hat"), V.mode("cosmetics", "back"), V.bool("cosmetics", "tint") ? -1 : V.color("cosmetics", "color"), !g.onGround(), lit(g, q), now); } catch (Throwable ex) { err("cosmetics", ex); } finally { Cosmetics.glide = Double.NaN; }
         // wings instead of the elytra: folded on the ground, beating in flight, the body lying along the flight
-        if (V.on("elytrawings") && g.thirdPerson() && g.elytraOf(self)) try { double[] q = g.pos(self, pt); int[] map = {1, 2, 3, 4, 6, 7, 8}; boolean fly = g.glidingOf(self);
+        if (wingElytra && g.thirdPerson()) try { double[] q = g.pos(self, pt); int[] map = {1, 2, 3, 4, 6, 7, 8}; boolean fly = g.glidingOf(self);
             if (fly) Cosmetics.glide = 90 + g.pitchOf(self, pt);
             Cosmetics.draw(r, q, g.bodyYawOf(self, pt), g.headYawOf(self, pt), g.pitchOf(self, pt), g.sneakingOf(self), g.height(self), map[Math.max(0, Math.min(6, V.mode("elytrawings", "style")))], 0, 0, V.bool("elytrawings", "tint") ? -1 : 0xFFE8F4FF, fly, lit(g, q), now);
         } catch (Throwable ex) { err("elytra", ex); } finally { Cosmetics.glide = Double.NaN; }
@@ -656,16 +680,28 @@ public final class Fx {
             pair(3, 3.2, 4.2, 4.8, 3.8, 4.8, 0xFFE5508A, 3), pair(3, 2.2, 4.4, 4.6, 2.8, 5, 0xFFE5508A, 3), pair(3, 1.2, 4.6, 4.2, 1.8, 5.2, 0xFFE5508A, 3), pair(4.8, 3.3, 4.25, 5.3, 3.7, 4.75, 0xFFFF7AA8, 3),
             pair(2, 0, 1.4, 3, 1.2, 2.4, 0xFFF7A6C4, 4), pair(2, 0, -3.6, 3, 1.2, -2.6, 0xFFF7A6C4, 6),
             one(bx(-0.4, 0.8, -11, 0.4, 4.4, -5, 0xFFF3C0D4, 2), bx(-0.8, 1.4, -8, 0.8, 3.2, -5, 0xFFF7A6C4, 2)))),
-        new Vox(new float[]{0, 10, 3, 0, 9, -4, 7, 0}, cat( // dragonling (17): purple scales, golden belly, horns, teal wings and a spade tail
-            one(bx(-2.2, 7, -4, 2.2, 11, 3, 0xFF6C5CE7, 0), bx(-1.6, 6.95, -3, 1.6, 7.1, 2.6, 0xFFFFD27A, 0), bx(-1.5, 7.4, 2.95, 1.5, 10.4, 3.15, 0xFFFFD27A, 0),
-                bx(-0.3, 11, -3, 0.3, 11.8, -2, 0xFF00D2D3, 0), bx(-0.3, 11, -0.5, 0.3, 12, 0.5, 0xFF00D2D3, 0), bx(-0.3, 11, 2, 0.3, 11.7, 2.8, 0xFF00D2D3, 0),
-                bx(-2.6, 9, 2.5, 2.6, 13.6, 7.2, 0xFF7B6CF0, 1), bx(-1.7, 9.3, 7.2, 1.7, 11.3, 9.2, 0xFF7B6CF0, 1), bx(-1.6, 9.7, 9.2, 1.6, 9.9, 9.28, 0xFF2D2560, 1)),
-            pair(0.6, 10.6, 9.2, 1.1, 11, 9.3, 0xFF2D2560, 1), pair(1.8, 10, 7.2, 2.5, 10.5, 7.28, BLUSH, 1),
-            eyes(1.6, 11.2, 12.6, 7.2, 1.5, 0xFFFFD43B, 0xFF1A1428, 0.3),
-            pair(1.2, 13.6, 3.4, 2, 15, 4.2, 0xFFFFF0C8, 3), pair(1.3, 15, 3, 1.9, 15.8, 3.6, 0xFFFFF0C8, 3), pair(2.6, 11.4, 3.6, 3.4, 12.8, 4.8, 0xFF00D2D3, 3),
-            pair(2.2, 11.5, -2.5, 7, 11.7, 1.5, 0xD000D2D3, 8), pair(2.2, 11.5, 1.2, 7, 12, 1.6, 0xFF5A4BD0, 8),
-            pair(0.8, 5.6, 1, 2, 7.2, 2.4, 0xFF6C5CE7, 4), pair(0.7, 5.4, 2, 2.1, 5.8, 2.6, 0xFFFFF0C8, 4), pair(0.8, 5.6, -3.4, 2, 7.2, -2, 0xFF6C5CE7, 6),
-            one(bx(-1, 8, -9, 1, 9.8, -4, 0xFF6C5CE7, 2), bx(-0.6, 8.3, -12, 0.6, 9.5, -9, 0xFF6C5CE7, 2), bx(-1.6, 8.1, -13.6, 1.6, 9.7, -12, 0xFF00D2D3, 2)))),
+        new Vox(new float[]{0, 10.5f, 3, 0, 8, -3.6f, 7.6f, 4, 2.4f, 10.2f, 7.8f, -10.2f}, cat( // dragonling (17): frost-blue scales, a white belly, cream horns, amber eyes, a spiky back,
+            // membrane wings that beat at the shoulder and fold at the elbow (parts 11 / 12) and a tail whose spade tip swings on its own (13)
+            one(bx(-2.5, 6, -3.6, 2.5, 10.6, 3.2, 0xFF35B8E0, 0), bx(-1.8, 5.92, -2.8, 1.8, 6.05, 2.8, 0xFFE6F7FF, 0), bx(-1.7, 6.4, 3.15, 1.7, 10, 3.35, 0xFFE6F7FF, 0),
+                bx(-1.75, 7.4, 3.3, 1.75, 7.6, 3.42, 0xFFC9E9F7, 0), bx(-1.75, 8.6, 3.3, 1.75, 8.8, 3.42, 0xFFC9E9F7, 0), bx(-1.3, 10.55, -3.2, 1.3, 10.7, 2.8, 0xFF2496C4, 0),
+                bx(-0.4, 10.6, -2.6, 0.4, 11.9, -1.5, 0xFFF7FCFF, 0), bx(-0.25, 11.9, -2.4, 0.25, 12.5, -1.8, 0xFFF7FCFF, 0), bx(-0.4, 10.6, -0.6, 0.4, 11.9, 0.5, 0xFFF7FCFF, 0),
+                bx(-0.25, 11.9, -0.4, 0.25, 12.5, 0.2, 0xFFF7FCFF, 0), bx(-0.4, 10.6, 1.4, 0.4, 11.6, 2.4, 0xFFF7FCFF, 0),
+                bx(-3.1, 9.6, 2.4, 3.1, 14.8, 7.6, 0xFF3CC0E8, 1), bx(-2.2, 14.75, 3, 2.2, 14.95, 7, 0xFF2496C4, 1), bx(-2.1, 9.9, 7.6, 2.1, 12.3, 10.2, 0xFF3CC0E8, 1),
+                bx(-2.0, 9.8, 7.6, 2.0, 10.5, 10.22, 0xFFE6F7FF, 1), bx(-1.6, 10.5, 10.2, 1.6, 10.65, 10.27, 0xFF0E5A78, 1), bx(-0.35, 14.8, 2.6, 0.35, 15.8, 3.6, 0xFFF7FCFF, 1)),
+            pair(0.6, 11.5, 10.2, 1.2, 11.9, 10.28, 0xFF0E5A78, 1), pair(3.05, 10, 4, 3.6, 12.2, 6.6, 0xFFE6F7FF, 1), pair(0.9, 13.6, 7.6, 2.7, 14.0, 7.7, 0xFF2496C4, 1),
+            eyes(1.75, 11.6, 13.6, 7.6, 1.8, 0xFFFFB12B, 0xFF1A1428, 0.5),
+            pair(1.3, 14.8, 3.6, 2.3, 16.4, 4.8, 0xFFF3EAD6, 3), pair(1.4, 16.3, 2.8, 2.1, 17.6, 3.8, 0xFFF3EAD6, 3), pair(1.5, 17.5, 2.2, 2.0, 18.3, 3.0, WH, 3),
+            pair(3.1, 12.2, 3.0, 3.9, 14.2, 4.6, 0xFF8FE6FF, 3), pair(3.3, 12.6, 2.4, 4.4, 13.6, 3.0, 0xFF8FE6FF, 3),
+            pair(1.0, 3.6, 1.0, 2.3, 7.2, 2.4, 0xFF35B8E0, 4), pair(0.9, 3.2, 1.6, 2.4, 3.8, 2.8, 0xFFF3EAD6, 4),
+            pair(1.6, 5.5, -3.6, 2.7, 8.4, -1.4, 0xFF35B8E0, 6), pair(1.1, 3.8, -3.3, 2.5, 7.6, -1.7, 0xFF35B8E0, 6), pair(1.0, 3.4, -2.8, 2.6, 4.0, -1.5, 0xFFF3EAD6, 6),
+            one(bx(-1.4, 7, -7.2, 1.4, 9.6, -3.5, 0xFF35B8E0, 2), bx(-1.0, 7.3, -10.2, 1.0, 9.2, -7.2, 0xFF35B8E0, 2), bx(-0.9, 6.95, -10, 0.9, 7.1, -3.8, 0xFFE6F7FF, 2),
+                bx(-0.3, 9.6, -6.4, 0.3, 10.4, -5.4, 0xFFF7FCFF, 2), bx(-0.25, 9.2, -9.2, 0.25, 9.9, -8.4, 0xFFF7FCFF, 2),
+                bx(-0.7, 7.6, -12.8, 0.7, 8.9, -10.2, 0xFF35B8E0, 13), bx(-2.0, 7.5, -14.8, 2.0, 9.0, -12.6, 0xFF8FE6FF, 13), bx(-1.2, 7.6, -15.6, 1.2, 8.9, -14.8, 0xFF8FE6FF, 13)),
+            pair(2.3, 9.8, 0.2, 7.8, 10.6, 1.1, 0xFF1E8CB8, 11), pair(7.4, 10.4, 0.3, 8.1, 11.4, 1.0, 0xFFF3EAD6, 11),
+            pair(2.3, 10.0, -5.4, 5.0, 10.3, 0.2, 0xD07FDDF7, 11), pair(5.0, 10.0, -4.4, 7.8, 10.3, 0.2, 0xD07FDDF7, 11),
+            pair(7.8, 9.9, 0.1, 13.4, 10.5, 0.8, 0xFF1E8CB8, 12), pair(9.9, 9.95, -4.8, 10.3, 10.45, 0.1, 0xFF1E8CB8, 12), pair(12.0, 9.95, -3.4, 12.4, 10.45, 0.1, 0xFF1E8CB8, 12),
+            pair(7.8, 10.02, -5.0, 10.0, 10.28, 0.1, 0xC85FC8EE, 12), pair(10.0, 10.02, -3.6, 12.1, 10.28, 0.1, 0xC85FC8EE, 12), pair(12.1, 10.02, -2.0, 13.4, 10.28, 0.1, 0xC85FC8EE, 12),
+            pair(13.2, 10.0, 0.0, 14.0, 10.6, 0.9, 0xFFF3EAD6, 12))),
         new Vox(new float[]{0, 9, 1, 0, 1.5f, -2.5f, 1.5f, 0}, cat( // penguin (18): white belly, orange beak and feet, a red scarf, flapping flippers
             one(bx(-2.6, 1.5, -2.4, 2.6, 9, 2.4, 0xFF263042, 0), bx(-2, 1.7, 2.35, 2, 8, 2.6, WH, 0), bx(-2.65, 8.3, -2.45, 2.65, 9, 2.65, 0xFFE84855, 0), bx(1.4, 6.6, 2.6, 2.2, 8.4, 2.8, 0xFFE84855, 0),
                 bx(-2.4, 8.6, -2.2, 2.4, 12.6, 2.4, 0xFF263042, 1), bx(-1.9, 8.8, 2.35, 1.9, 11.6, 2.6, WH, 1), bx(-0.7, 9.6, 2.6, 0.7, 10.4, 3.8, 0xFFFFA62B, 1),
@@ -674,21 +710,49 @@ public final class Fx {
             eyes(1.1, 10.4, 11.3, 2.6, 0.8, 0xFF141820, 0, 0),
             pair(2.6, 3.5, -1.2, 3.3, 7.8, 1.2, 0xFF263042, 10),
             pair(0.5, 0, -0.2, 2.1, 0.6, 3, 0xFFFFA62B, 4), pair(0.9, 0.6, -0.6, 1.7, 1.6, 0.6, 0xFFFFA62B, 4))),
+        new Vox(new float[]{0, 6.5f, 4, 0, 6, -5.5f, 3, 0}, cat( // puppy (19): a long brown body, floppy dark ears, a cream muzzle and paws, a red collar with a gold tag
+            one(bx(-2.2, 3, -5.5, 2.2, 6.8, 4, 0xFFB5733E, 0), bx(-1.6, 3.3, 3.95, 1.6, 6.2, 4.2, CREAM, 0), bx(-1.5, 2.95, -4, 1.5, 3.1, 3, CREAM, 0),
+                bx(-2.3, 6.0, 3.2, 2.3, 6.9, 4.25, 0xFFE84855, 0), bx(-0.5, 5.0, 4.2, 0.5, 6.0, 4.4, 0xFFFFD43B, 0), bx(-1.4, 6.75, -4.6, 1.4, 6.9, 2.8, 0xFF9A5E30, 0),
+                bx(-2.6, 5.4, 3.6, 2.6, 10, 8, 0xFFB5733E, 1), bx(-1.5, 5.6, 8, 1.5, 7.6, 10.4, CREAM, 1), bx(-0.6, 7.0, 10.4, 0.6, 7.8, 10.7, 0xFF231A18, 1), bx(-0.5, 5.4, 9.6, 0.5, 5.7, 10.3, 0xFFFF7A90, 1),
+                bx(-0.9, 9.95, 4.4, 0.9, 10.15, 7.4, 0xFF9A5E30, 1)),
+            pair(1.7, 6.6, 8, 2.4, 7.1, 8.08, BLUSH, 1),
+            eyes(1.4, 7.9, 9.2, 8, 1.3, 0xFF2A1A12, 0, 0),
+            pair(2.4, 6.0, 5, 3.2, 9.8, 7.2, 0xFF7A4522, 3), pair(2.5, 5.6, 5.4, 3.1, 6.0, 6.8, 0xFF7A4522, 3),
+            pair(0.8, 0, 2, 2, 3, 3.2, 0xFFB5733E, 4), pair(0.75, 0, 2.6, 2.05, 0.6, 3.4, CREAM, 4), pair(0.8, 0, -5, 2, 3, -3.8, 0xFFB5733E, 6), pair(0.75, 0, -4.4, 2.05, 0.6, -3.6, CREAM, 6),
+            one(bx(-0.4, 6.2, -8.4, 0.4, 7, -5.4, 0xFFB5733E, 2), bx(-0.35, 6.8, -9.6, 0.35, 8.4, -8.2, 0xFFB5733E, 2), bx(-0.4, 8.2, -9.8, 0.4, 8.8, -8.6, CREAM, 2)))),
+        new Vox(new float[]{0, 11, 0, 0, 6, -2.6f, 5.1f, 4, 2.9f, 10.2f, 6.8f, -3}, cat( // owlet (20): a round brown body, a pale face disk, huge amber eyes, ear tufts, feathered wings that really beat
+            one(bx(-3, 5, -2.8, 3, 11.5, 2.8, 0xFF9A6B45, 0), bx(-2.2, 5.5, 2.75, 2.2, 10, 2.95, 0xFFF1DFC2, 0), bx(-1.2, 7, 2.9, -0.6, 7.5, 3.0, 0xFFB08A60, 0), bx(0.6, 8.2, 2.9, 1.2, 8.7, 3.0, 0xFFB08A60, 0),
+                bx(-0.4, 6.2, 2.9, 0.2, 6.7, 3.0, 0xFFB08A60, 0),
+                bx(-3.2, 10.8, -2.6, 3.2, 15.2, 2.9, 0xFFA8774E, 1), bx(-2.6, 11.2, 2.85, 2.6, 14.6, 3.05, 0xFFF4E6CC, 1), bx(-0.4, 11.4, 3.0, 0.4, 12.6, 3.7, 0xFFE0A030, 1),
+                bx(-2.8, 15.15, -2, 2.8, 15.35, 2.2, 0xFF8A5A36, 1)),
+            eyes(1.25, 12.4, 14.0, 3.05, 1.7, 0xFFFFC23A, 0xFF1A1414, 0.75),
+            pair(1.8, 15.2, -0.8, 3.0, 16.6, 0.6, 0xFF8A5A36, 3), pair(2.2, 16.5, -0.5, 2.8, 17.3, 0.3, 0xFF6A4628, 3),
+            pair(0.6, 4.2, 0.6, 1.8, 5.1, 2.0, 0xFFE0A030, 4),
+            one(bx(-1.5, 5.5, -4, 1.5, 7, -2.6, 0xFF7E5636, 2), bx(-1.1, 5.6, -4.6, 1.1, 6.8, -4, 0xFFC8A57A, 2)),
+            pair(2.9, 9.9, -2.4, 6.8, 10.5, 1.8, 0xFF8A5A36, 11), pair(4.5, 9.95, -3.2, 6.8, 10.45, -2.4, 0xFFB08A60, 11),
+            pair(6.8, 9.95, -2.0, 10.5, 10.45, 1.6, 0xFF7E5636, 12), pair(10.5, 10.0, -1.6, 12.0, 10.4, 1.2, 0xFF6A4628, 12), pair(8, 9.9, -2.0, 8.4, 10.5, 1.6, 0xFFC8A57A, 12),
+            pair(9.6, 9.9, -2.0, 10.0, 10.5, 1.6, 0xFFC8A57A, 12))),
     };
     static void drawVox(R3 r, Vox m, double[] pos, Follow f, double size, float lt, long now) {
         double t = now / 1000.0, mv = Math.min(1, f.speed * 9), ph = f.phase, style = m.pv[7], k = size * 0.04, yaw = Math.toRadians(f.yaw), cy = Math.cos(yaw), sy = Math.sin(yaw);
-        double hop = style == 1 ? Math.abs(Math.sin(ph * 0.8)) * 3.2 * mv : style == 3 ? 1.2 * Math.sin(t * 2.2) : style == 2 ? Math.abs(Math.sin(ph * 0.7)) * 2.4 * mv : Math.abs(Math.sin(ph)) * 0.5 * mv;
+        double beat = t * (7 + 3 * mv), wA = 0.3 + 0.75 * Math.sin(beat), wB = -0.15 + 0.5 * Math.sin(beat - 1.1), wSweep = 0.2 * Math.sin(beat + 0.5); // style 4: a real wingbeat
+        double hop = style == 4 ? -0.7 * Math.cos(beat) + 0.35 * Math.sin(t * 1.3) : style == 1 ? Math.abs(Math.sin(ph * 0.8)) * 3.2 * mv : style == 3 ? 1.2 * Math.sin(t * 2.2) : style == 2 ? Math.abs(Math.sin(ph * 0.7)) * 2.4 * mv : Math.abs(Math.sin(ph)) * 0.5 * mv;
         double squash = style == 2 ? 1 - 0.18 * Math.sin(ph * 1.4) * mv + 0.04 * Math.sin(t * 3) : 1 + 0.03 * Math.sin(t * 2.4);
         boolean blink = (now / 100) % 38 == 0;
-        double headTilt = Math.sin(t * 1.3) * 0.12 * (1 - mv), tailWag = Math.sin(t * (mv > 0.2 ? 9 : 3.5)) * (style == 2 ? 0 : 0.55), earTw = ((now / 1700) % 5 == 0) ? Math.sin(t * 30) * 0.3 : 0, wing = Math.sin(t * 38) * 0.9;
+        double headTilt = Math.sin(t * 1.3) * 0.12 * (1 - mv), tailWag = style == 4 ? Math.sin(t * 2.5) * 0.3 : Math.sin(t * (mv > 0.2 ? 9 : 3.5)) * (style == 2 ? 0 : 0.55), earTw = ((now / 1700) % 5 == 0) ? Math.sin(t * 30) * 0.3 : 0, wing = Math.sin(t * 38) * 0.9;
         r.beginSolid();
         for (float[] b : m.b) { int part = (int) b[7], col = ((int) b[6] << 16) | (int) b[8];
             double[][] c = new double[8][];
             for (int n = 0; n < 8; n++) { double x = (n & 1) == 0 ? b[0] : b[3], y = (n & 2) == 0 ? b[1] : b[4], z = (n & 4) == 0 ? b[2] : b[5];
                 if (part == 9 && blink) y = (b[1] + b[4]) / 2 + (y - (b[1] + b[4]) / 2) * 0.15;
                 if (part == 1 || part == 3 || part == 9) { double[] q = rotX(y, z, m.pv[1], m.pv[2], headTilt); y = q[0]; z = q[1]; if (part == 3) { double[] e = rotX(y, z, m.pv[1] + 5, m.pv[2], earTw); y = e[0]; z = e[1]; } }
-                else if (part == 2) { double[] q = rotY(x, z, m.pv[3], m.pv[5], tailWag); x = q[0]; z = q[1]; }
-                else if (part >= 4 && part <= 7) { double sgn = (part == 4 || part == 7) ? 1 : -1; double[] q = rotX(y, z, m.pv[6], (b[2] + b[5]) / 2, Math.sin(ph) * 0.8 * mv * sgn); y = q[0]; z = q[1]; }
+                else if (part == 2 || part == 13) { double[] q = rotY(x, z, m.pv[3], m.pv[5], tailWag); x = q[0]; z = q[1]; if (part == 13) { q = rotY(x, z, m.pv[3], m.pv[11], Math.sin(t * 2.5 - 0.8) * 0.5); x = q[0]; z = q[1]; } }
+                else if (part >= 4 && part <= 7) { double sgn = (part == 4 || part == 7) ? 1 : -1; double[] q = rotX(y, z, m.pv[6], (b[2] + b[5]) / 2, style == 4 ? 0.15 * Math.sin(t * 2 + sgn) : Math.sin(ph) * 0.8 * mv * sgn); y = q[0]; z = q[1]; }
+                else if (part == 11 || part == 12) { // wings: the outer half folds at the elbow, the whole wing beats at the shoulder and sweeps a little forward on the downstroke
+                    double side = b[0] + b[3] < 0 ? -1 : 1, sx = side * m.pv[8], wy = m.pv[9];
+                    if (part == 12) { double ex = side * m.pv[10], a = side * wB, dx = x - ex, dy = y - wy; x = ex + dx * Math.cos(a) - dy * Math.sin(a); y = wy + dx * Math.sin(a) + dy * Math.cos(a); }
+                    double a = side * wA, dx = x - sx, dy = y - wy; x = sx + dx * Math.cos(a) - dy * Math.sin(a); y = wy + dx * Math.sin(a) + dy * Math.cos(a);
+                    double[] q = rotY(x, z, sx, 0.5, side * wSweep); x = q[0]; z = q[1]; }
                 else if (part == 10) { double side = b[0] < 0 ? -1 : 1, px = side * 2.6, py = 7.8, an = side * (0.18 + 0.55 * Math.abs(Math.sin(ph)) * mv + 0.07 * Math.sin(t * 2.2)); double dx = x - px, dy = y - py; x = px + dx * Math.cos(an) - dy * Math.sin(an); y = py + dx * Math.sin(an) + dy * Math.cos(an); }
                 else if (part == 8) { double side = b[0] < 0 ? -1 : 1; double ang = wing * side; double yy = m.pv[6] + 4 + (y - (m.pv[6] + 4)) * Math.cos(ang) + Math.abs(x) * Math.sin(ang * 0.6); y = yy; }
                 y = y * squash; double hx = x * (style == 2 ? 2 - squash : 1);
@@ -761,16 +825,25 @@ public final class Fx {
         else { r.beginTex(PETS[Math.max(0, Math.min(PETS.length - 1, kind))], true); tq(r, pp[0], pp[1] + bob, pp[2], s, Math.sin(now / 900.0) * 0.15, shade(0xFFFFFFFF, lt)); r.end(); }
     }
     /** glowing ring floating above the head, slowly turning and bobbing */
+    /** a point given in the player's own frame (blocks from the feet: x left, y up along the body, z forward) in the world; an elytra flyer lies along the flight */
+    interface BodyTf { double[] at(double x, double y, double z); }
+    static BodyTf body(Game g, Object e, float pt) {
+        double[] p = g.pos(e, pt); double yb = Math.toRadians(g.bodyYawOf(e, pt)), cy = Math.cos(yb), sy = Math.sin(yb);
+        boolean fly = g.glidingOf(e); double a = fly ? Math.toRadians(90 + g.pitchOf(e, pt)) : 0, ca = Math.cos(a), sa = Math.sin(a);
+        return (x, y, z) -> { double y2 = y * ca - z * sa, z2 = y * sa + z * ca; return new double[]{p[0] + x * cy - z2 * sy, p[1] + y2, p[2] + x * sy + z2 * cy}; };
+    }
     private static void halo(R3 r, Game g, Object self, float pt, long now) {
-        double[] p = g.pos(self, pt); double rad = V.num("halo", "size"), y = p[1] + g.height(self) + V.num("halo", "height") + Math.sin(now / 700.0) * 0.03;
+        BodyTf b = body(g, self, pt); double rad = V.num("halo", "size"), y = g.height(self) + V.num("halo", "height") + Math.sin(now / 700.0) * 0.03;
         double spin = now / 1000.0 * V.num("halo", "spin"), w = rad * 0.22; int seg = 48;
         r.begin(R3.STRIP, true);
         for (int i = 0; i <= seg; i++) { double a = spin + Math.PI * 2 * i / seg; int c = V.grad(i / (float) seg);
-            r.v(p[0] + Math.cos(a) * (rad + w), y, p[2] + Math.sin(a) * (rad + w), D.a(c, 0)); r.v(p[0] + Math.cos(a) * rad, y, p[2] + Math.sin(a) * rad, D.a(c, 0.95f)); }
+            double[] o = b.at(Math.cos(a) * (rad + w), y, Math.sin(a) * (rad + w)), n = b.at(Math.cos(a) * rad, y, Math.sin(a) * rad);
+            r.v(o[0], o[1], o[2], D.a(c, 0)); r.v(n[0], n[1], n[2], D.a(c, 0.95f)); }
         r.end();
         r.begin(R3.STRIP, true);
         for (int i = 0; i <= seg; i++) { double a = spin + Math.PI * 2 * i / seg; int c = V.grad(i / (float) seg);
-            r.v(p[0] + Math.cos(a) * rad, y, p[2] + Math.sin(a) * rad, D.a(D.mix(c, 0xFFFFFFFF, 0.5f), 0.95f)); r.v(p[0] + Math.cos(a) * (rad - w), y, p[2] + Math.sin(a) * (rad - w), D.a(c, 0)); }
+            double[] n = b.at(Math.cos(a) * rad, y, Math.sin(a) * rad), o = b.at(Math.cos(a) * (rad - w), y, Math.sin(a) * (rad - w));
+            r.v(n[0], n[1], n[2], D.a(D.mix(c, 0xFFFFFFFF, 0.5f), 0.95f)); r.v(o[0], o[1], o[2], D.a(c, 0)); }
         r.end();
     }
     // 7-segment digits drawn as camera-facing quads: segments a b c d e f g
@@ -902,19 +975,15 @@ public final class Fx {
         }
     }
     private static void hat(R3 r, Game g, Object self, float pt, long now, float bodyYaw) {
-        double[] p = g.pos(self, pt); double top = p[1] + g.height(self) + 0.02, rad = V.num("chinahat", "size"); float a = (float) V.num("chinahat", "alpha");
-        int seg = 40; double yaw = Math.toRadians(-bodyYaw);
+        BodyTf b = body(g, self, pt); double top = g.height(self) + 0.02, rad = V.num("chinahat", "size"); float a = (float) V.num("chinahat", "alpha");
+        int seg = 40; double[] apex = b.at(0, top + rad * 0.45, 0), rim[] = new double[seg + 1][];
+        for (int i = 0; i <= seg; i++) { double an = Math.PI * 2 * i / seg; rim[i] = b.at(Math.cos(an) * rad, top, Math.sin(an) * rad); }
         r.begin(R3.TRIS, true);
-        for (int i = 0; i < seg; i++) {
-            double a0 = yaw + Math.PI * 2 * i / seg, a1 = yaw + Math.PI * 2 * (i + 1) / seg; int c0 = V.grad(i / (float) seg), c1 = V.grad((i + 1) / (float) seg);
-            r.v(p[0], top + rad * 0.45, p[2], D.a(D.mix(c0, 0xFFFFFFFF, 0.3f), a));
-            r.v(p[0] + Math.cos(a0) * rad, top, p[2] + Math.sin(a0) * rad, D.a(c0, a * 0.7f));
-            r.v(p[0] + Math.cos(a1) * rad, top, p[2] + Math.sin(a1) * rad, D.a(c1, a * 0.7f));
-        }
+        for (int i = 0; i < seg; i++) { int c0 = V.grad(i / (float) seg), c1 = V.grad((i + 1) / (float) seg);
+            r.v(apex[0], apex[1], apex[2], D.a(D.mix(c0, 0xFFFFFFFF, 0.3f), a)); r.v(rim[i][0], rim[i][1], rim[i][2], D.a(c0, a * 0.7f)); r.v(rim[i + 1][0], rim[i + 1][1], rim[i + 1][2], D.a(c1, a * 0.7f)); }
         r.end();
         r.begin(R3.LINES, true);
-        for (int i = 0; i < seg; i++) { double a0 = yaw + Math.PI * 2 * i / seg, a1 = yaw + Math.PI * 2 * (i + 1) / seg; int c = V.grad(i / (float) seg);
-            r.v(p[0] + Math.cos(a0) * rad, top, p[2] + Math.sin(a0) * rad, c); r.v(p[0] + Math.cos(a1) * rad, top, p[2] + Math.sin(a1) * rad, c); }
+        for (int i = 0; i < seg; i++) { int c = V.grad(i / (float) seg); r.v(rim[i][0], rim[i][1], rim[i][2], c); r.v(rim[i + 1][0], rim[i + 1][1], rim[i + 1][2], c); }
         r.end();
     }
     private static void particles(R3 r, long now) {
@@ -1032,6 +1101,8 @@ public final class Fx {
     /** the real swing progress; the vanilla swing movement gets 0 for our styles, so only our animation is seen */
     public static float realSwing;
     public static float vanillaSwing(float s) { realSwing = s; return V.on("swing") && V.mode("swing", "preset") != 0 && (G == null || !G.mainHandEmpty()) ? 0 : s; } // an empty hand keeps the vanilla swing (our styles move items)
+    /** our swing styles: the item stays up after a hit instead of dipping down for the attack cooldown */
+    public static float noDip(float equip) { return V.on("swing") && V.mode("swing", "preset") != 0 && (G == null || !G.mainHandEmpty()) ? 0 : equip; }
     public static float[] swingPose(float ignored) {
         if (!V.on("swing")) return null; float swing = realSwing;
         int preset = V.mode("swing", "preset");
@@ -1039,7 +1110,7 @@ public final class Fx {
         if (preset == 5) return new float[]{0.02f, 0.06f - 0.05f * s, -0.05f, -70 + 45 * s2, 8, 0}; // flat: lies forward, chops down (also when idle)
         if (swing <= 0) return null;
         switch (preset) {
-            case 1: return new float[]{-0.08f * s2, -0.1f * s, -0.12f * s, -55 * s2, 10 * s, -8 * s};   // smooth: a soft arc down and in
+            case 1: return new float[]{-0.12f * s2, -0.14f * s, -0.16f * s, -80 * s2, 14 * s, -12 * s};   // smooth: a soft arc down and in
             case 2: return new float[]{-0.18f * s2, 0.06f * s, -0.04f * s, -70 * s2, -50 * s2, 50 * s}; // "1.7 block": the sword turns across the screen
             case 3: return new float[]{0, 0.02f * s, -0.08f * s, 0, -360 * ease(swing), 0};             // spin
             case 4: return new float[]{0, 0.14f * s - 0.05f * s2, 0.02f * s, 75 * s - 95 * s2, 0, 0};  // chop: up, then hard down
@@ -1052,11 +1123,12 @@ public final class Fx {
     /** name protect: your nick in any text becomes the alias */
     public static String protect(String s) {
         if (s == null || !V.on("nameprotect") || V.user.isEmpty() || s.indexOf(V.user) < 0) return s;
-        String[] al = {"Asteria", "Игрок", "AL"}; return s.replace(V.user, al[Math.min(2, V.mode("nameprotect", "alias"))]);
+        String[] al = {"Asteria", "Игрок", "AL"}; int k = V.mode("nameprotect", "alias"); String own = V.text("nameprotect", "custom").trim();
+        return s.replace(V.user, k >= 3 ? (own.isEmpty() ? "Hidden" : own) : al[Math.min(2, k)]);
     }
 
     // ------------------------------------------------------------------ zoom
-    private static float zoomT, zoomLevel = -1; private static boolean zoomHeld;
+    static float zoomT; private static float zoomLevel = -1; private static boolean zoomHeld;
     public static void zoomKey(boolean held) { if (held && !zoomHeld) zoomLevel = (float) V.num("zoom", "fov"); zoomHeld = held; }
     public static boolean zooming() { return zoomHeld && V.on("zoom"); }
     /** mouse wheel while zooming: stronger / weaker zoom. true = consumed */

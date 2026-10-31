@@ -17,7 +17,7 @@ public final class Gui {
     private static float scroll, scrollTarget, openT; private static long openedAt;
     private static String expanded = null; private static V.Mod listening = null; private static V.S textEdit = null;
     private static V.S dragging = null; private static float dragX0, dragW;
-    private static boolean themeDragBg, themeDragScale;
+    private static boolean themeDragBg, themeDragScale, themeDragMenu;
     private static Hud.Box moving = null; private static float moveDX, moveDY;
     private static V.S colorOpen = null;
     private static final List<Hit> HITS = new ArrayList<>();
@@ -40,7 +40,7 @@ public final class Gui {
         float a = D.ease(openT);
         D.rect(0, 0, screenW, screenH, D.alpha(0x02060A, (int) (150 * a)));
         // a scale that is a whole number of half screen pixels: the text stays as sharp as in the HUD (no zoom animation for the same reason)
-        { float k = g.pxScale() * 2, fit = Math.min(1.6f, Math.min((screenW - 24) / W, (screenH - 24) / H)); sw = Math.max(1, (float) Math.floor(fit * k)) / k; } // bigger on big screens: letters as readable as in Lunar
+        { float k = g.pxScale() * 2, fit = Math.min(1.2f * V.menuScale, Math.min((screenW - 24) / W, (screenH - 24) / H)); sw = Math.max(1, (float) Math.floor(fit * k)) / k; } // bigger on big screens: letters as readable as in Lunar
         ox = (screenW - W * sw) / 2; oy = (screenH - H * sw) / 2 + (1 - a) * 12;
         float lmx = (mx - ox) / sw, lmy = (my - oy) / sw;
         g.push(ox, oy, sw);
@@ -50,7 +50,6 @@ public final class Gui {
         D.round(0, 0, SIDE, H, 10, D.alpha(0x0B1822, 255));
         D.rect(SIDE - 10, 0, SIDE, H, D.alpha(0x0B1822, 255));
         D.rect(SIDE, 8, SIDE + 0.6f, H - 8, 0x22FFFFFF);
-        D.round(10, 0, W - 10, 1.2f, 0.5f, V.a1(), V.a2());
         sidebar(g, game, lmx, lmy);
         if (cat.equals("theme")) theme(g, lmx, lmy); else if (cat.equals("configs")) configs(g, lmx, lmy); else modules(g, game, lmx, lmy);
         g.pop();
@@ -119,8 +118,7 @@ public final class Gui {
         boolean hov = in(mx, my, x0, y, x1, y + 32) && my > 44;
         float p = D.anim("on." + m.id, m.on ? 1 : 0, 12);
         D.round(x0, y, x1, y + h, 7, hov ? 0x1EFFFFFF : 0x12FFFFFF);
-        if (p > 0.01f) D.vgradRound(x0 + 3, y + 7, x0 + 5.5f, Math.min(y + h - 7, y + 25), D.a(V.a1(), p), D.a(V.a2(), p));
-        hit(x0, y, x1, y + 32, "card", () -> { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); if (V.on("sounds") && V.bool("sounds", "menu")) Fx.sound(m.on ? "module_enable" : "module_disable", (float) V.num("sounds", "volume")); if (V.on("voice") && V.bool("voice", "modules")) Voice.say((m.on ? "on_" : "off_") + m.id); });
+        hit(x0, y, x1, y + 32, "card", () -> { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); if (V.on("sounds") && V.bool("sounds", "menu")) Fx.sound(m.on ? "module_enable" : "module_disable", (float) V.num("sounds", "volume")); });
         D.g.text(m.name, x0 + 10, y + 6, D.mix(0xFFCFE0E8, 0xFFFFFFFF, p), false);
         D.textS(m.desc, x0 + 10, y + 18, 0.72f, 0xFF7E97A4);
         // switch
@@ -248,6 +246,7 @@ public final class Gui {
         y += 4;
         y = themeSlider("Прозрачность панелей", V.bg, 0.15f, 0.95f, Math.round(V.bg * 100) + "%", x0, y, x1, mx, 0);
         y = themeSlider("Размер HUD", V.scale, 0.5f, 2f, Math.round(V.scale * 100) + "%", x0, y, x1, mx, 1);
+        y = themeSlider("Размер меню Asteria", V.menuScale, 0.6f, 1.4f, Math.round(V.menuScale * 100) + "%", x0, y, x1, mx, 2);
         y += 6;
         D.panel(x0, y, x1, y + 36, 6); D.mark(x0 + 4, y + 8, 20);
         D.gradText("Так выглядят панели HUD", x0 + 28, y + 9, true); D.textS("Настройки тем сохраняются сразу и видны в лаунчере", x0 + 28, y + 21, 0.75f, 0xFF9FB3C0);
@@ -296,13 +295,14 @@ public final class Gui {
         D.g.text(label, x0, y + 3, 0xFFB9CBD4, false); D.g.text(val, x1 - D.w(val), y + 3, 0xFFFFFFFF, false);
         float ty = y + 15, f = (v - min) / (max - min);
         D.round(x0, ty, x1, ty + 3, 1.5f, 0x30FFFFFF); D.round(x0, ty, x0 + (x1 - x0) * f, ty + 3, 1.5f, V.a1(), V.a2()); D.circle(x0 + (x1 - x0) * f, ty + 1.5f, 3.8f, 0xFFFFFFFF);
-        hit(x0 - 3, ty - 5, x1 + 3, ty + 8, "ts", () -> { if (which == 0) themeDragBg = true; else themeDragScale = true; dragX0 = x0; dragW = x1 - x0; themeDrag(lastMx); });
+        hit(x0 - 3, ty - 5, x1 + 3, ty + 8, "ts", () -> { if (which == 0) themeDragBg = true; else if (which == 1) themeDragScale = true; else themeDragMenu = true; dragX0 = x0; dragW = x1 - x0; themeDrag(lastMx); });
         return y + 26;
     }
     private static void themeDrag(float mx) {
         float f = Math.max(0, Math.min(1, ((mx - ox) / sw - dragX0) / dragW));
         if (themeDragBg) V.bg = Math.round((0.15f + f * 0.8f) * 20) / 20f;
         if (themeDragScale) V.scale = Math.round((0.5f + f * 1.5f) * 20) / 20f;
+        if (themeDragMenu) V.menuScale = Math.round((0.6f + f * 0.8f) * 20) / 20f;
         V.changed();
     }
 
@@ -369,13 +369,13 @@ public final class Gui {
             V.changed(); return;
         }
         if (dragging != null) drag(mx);
-        if (themeDragBg || themeDragScale) themeDrag(mx);
+        if (themeDragBg || themeDragScale || themeDragMenu) themeDrag(mx);
     }
     private static void drag(float mx) {
         V.S s = dragging; float f = Math.max(0, Math.min(1, ((mx - ox) / sw - dragX0) / dragW));
         double v = s.min + (s.max - s.min) * f; v = Math.round(v / s.step) * s.step; s.num = Math.max(s.min, Math.min(s.max, v)); V.changed();
     }
-    public static void release() { dragging = null; moving = null; themeDragBg = themeDragScale = false; }
+    public static void release() { dragging = null; moving = null; themeDragBg = themeDragScale = themeDragMenu = false; }
     public static void scroll(double amount) {
         if (Hud.editing) { for (int i = Hud.BOXES.size() - 1; i >= 0; i--) { Hud.Box b = Hud.BOXES.get(i); /* the element under the mouse grows / shrinks by 5 % a notch */
             if (in(lastMx, lastMy, b.x, b.y, b.x + b.w, b.y + b.h)) { b.mod.hs = Math.max(0.5f, Math.min(2.5f, Math.round((b.mod.hs + (amount > 0 ? 0.05f : -0.05f)) * 20) / 20f)); V.changed(); return; } } return; }

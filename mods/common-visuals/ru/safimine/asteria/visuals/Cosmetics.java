@@ -325,16 +325,20 @@ public final class Cosmetics {
         int acc = tint == -1 ? V.a1() : tint, acc2 = tint == -1 ? V.a2() : tint;
         r.beginSolid();
         if (wing > 0 && wing < WINGS.length) { List<Ob> w = CACHE_W[wing] != null ? CACHE_W[wing] : (CACHE_W[wing] = wings(wing));
-            final double ph = Math.toRadians(26 + 5 * Math.sin(t * 1.8)), be = Math.toRadians(air ? 26 * Math.sin(t * 9) : 6 * Math.sin(t * 1.8)), sn = sneak;
+            // a living wing: the beat runs from the shoulder to the tips as a wave (the tips lag and bend), the wings breathe and
+            // half-open at rest, open wide and beat hard in the air; a little lift (dihedral) so they are not a flat board behind the back
+            final double rate = air ? 8.5 : 1.7, amp = Math.toRadians(air ? 34 : 7), open = Math.toRadians(air ? 18 : 30 + 6 * Math.sin(t * 0.9)), lift = Math.toRadians(air ? 6 : 14), sn = sneak;
             for (int s = -1; s <= 1; s += 2) { final int sd = s;
-                // wing space (outward = -x) -> body space: spread backwards by ph, beat up and down by be, attached to the upper back; +x is the player's left
-                emit(r, w, pos, bodyYaw, k, light, acc, acc2, (x, y, z) -> { double o = Math.max(0, -x), oo = o * Math.cos(be);
-                    return lean(sd * (1.6 + oo * Math.cos(ph)), 21.5 + y + o * Math.sin(be) - bDrop, -2.3 - oo * Math.sin(ph) + z, ln, neck); }); } }
+                // wing space (outward = -x) -> body space; +x is the player's left
+                emit(r, w, pos, bodyYaw, k, light, acc, acc2, (x, y, z) -> { double o = Math.max(0, -x), f = Math.min(1, o / 16), lag = o * (air ? 0.09 : 0.05);
+                    double be = lift + amp * Math.sin(t * rate - lag) * (0.6 + 0.6 * f), ph = open + Math.toRadians(air ? 10 : 4) * Math.sin(t * rate - lag + 1.2) * f;
+                    double oo = o * Math.cos(be), up = o * Math.sin(be);
+                    return lean(sd * (1.6 + oo * Math.cos(ph)), 21.5 + y + up - bDrop, -2.3 - oo * Math.sin(ph) + z, ln, neck); }); } }
         if (hatK > 0 && hatK < HATS.length) { List<Ob> hl = CACHE_H[hatK] != null ? CACHE_H[hatK] : (CACHE_H[hatK] = hat(hatK));
             float rel = headYaw - bodyYaw;
             final double sn = sneak; emit(r, hl, pos, bodyYaw, k, light, acc, acc2, (x, y, z) -> { double y2 = y * cp - z * sp, z2 = z * cp + y * sp, a = Math.toRadians(rel), cx = x * Math.cos(a) - z2 * Math.sin(a), cz = x * Math.sin(a) + z2 * Math.cos(a); return new double[]{cx, 24 + y2 - hDrop, cz}; }); }
         if (backK > 0 && backK < BACK.length) { List<Ob> bl = CACHE_B[backK] != null ? CACHE_B[backK] : (CACHE_B[backK] = back(backK));
-            final double sn = sneak; emit(r, bl, pos, bodyYaw, k, light, acc, acc2, (x, y, z) -> { double a = Math.toRadians(38); double cx = x * Math.cos(a) - y * Math.sin(a), cy = x * Math.sin(a) + y * Math.cos(a); return lean(cx, 18 + cy - bDrop, -3.4 + z, ln, neck); }); }
+            final double sn = sneak; emit(r, bl, pos, bodyYaw, k, light, acc, acc2, (x, y, z) -> { double a = Math.toRadians(38 + 3 * Math.sin(t * 1.4)); double cx = x * Math.cos(a) - y * Math.sin(a), cy = x * Math.sin(a) + y * Math.cos(a); return lean(cx, 18 + cy - bDrop, -3.4 + z, ln, neck); }); }
         r.end();
     }
     interface Tf { double[] at(double x, double y, double z); }

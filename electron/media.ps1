@@ -1,4 +1,4 @@
-# "Now playing" for AsteriaLauncher: the Windows media controls (Spotify, Yandex Music, browsers...).
+﻿# "Now playing" for AsteriaLauncher: the Windows media controls (Spotify, Yandex Music, browsers...).
 # Reader mode (default): one UTF-8 JSON line every ~1.5 s: title, artist, playing, pos, dur, app, key;
 #   "cover" (base64 PNG, 128x128) is added only when the track changes.
 # Commands: the launcher writes 'toggle' | 'next' | 'prev' into the file in $env:ASTERIA_MEDIA_CMD; the reader runs it
@@ -45,11 +45,13 @@ function Cover($p) {
   } catch { return $null }
 }
 
-$lastKey = ''; $fast = 0; $coverTries = 0; $coverNext = [DateTime]::Now; $lastCover = ''
+$lastKey = ''; $ownKey = ''; $ownPos = 0; $ownAt = [DateTime]::Now; $ownPlaying = $false; $fast = 0; $coverTries = 0; $coverNext = [DateTime]::Now; $lastCover = ''
 while ($true) {
   if ($cmdFile -and (Test-Path $cmdFile)) { $c = (Get-Content $cmdFile -Raw).Trim(); Remove-Item $cmdFile -Force; RunCmd $c; $fast = 25 } # then poll every 80 ms for ~2 s: the new track shows the moment the player switches
   $o = @{ playing = $false; title = ''; artist = '' }
-  $s = $mgr.GetCurrentSession()
+  # the session that is playing wins over the "current" one (a paused browser tab kept Telegram's music out)
+  $s = $null; foreach ($x in $mgr.GetSessions()) { try { if ($x.GetPlaybackInfo().PlaybackStatus -eq 'Playing') { $s = $x; break } } catch {} }
+  if (-not $s) { $s = $mgr.GetCurrentSession() }
   if ($s) {
     $p = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
     $tl = $s.GetTimelineProperties(); $pb = $s.GetPlaybackInfo()
@@ -57,6 +59,9 @@ while ($true) {
     $playing = ($pb.PlaybackStatus -eq 'Playing'); $pos = $tl.Position.TotalSeconds; $dur = $tl.EndTime.TotalSeconds
     if ($playing -and $tl.LastUpdatedTime.Year -gt 2000) { $pos += ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalSeconds } # players report the position rarely
     if ($dur -gt 0) { $pos = [math]::Max(0, [math]::Min($dur, $pos)) }
+    else { # Telegram and the like give no timeline: count the played time ourselves (shown without a total)
+      $now = [DateTime]::Now; if ($key -ne $ownKey) { $ownKey = $key; $ownPos = 0 } elseif ($ownPlaying) { $ownPos += ($now - $ownAt).TotalSeconds }
+      $ownAt = $now; $ownPlaying = $playing; $pos = $ownPos }
     $o = @{ title = $p.Title; artist = $p.Artist; playing = $playing; pos = [math]::Round($pos, 1); dur = [math]::Round($dur, 1); app = $s.SourceAppUserModelId; key = $key }
     # players change the title first and the picture a moment later: read the cover again a few times after a new track and send it when it changes
     if ($key -ne $lastKey) { $lastKey = $key; $coverTries = 4; $coverNext = [DateTime]::Now }

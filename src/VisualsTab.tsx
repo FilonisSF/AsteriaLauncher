@@ -79,18 +79,21 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
   const [pr, setPr] = useState<Presets | null>(null), prRef = useRef<Presets | null>(null), [enabled, setEnabled] = useState(true)
   useEffect(() => { window.api.visEnabled?.().then((v: boolean) => setEnabled(v !== false)) }, [])
   const toggleAll = async (v: boolean) => { setEnabled(v); await window.api.visEnabled?.(v); say(v ? 'Визуалы включены — со следующего запуска игры' : 'Визуалы выключены — игра запустится без них') }
-  const [keys, setKeys] = useState<Record<string, string>>({}), [listenKey, setListenKey] = useState(''), last = useRef(0), tm = useRef<any>()
+  const [keys, setKeys] = useState<Record<string, string>>({}), [listenKey, setListenKey] = useState(''), last = useRef(0), wrote = useRef(0), tm = useRef<any>()
   const loadPresets = async (cur: VisCfg) => { let p: Presets | null = await window.api.visPresets?.()
     if (!p || !p.list?.length) { const id = uid(); p = { active: id, list: [{ id, name: 'Мой конфиг', cfg: cur }] }; window.api.visPresetsSet?.(p) }
     p = { ...p, list: p.list.map((x) => x.id === p!.active ? { ...x, cfg: cur } : { ...x, cfg: merge(x.cfg) }) }; prRef.current = p; setPr(p) }
   useEffect(() => { window.api.visGet().then((v: any) => { const m = merge(v); setC(m); loadPresets(m) }) }, [])
-  useEffect(() => window.api.onFiles?.((d: any) => { if (Date.now() - last.current < 1500) return; if (d.kind === 'vis') window.api.visGet().then((v: any) => { if (v) { const m = merge(v); setC(m); loadPresets(m) } }); if (d.kind === 'opts' && d.ver === ver) window.api.optsGet(ver).then((o: any) => setKeys({ menu: o['key_key.asteria.menu'] || 'key.keyboard.right.shift', zoom: o['key_key.asteria.zoom'] || 'key.keyboard.c' })) }), [ver])
+  // our own write coming back (wrote) is skipped: reading it would put an older config into the active one
+  useEffect(() => window.api.onFiles?.((d: any) => { if (Date.now() - last.current < 1500 || Date.now() - wrote.current < 2500) return; if (d.kind === 'vis') window.api.visGet().then((v: any) => { if (v) { const m = merge(v); setC(m); loadPresets(m) } }); if (d.kind === 'opts' && d.ver === ver) window.api.optsGet(ver).then((o: any) => setKeys({ menu: o['key_key.asteria.menu'] || 'key.keyboard.right.shift', zoom: o['key_key.asteria.zoom'] || 'key.keyboard.c' })) }), [ver])
   useEffect(() => { const id = setInterval(async () => { if (Date.now() - last.current < 4000) return; const s = await window.api.gameState(); if (s.running) { const v = await window.api.visGet(); if (v) setC(merge(v)) } }, 3000); return () => clearInterval(id) }, []) // edits made in the game menu come back here
   useEffect(() => { window.api.optsGet(ver).then((o: any) => setKeys({ menu: o['key_key.asteria.menu'] || 'key.keyboard.right.shift', zoom: o['key_key.asteria.zoom'] || 'key.keyboard.c' })) }, [ver])
   // every edit also lands in the active preset
   const save = (n: VisCfg) => { setC(n); last.current = Date.now(); const p = prRef.current; if (p) { const q = { ...p, list: p.list.map((x) => x.id === p.active ? { ...x, cfg: n } : x) }; prRef.current = q; setPr(q) }
-    clearTimeout(tm.current); tm.current = setTimeout(async () => { const r = await window.api.visSet(n); if (prRef.current) window.api.visPresetsSet?.(prRef.current); if (r?.live) say('Применено в игре') }, 300) }
-  const setPresets = (p: Presets, apply?: VisCfg) => { prRef.current = p; setPr(p); window.api.visPresetsSet?.(p); if (apply) save(apply) }
+    clearTimeout(tm.current); tm.current = setTimeout(() => write(n), 300) }
+  const write = async (n: VisCfg) => { last.current = Date.now(); const r = await window.api.visSet(n); wrote.current = Date.now(); if (prRef.current) window.api.visPresetsSet?.(prRef.current); if (r?.live) say('Применено в игре') }
+  // switching a config writes at once (no 300 ms wait): quick clicks always end on the last one picked
+  const setPresets = (p: Presets, apply?: VisCfg) => { prRef.current = p; setPr(p); window.api.visPresetsSet?.(p); if (apply) { save(apply); clearTimeout(tm.current); write(apply) } }
   const mod = (id: string, p: Partial<ModCfg>) => c && save({ ...c, modules: { ...c.modules, [id]: { ...c.modules[id], ...p } } })
   const setS = (id: string, k: string, v: any) => c && mod(id, { s: { ...c.modules[id].s, [k]: v } })
   const theme = (p: Partial<Theme>) => c && save({ ...c, theme: { ...c.theme, ...p } })
@@ -120,7 +123,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     {!premium && <div className="card rounded-2xl p-4 mb-4 flex items-center gap-3"><span className="cmd-ic"><Icon n="lock" s={16} /></span><div className="text-sm flex-1"><b>Можно всё настроить заранее.</b> <span className="muted">В игре визуалы включатся, как только на аккаунте появится PREMIUM — лаунчер проверяет подписку при каждом запуске.</span></div></div>}
 
     <div className="flex items-center gap-3 mb-4 flex-wrap">
-      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['crosshair', 'Прицел', 'plus'], ['marks', 'Метки', 'servers'], ['binds', 'Бинды команд', 'keyboard'], ['voice', 'Диктор', 'music'], ['configs', 'Конфиги', 'folder'], ['abbr', 'Сокращения', 'rules']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
+      <div className="seg">{([['mods', 'Функции', 'sparkles'], ['theme', 'Тема', 'palette'], ['crosshair', 'Прицел', 'plus'], ['marks', 'Метки', 'servers'], ['binds', 'Бинды команд', 'keyboard'], ['configs', 'Конфиги', 'folder'], ['abbr', 'Сокращения', 'rules']] as const).map(([k, l, i]) => <button key={k} className={'flex items-center gap-1.5 ' + (view === k ? 'on' : '')} onClick={() => setView(k)}><Icon n={i} s={14} />{l}</button>)}</div>
       <div className="flex-1" />
       <div className="flex items-center gap-2 text-sm"><span className="muted">Клавиши в игре:</span>
         {(['menu', 'zoom'] as const).map((k) => <button key={k} className={'btn !py-1.5 ' + (listenKey === k ? 'btn-on' : '')} onClick={() => setListenKey(k)}>{k === 'menu' ? 'Меню' : 'Зум'} <kbd className="ml-1">{listenKey === k ? '…' : pretty(keys[k])}</kbd></button>)}</div>
@@ -190,7 +193,6 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
     {view === 'binds' && <BindsTab say={say} />}
     {view === 'crosshair' && c.modules.crosshair && <CrosshairTab m={c.modules.crosshair} on={(v) => mod('crosshair', { on: v })} set={(k, v) => setS('crosshair', k, v)} say={say} />}
 
-    {view === 'voice' && <VoiceTab say={say} />}
   </div>
 }
 

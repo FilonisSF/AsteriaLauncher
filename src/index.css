@@ -240,6 +240,7 @@ kbd{font:600 .78rem/1 ui-monospace,Consolas,monospace;padding:.3rem .45rem;borde
 [data-theme=light] .evcard .muted{color:#9fb3c0}
 [data-theme=light] .evcard .chip-xs{background:rgba(255,255,255,.08);color:#dbeafe}
 
+.toastx{position:fixed}.toastx .toast-x{position:absolute;top:8px;right:8px}
 .toastx .ic.err{background:rgba(244,63,94,.18);color:#fb7185;box-shadow:0 0 18px rgba(244,63,94,.3)}.toastx .ic.info{background:rgba(245,158,11,.16);color:#fbbf24;box-shadow:0 0 18px rgba(245,158,11,.25)}
 
 /* own mods: upload button and full-tab drop overlay */
@@ -294,7 +295,7 @@ input,select,textarea{border-radius:14px}
 /* mini player */
 .miniplayer{display:block;padding:10px;border-radius:18px;margin-bottom:8px;background:linear-gradient(180deg,rgba(255,255,255,.04),transparent 60%),var(--card);border:1px solid var(--line)}
 .mp-cover{width:42px;height:42px;border-radius:12px;object-fit:cover;flex:none;box-shadow:0 4px 14px rgba(0,0,0,.35)}
-.mp-bar{height:4px;border-radius:999px;background:var(--chip);overflow:hidden}.mp-bar>div{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a1),var(--a2));transition:width .5s linear}
+.mp-bar{height:4px;border-radius:999px;background:var(--chip);overflow:hidden}.mp-bar.live>div{background:linear-gradient(90deg,transparent,var(--a1),var(--a2),transparent);background-size:200% 100%;animation:mpLive 2.4s linear infinite;opacity:.8}@keyframes mpLive{from{background-position:200% 0}to{background-position:-200% 0}}.mp-artist{color:var(--text);opacity:.72}.mp-bar>div{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a1),var(--a2));transition:width .5s linear}
 .mp-btn{width:28px;height:26px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:var(--text);background:transparent;transition:background .15s,color .15s,transform .15s}
 .mp-btn:hover{background:color-mix(in srgb,var(--a2) 16%,transparent);color:var(--a2)}
 .mp-btn.big{width:34px;height:30px;background:linear-gradient(135deg,var(--a1),var(--a2));color:#032a2e}.mp-btn.big:hover{transform:scale(1.06);color:#032a2e}
@@ -320,7 +321,7 @@ button.pill:hover{background:color-mix(in srgb,var(--a2) 14%,var(--pill-bg));col
 .quick-tile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;border-radius:16px;background:var(--chip);transition:background .15s,transform .15s}
 .quick-tile:hover{background:color-mix(in srgb,var(--a2) 18%,var(--chip));transform:translateY(-1px)}
 /* low windows: the mini player gets compact so the account card at the bottom stays visible */
-@media (max-height:860px){.miniplayer{padding:8px}.miniplayer .mp-cover{width:34px;height:34px}.miniplayer .lbl.mt-2{margin-top:6px}.miniplayer .lbl.mt-2>.flex.justify-between{display:none}.miniplayer .lbl.mt-2>.flex.items-center{margin-top:4px}}
+@media (max-height:860px){.miniplayer{padding:8px}.miniplayer .mp-cover{width:34px;height:34px}.miniplayer .lbl.mt-2{margin-top:6px}.miniplayer .lbl.mt-2>.flex.items-center{margin-top:4px}}
 
 .vis-master{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:18px;color:#fff;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(10px);transition:border-color .2s,box-shadow .2s;flex:none}
 .vis-master.on{border-color:color-mix(in srgb,var(--a2) 70%,transparent);box-shadow:0 0 24px color-mix(in srgb,var(--a2) 30%,transparent)}

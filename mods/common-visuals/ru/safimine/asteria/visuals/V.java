@@ -37,7 +37,7 @@ public final class V {
     // theme
     public static int accent = 0xFF22D3EE, accent2 = 0xFF3B82F6;
     public static boolean chroma = false, shadow = true, blur = true;
-    public static float bg = 0.6f, scale = 1.25f;
+    public static float bg = 0.6f, scale = 1.25f, menuScale = 1; // menuScale: the Asteria menu window (0.6..1.4)
     /** HUD look: 0 = crystal panels, 1 = Asteria lines (thin lines, minimal backing) */
     public static int hudStyle = 0;
     /** a light sheen running over the HUD panels now and then */
@@ -156,7 +156,7 @@ public final class V {
         {
             if (o.has("theme")) { JsonObject t = o.getAsJsonObject("theme");
                 accent = parse(str(t, "accent"), accent); accent2 = parse(str(t, "accent2"), accent2);
-                chroma = b(t, "chroma", chroma); shadow = b(t, "shadow", shadow); blur = b(t, "blur", blur); bg = (float) d(t, "bg", bg); scale = Math.max(0.5f, Math.round((float) d(t, "scale", scale) * 4) / 4f); /* whole quarters: the text stays sharp */ hudStyle = (int) d(t, "hud", hudStyle); glare = b(t, "glare", glare); if (t.has("font")) { try { font = t.get("font").isJsonPrimitive() && t.get("font").getAsJsonPrimitive().isBoolean() ? (t.get("font").getAsBoolean() ? 2 : 0) : Math.max(0, Math.min(FONTS.length - 1, t.get("font").getAsInt())); } catch (Exception ignored) {} } menu = b(t, "menu", menu); menuBg = (int) d(t, "menuBg", menuBg); allFont = b(t, "allFont", allFont); lite = b(t, "lite", lite); bgBlur = b(t, "bgBlur", bgBlur); }
+                chroma = b(t, "chroma", chroma); shadow = b(t, "shadow", shadow); blur = b(t, "blur", blur); bg = (float) d(t, "bg", bg); scale = Math.max(0.5f, Math.round((float) d(t, "scale", scale) * 4) / 4f); /* whole quarters: the text stays sharp */ hudStyle = (int) d(t, "hud", hudStyle); glare = b(t, "glare", glare); if (t.has("font")) { try { font = t.get("font").isJsonPrimitive() && t.get("font").getAsJsonPrimitive().isBoolean() ? (t.get("font").getAsBoolean() ? 2 : 0) : Math.max(0, Math.min(FONTS.length - 1, t.get("font").getAsInt())); } catch (Exception ignored) {} } menu = b(t, "menu", menu); menuBg = (int) d(t, "menuBg", menuBg); allFont = b(t, "allFont", allFont); lite = b(t, "lite", lite); bgBlur = b(t, "bgBlur", bgBlur); menuScale = Math.max(0.6f, Math.min(1.4f, (float) d(t, "menuScale", menuScale))); }
             JsonObject mods = o.has("modules") ? o.getAsJsonObject("modules") : new JsonObject();
             for (Mod md : MODS) {
                 if (!mods.has(md.id)) continue;
@@ -173,7 +173,7 @@ public final class V {
     private static void write() {
         try {
             JsonObject o = new JsonObject(), t = new JsonObject(), mods = new JsonObject();
-            t.addProperty("accent", hex(accent)); t.addProperty("accent2", hex(accent2)); t.addProperty("chroma", chroma); t.addProperty("shadow", shadow); t.addProperty("blur", blur); t.addProperty("bg", bg); t.addProperty("scale", scale); t.addProperty("hud", hudStyle); t.addProperty("glare", glare); t.addProperty("font", font); t.addProperty("menu", menu); t.addProperty("menuBg", menuBg); t.addProperty("allFont", allFont); t.addProperty("lite", lite); t.addProperty("bgBlur", bgBlur);
+            t.addProperty("accent", hex(accent)); t.addProperty("accent2", hex(accent2)); t.addProperty("chroma", chroma); t.addProperty("shadow", shadow); t.addProperty("blur", blur); t.addProperty("bg", bg); t.addProperty("scale", scale); t.addProperty("hud", hudStyle); t.addProperty("glare", glare); t.addProperty("font", font); t.addProperty("menu", menu); t.addProperty("menuBg", menuBg); t.addProperty("allFont", allFont); t.addProperty("lite", lite); t.addProperty("bgBlur", bgBlur); t.addProperty("menuScale", menuScale);
             o.add("theme", t);
             for (Mod m : MODS) {
                 JsonObject j = new JsonObject(), sv = new JsonObject(); j.addProperty("on", m.on); j.addProperty("bind", m.bind);

@@ -110,7 +110,7 @@ function useVisModule(id: string) {
 const COS_ROWS: [string, string, string, [number, string][]][] = [['wings', 'w', 'Крылья', [[1, 'Ангел'], [2, 'Демон'], [3, 'Фея'], [4, 'Дракон'], [6, 'Кристальные'], [7, 'Бабочка'], [8, 'Летучая мышь']]],
     ['hat', 'h', 'Головной убор', [[1, 'Корона'], [2, 'Цилиндр'], [3, 'Кошачьи ушки'], [4, 'Шляпа ведьмы'], [5, 'Рога'], [7, 'Ледяная тиара'], [8, 'Цветочный венок'], [9, 'Тыква']]],
     ['back', 'b', 'За спиной', [[1, 'Коса'], [2, 'Молот'], [3, 'Катана'], [5, 'Небесный клинок'], [6, 'Посох звёзд'], [7, 'Лук ветра'], [8, 'Нефритовое копьё'], [9, 'Метла ведьмы']]]]
-const PET_NAMES = ['Котик', 'Призрак', 'Огонёк', 'Кристалл', 'Атом', 'Цветок', 'Пончик', 'Мячик', 'Банан', 'Мини-я', 'Котёнок', 'Лисёнок', 'Зайчик', 'Слайм', 'Пчёлка', 'Аксолотль', 'Своя модель', 'Дракончик', 'Пингвин']
+const PET_NAMES = ['Котик', 'Призрак', 'Огонёк', 'Кристалл', 'Атом', 'Цветок', 'Пончик', 'Мячик', 'Банан', 'Мини-я', 'Котёнок', 'Лисёнок', 'Зайчик', 'Слайм', 'Пчёлка', 'Аксолотль', 'Своя модель', 'Дракончик', 'Пингвин', 'Щенок', 'Совёнок']
 /** the profile showcase: you in 3D with everything you wear (skin, cape, 3D cosmetics, pet), the name plate as above your head in the game, and what is on */
 function ProfileLook({ skin, slim, cape, name, sub, children }: { skin: string; slim: boolean; cape?: string; name: string; sub?: React.ReactNode; children?: React.ReactNode }) {
   const [v] = useVisModule('cosmetics'), c = v?.modules?.cosmetics, p = v?.modules?.pet
@@ -150,7 +150,7 @@ function PetCard({ face }: { face: string }) {
   const [v, put] = useVisModule('pet')
   if (!v) return null
   const p = v.modules.pet
-  const names = PET_NAMES, order = [10, 11, 12, 17, 18, 13, 14, 15, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8]
+  const names = PET_NAMES, order = [17, 10, 11, 19, 20, 12, 18, 13, 14, 15, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8]
   return <div className="card rounded-3xl p-5 flex flex-col gap-3">
     <div className="flex items-center justify-between"><div><b className="text-lg">Питомец</b><div className="muted text-xs">Бегает рядом с вами в игре. Его видят все игроки Asteria</div></div><Switch on={!!p.on} set={(on) => put({ on })} /></div>
     <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', opacity: p.on ? 1 : 0.5 }}>{order.map((i) => { const n = names[i], pic = petPic(i), sel = +p.s.kind === i
@@ -208,18 +208,23 @@ function MiniPlayer() {
   const [m, setM] = useState<any>(null)
   useEffect(() => { api.mediaGet?.().then(setM); return api.onMedia?.(setM) }, [])
   const [, tick] = useState(0); useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 500); return () => clearInterval(id) }, []) // the bar moves between updates
+  const [hold, setHold] = useState<{ p: boolean; until: number } | null>(null)
   if (!m?.title) return <div className="mt-auto" /> // after every hook: React needs the same hooks on each render
-  const cmd = (c: string) => { api.mediaCmd(c); if (c === 'toggle') setM({ ...m, playing: !m.playing, pos: pos, at: Date.now() }) }
-  const pos = Math.min(m.dur || 0, (m.pos || 0) + (m.playing ? (Date.now() - m.at) / 1000 : 0)), f = m.dur > 0 ? pos / m.dur : 0
+  // a click shows the new state at once and holds it ~1.5 s: the player reports the old state a moment longer, which made the button flicker
+  const playing = hold && Date.now() < hold.until ? hold.p : !!m.playing
+  const cmd = (c: string) => { api.mediaCmd(c); if (c === 'toggle') { setHold({ p: !playing, until: Date.now() + 1500 }); setM({ ...m, playing: !playing, pos, at: Date.now() }) } }
+  // Telegram and the like give no length: then the played time is shown and the bar runs as a soft glow
+  const raw = (m.pos || 0) + (playing && m.at ? (Date.now() - m.at) / 1000 : 0), pos = m.dur > 0 ? Math.min(m.dur, raw) : raw, f = m.dur > 0 ? pos / m.dur : 0
   const t = (x: number) => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0')
   return <div className="miniplayer mt-auto">
     <div className="flex gap-2.5 items-center">
       {m.cover ? <img src={m.cover} className="mp-cover" /> : <span className="mp-cover flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--a1),var(--a2))', color: '#fff' }}><Icon n="music" s={18} /></span>}
-      <div className="lbl min-w-0 flex-1"><b className="block truncate text-[12.5px] leading-tight">{m.title}</b><span className="block truncate text-[11px] muted">{m.artist || (m.playing ? 'Играет' : 'Пауза')}</span></div></div>
-    <div className="lbl mt-2"><div className="mp-bar"><div style={{ width: f * 100 + '%' }} /></div>
-      {m.dur > 0 && <div className="flex justify-between text-[10px] muted mt-1 tabular-nums"><span>{t(pos)} / {t(m.dur)}</span><span>-{t(Math.max(0, m.dur - pos))}</span></div>}
+      <div className="lbl min-w-0 flex-1"><b className="block truncate text-[12.5px] leading-tight">{m.title}</b><span className="block truncate text-[11px] mp-artist">{m.artist || (playing ? 'Играет' : 'Пауза')}</span></div></div>
+    <div className="lbl mt-2"><div className={'mp-bar' + (m.dur > 0 ? '' : playing ? ' live' : '')}><div style={{ width: (m.dur > 0 ? f * 100 : 100) + '%' }} /></div>
+      {m.dur > 0 ? <div className="flex justify-between text-[10px] muted mt-1 tabular-nums"><span>{t(pos)} / {t(m.dur)}</span><span>-{t(Math.max(0, m.dur - pos))}</span></div>
+        : pos > 0 && <div className="text-[10px] muted mt-1 tabular-nums">{t(pos)}</div>}
       <div className="flex items-center justify-center gap-1.5 mt-1"><button className="mp-btn" title="Назад" onClick={() => cmd('prev')}><Icon n="prev" s={13} /></button>
-        <button className="mp-btn big" title={m.playing ? 'Пауза' : 'Играть'} onClick={() => cmd('toggle')}><Icon n={m.playing ? 'pause' : 'play'} s={14} fill={!m.playing} /></button>
+        <button className="mp-btn big" title={playing ? 'Пауза' : 'Играть'} onClick={() => cmd('toggle')}><Icon n={playing ? 'pause' : 'play'} s={14} fill={!playing} /></button>
         <button className="mp-btn" title="Дальше" onClick={() => cmd('next')}><Icon n="next" s={13} /></button></div>
       <div className="flex items-center justify-center gap-1 mt-1"><button className="mp-btn" title="Тише" onClick={() => cmd('voldown')}><b className="text-[12px]">−</b></button>
         <button className="mp-btn" title="Без звука / со звуком" onClick={() => cmd('mute')}><Icon n="volume" s={12} /></button>
@@ -347,7 +352,9 @@ export default function App() {
   const setMyCapes = (l: Saved[]) => { setMyCapesS(l); writeList('myCapes', l) }, setMySkins = (l: Saved[]) => { setMySkinsS(l); writeList('mySkins', l) }
   const addCape = async (data: string) => { const it = { id: 'my' + Date.now().toString(36), data }; setMyCapes([it, ...myCapes]); setCape(it.id); const r = await api.saveTexture({ data: await withElytra(data), kind: 'cape' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
   const addSkin = (data: string) => { setPresetSkin(''); if (!mySkins.some((x) => x.data === data)) setMySkins([{ id: 'my' + Date.now().toString(36), data }, ...mySkins]) }
-  const useSkin = async (data: string) => { setSkin(data); const r = await api.saveTexture({ data, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
+  const skinW = (data: string) => new Promise<number>((ok) => { const i = new Image(); i.onload = () => ok(i.naturalWidth); i.onerror = () => ok(0); i.src = data })
+  const useSkin = async (data: string) => { if ((await skinW(data)) > 64) return say('HD-скины не поддерживаются: нужен обычный скин 64×64', 'err') // HD skins are off everywhere
+    setSkin(data); const r = await api.saveTexture({ data, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
   const play = async (v: string, join = false, server?: any, extra?: { world?: string; together?: boolean }) => { if (!me) { setAddOpen(true); return say('Сначала добавьте аккаунт', 'info') } let r: any; try { r = await api.launch({ version: v, join, lang, server, ...(extra || {}) }) } catch (e: any) { r = { error: 'Не удалось запустить: ' + (e?.message || e) } } if (r?.warn) say(r.warn, 'info'); if (r?.error) say(r.error, 'err') }
   const install = async (slug: string) => { setBusy(slug)
     if (kind === 'mod') { const list = targets.filter((x) => tsel.includes(x.key)); const tg = list.length ? list : [{ key: instKeyNow, version: ver }]
@@ -516,7 +523,7 @@ export default function App() {
               <div><b>Скин и плащ отсюда видят только игроки с AsteriaLauncher.</b> <span className="muted">Остальные видят ваш обычный скин на сервере.{me?.type === 'microsoft' ? ' Чтобы скин видели все — нажмите «' + t('apply') + '».' : ''}</span></div></div>
             <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)' }}>
             <div className="card rounded-3xl p-4 relative"><div className="seg absolute right-4 top-4 z-10"><button className={look ? '' : 'on'} onClick={() => setLook('')}>Скин</button><button className={look ? 'on' : ''} onClick={() => setLook('1')}>С косметикой</button></div>
-              {look ? <LookPreview skin={skinUrl} slim={variant === 'slim'} height={470} /> : <Skin3D skin={skinUrl} slim={variant === 'slim'} cape={capeUrl} height={470} spin={skinSpin === '1'} />}
+              <LookPreview skin={skinUrl} slim={variant === 'slim'} cape={capeUrl} height={470} bare={!look} spin={skinSpin === '1'} /> {/* one view for both: the same size, light and turning */}
               <div className="mt-2"><Check on={skinSpin === '1'} set={(v) => setSkinSpin(v ? '1' : '0')} label="Вращать модель" /></div>
               <div className="flex gap-2 items-center flex-wrap mt-3"><button className="btn btn-primary flex items-center gap-2" onClick={() => setEdit('skin')}><Icon n="pencil" s={16} />Редактировать на модели</button>
                 <button className="btn flex items-center gap-2" onClick={async () => { const d = await api.pickSkin(); if (d) { setSkin(d); addSkin(d); const r = await api.saveTexture({ data: d, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) } }}><Icon n="upload" s={16} />{t('pickPng')}</button>
@@ -528,11 +535,11 @@ export default function App() {
               <p className="muted text-xs mt-2">{t('drag')}</p>
               <div className="mt-4"><div className="flex items-center justify-between mb-2"><b className="text-sm">Скины</b><span className="muted text-xs">Наведите на свой скин — появится кнопка удаления</span></div>
                 <div className="grid grid-cols-6 gap-2">{mySkins.map((x) => <SkinTile key={x.id} url={x.data} on={skin === x.data} title="Мой скин" pick={() => useSkin(x.data)} del={() => { setMySkins(mySkins.filter((y) => y.id !== x.id)); say('Скин удалён из списка') }} />)}
-                  {SKINS.map(([n, u]) => <SkinTile key={n} url={u} on={presetSkin === n && !mySkins.some((x) => x.data === skin)} title={'HD-скин ' + n} pick={async () => { setPresetSkin(n); useSkin(await toData(u)) }} />)}</div></div></div>
+                  {SKINS.map(([n, u]) => <SkinTile key={n} url={u} on={presetSkin === n && !mySkins.some((x) => x.data === skin)} title={'Скин ' + n} pick={async () => { setPresetSkin(n); useSkin(await toData(u)) }} />)}</div></div></div>
             <div className="flex flex-col gap-4">
               <PetCard face={miniSkin || skinUrl} />
               <CosmCard />
-              <ModelsCard say={say} />
+
               <div className="card rounded-3xl p-5 flex gap-4 items-center"><div className="w-16 h-16 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center" style={{ background: 'var(--chip)' }}>{miniSkin ? <div className="w-full h-full" style={{ backgroundImage: `url(${miniSkin})`, backgroundSize: '512px 512px', backgroundPosition: '-64px -64px', imageRendering: 'pixelated' }} /> : <Icon n="user" s={26} />}</div>
                 <div className="flex-1 min-w-0"><b>Питомец «Мини-я»</b><div className="muted text-sm">Маленькая копия вас бегает следом. Включите в Визуалы → Питомец → «Мини-я»; скин — ваш или отдельный отсюда. Его видят все игроки Asteria</div>
                   <div className="flex gap-2 mt-2 flex-wrap"><button className="btn !py-1.5 text-sm flex items-center gap-2" onClick={async () => { const d = await api.pickSkin(); if (d) { setMiniSkin(d); const r = await api.saveTexture({ data: d, kind: 'mini' }); say(r?.uploaded ? 'Скин «Мини-я» сохранён' : 'Скин сохранён на этом компьютере', r?.uploaded ? 'ok' : 'info') } }}><Icon n="upload" s={15} />Свой скин для «Мини-я»</button>
@@ -572,7 +579,7 @@ export default function App() {
 
           {/* =============================== SERVERS */}
 
-          {tab === 'servers' && <div><PageHead title={t('servers')} sub="Статус, адрес и быстрый вход. Все серверы отсюда сами появляются в списке серверов Minecraft" right={<button className="btn-add" onClick={() => setSrvForm({ name: '', ip: '', port: '', desc: '' })}><span className="ic"><Icon n="plus" s={14} /></span>Добавить сервер</button>} />
+          {tab === 'servers' && <div><PageHead title={t('servers')} sub="Статус, адрес и быстрый вход. Все серверы отсюда сами появляются в списке серверов Minecraft" />
             {srvForm && <div className="ask-bg" onClick={() => setSrvForm(null)}><div className="ask flex flex-col gap-2" onClick={(e) => e.stopPropagation()}><b className="text-lg">Свой сервер</b>
               <input placeholder="Название" value={srvForm.name} onChange={(e) => setSrvForm({ ...srvForm, name: e.target.value })} />
               <div className="flex gap-2"><input className="flex-1" placeholder="Адрес: play.server.ru" value={srvForm.ip} onChange={(e) => setSrvForm({ ...srvForm, ip: e.target.value.trim() })} /><input className="w-24" placeholder="Порт" value={srvForm.port} onChange={(e) => setSrvForm({ ...srvForm, port: e.target.value.replace(/\D/g, '') })} /></div>
@@ -672,7 +679,7 @@ export default function App() {
         <p className='muted text-sm mt-2'>{verAsk === 'reinstall' ? 'Файлы игры скачаются заново. Миры, моды и настройки останутся.' : 'Файлы игры уйдут в корзину. Миры, моды и настройки можно оставить или удалить тоже.'}</p>
         <div className='flex gap-2 mt-4 justify-end flex-wrap'><button className='btn' onClick={() => setVerAsk('')}>Отмена</button>{verAsk === 'reinstall' ? <button className='btn-add' onClick={() => verDo('reinstall')}><span className='ic'><Icon n='reset' s={13} /></span>Переустановить</button>
           : <><button className='btn' onClick={() => verDo('remove')}>Только файлы игры</button><button className='btn-danger' onClick={() => verDo('remove', true)}><Icon n='trash' s={14} />Вместе с мирами</button></>}</div></div></div>}<Splash pct={boot.pct} msg={boot.msg} />
-      {toast && <div className="toastx pop-in"><span className={'ic ' + toastKind}>{toastKind === 'err' ? <Icon n="close" s={18} /> : toastKind === 'info' ? <Icon n="eye" s={18} /> : <Gem s={20} glow={false} />}</span><div className="min-w-0"><b className="block text-sm">{toastKind === 'err' ? 'Ошибка' : toastKind === 'info' ? 'Внимание' : 'Готово'}</b><span className="muted text-xs block">{toast}</span></div><button className="iconbtn !w-7 !h-7" onClick={() => setToast('')}><Icon n="close" s={12} /></button></div>}
+      {toast && <div className="toastx pop-in"><span className={'ic ' + toastKind}>{toastKind === 'err' ? <Icon n="close" s={18} /> : toastKind === 'info' ? <Icon n="eye" s={18} /> : <Gem s={20} glow={false} />}</span><div className="min-w-0 flex-1 pr-5"><b className="block text-sm">{toastKind === 'err' ? 'Ошибка' : toastKind === 'info' ? 'Внимание' : 'Готово'}</b><span className="muted text-xs block">{toast}</span></div><button className="iconbtn !w-6 !h-6 toast-x" onClick={() => setToast('')}><Icon n="close" s={12} /></button></div>}
     </div>
   )
 }

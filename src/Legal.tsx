@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from './Icons'
 
 /** Privacy policy and terms of use: what the launcher really does with data (kept in sync with the code) */
@@ -30,8 +31,7 @@ const TERMS: [string, string[]][] = [
     'Запрещено загружать оскорбительное, незаконное и чужое без разрешения. Такой контент может быть удалён, а доступ к функциям ограничен.']],
   ['Честная игра', ['Визуалы Asteria меняют только то, что видите вы, и не дают преимущества. Не используйте лаунчер вместе с читами.',
     'На каждом сервере действуют свои правила — их нужно соблюдать. Наказания серверов от лаунчера не зависят.']],
-  ['Подписка и аккаунт', ['PREMIUM открывает дополнительные визуалы на срок подписки. Ник, привязанный к лаунчеру, нельзя передавать другим людям.',
-    'Код сохранения «Для себя» содержит ваши ники — никому его не отдавайте.']],
+  ['Аккаунт', ['Код сохранения «Для себя» содержит ваши ники — никому его не отдавайте.']],
   ['Ответственность', ['Лаунчер предоставляется «как есть». Мы стараемся, чтобы всё работало, но не отвечаем за потерю миров и файлов — делайте копии важного.',
     'Условия могут меняться; новая версия действует с выхода обновления лаунчера.']],
   ['Связь', ['Вопросы, удаление данных, сотрудничество: Telegram @filonis_music.']],
@@ -40,14 +40,16 @@ const TERMS: [string, string[]][] = [
 export function LegalCard() {
   const [open, setOpen] = useState<'' | 'privacy' | 'terms'>('')
   const doc = open === 'privacy' ? PRIVACY : TERMS
+  useEffect(() => { if (!open) return; const k = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(''); addEventListener('keydown', k); return () => removeEventListener('keydown', k) }, [open])
   return <div className="card rounded-3xl p-5 flex flex-col gap-3">
     <div className="font-bold flex items-center gap-2"><Icon n="shield" s={18} />Документы</div>
     <div className="flex flex-col gap-2">
       <button className="mcard !p-3 flex items-center gap-3 text-left" onClick={() => setOpen('privacy')}><Icon n="lock" s={16} /><div className="flex-1"><b className="text-sm block">Политика конфиденциальности</b><span className="muted text-[11px]">Какие данные есть у лаунчера и куда они уходят</span></div><Icon n="right" s={14} /></button>
       <button className="mcard !p-3 flex items-center gap-3 text-left" onClick={() => setOpen('terms')}><Icon n="rules" s={16} /><div className="flex-1"><b className="text-sm block">Условия использования</b><span className="muted text-[11px]">Правила для контента, честная игра, ответственность</span></div><Icon n="right" s={14} /></button></div>
-    {open && <div className="ask-bg" onClick={() => setOpen('')}><div className="ask !w-[620px] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+    {/* on top of the whole window (a portal: the settings card would clip it), centred, scrolling inside; a click on the dimmed space or Esc closes it */}
+    {open && createPortal(<div className="ask-bg" onMouseDown={(e) => e.target === e.currentTarget && setOpen('')}><div className="ask !w-[620px] max-w-[92vw] max-h-[80vh] flex flex-col">
       <div className="flex items-center justify-between mb-3"><b className="text-xl">{open === 'privacy' ? 'Политика конфиденциальности' : 'Условия использования'}</b><button className="iconbtn" onClick={() => setOpen('')}><Icon n="close" s={15} /></button></div>
       <div className="overflow-auto pr-2 flex flex-col gap-4">{doc.map(([h, ps]) => <div key={h}><b className="block mb-1">{h}</b>{ps.map((p) => <p key={p} className="muted text-sm mb-1.5 leading-relaxed">{p}</p>)}</div>)}
-        <p className="muted text-[11px]">Действует с версии 1.6.0 AsteriaLauncher.</p></div></div></div>}
+        <p className="muted text-[11px]">Действует с версии 1.6.0 AsteriaLauncher.</p></div></div></div>, document.body)}
   </div>
 }

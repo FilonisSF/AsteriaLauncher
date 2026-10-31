@@ -31,16 +31,19 @@ public class HeldItemRendererMixin {
     /** rotation, swing turns and size: around the item in the hand, so turning feels natural */
     @Inject(method = "renderFirstPersonItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/item/HeldItemRenderer;renderItem(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/item/ItemStack;Lnet/minecraft/client/render/model/json/ModelTransformationMode;ZLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V"), require = 0)
     private void asteria$turn(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swing, ItemStack item, float equip, MatrixStack m, VertexConsumerProvider vcp, int light, CallbackInfo ci) {
-        if (hand == Hand.MAIN_HAND) { float[] p = Fx.swingPose(swing); if (p != null) { float side = player.getMainArm() == Arm.RIGHT ? 1 : -1;
-            m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(p[3])); m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * p[4])); m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(side * p[5])); } }
         float mini = Fx.miniScale(ru.safimine.asteria.visuals.mc.VisualsClient.category(item)); if (mini != 1) m.scale(mini, mini, mini);
-        if (!V.on("viewmodel")) return;
+        // the hand turn first, then our swing inside it: the swing follows the blade however the hand is turned
         Arm arm = hand == Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
-        float side = arm == Arm.RIGHT ? 1 : -1; float[] hd = Fx.hand(hand == Hand.MAIN_HAND ? 0 : 1); float s = hd[6];
-        m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(hd[3])); m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * hd[4])); m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(side * hd[5]));
-        m.scale(s, s, s);
+        float side = arm == Arm.RIGHT ? 1 : -1; float[] hd = Fx.hand(hand == Hand.MAIN_HAND ? 0 : 1); float s = hd[6]; boolean vm = V.on("viewmodel");
+        if (vm) {m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(hd[3])); m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * hd[4])); m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(side * hd[5])); }
+        if (hand == Hand.MAIN_HAND) { float[] p = Fx.swingPose(swing); if (p != null) { float ms = player.getMainArm() == Arm.RIGHT ? 1 : -1;
+            m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(p[3])); m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(ms * p[4])); m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(ms * p[5])); } }
+        if (vm) m.scale(s, s, s);
     }
     /** our swing styles replace the vanilla swing movement (otherwise it hides them) */
     @ModifyVariable(method = "renderFirstPersonItem", at = @At("HEAD"), argsOnly = true, ordinal = 2, require = 0)
     private float asteria$vanillaSwing(float swing) { return Fx.vanillaSwing(swing); }
+    /** with our swing styles the item no longer dips down after every hit (the attack cooldown) */
+    @ModifyVariable(method = "renderFirstPersonItem", at = @At("HEAD"), argsOnly = true, ordinal = 3, require = 0)
+    private float asteria$noDip(float equip) { return Fx.noDip(equip); }
 }

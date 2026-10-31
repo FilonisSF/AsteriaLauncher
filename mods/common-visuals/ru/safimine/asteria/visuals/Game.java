@@ -86,6 +86,8 @@ public interface Game {
     default boolean onGroundOf(Object e) { return true; }
     /** nothing in the main hand (the arm alone is drawn by another vanilla path) */
     default boolean mainHandEmpty() { return false; }
+    /** watching as a spectator: the game shows its own spectator bar instead of the hotbar */
+    default boolean spectator() { return false; }
     /** wears elytra in the chest slot / is flying with them */
     default boolean elytraOf(Object e) { for (Item it : armorOf(e)) if (itemId(it.stack).endsWith("elytra")) return true; return false; }
     default boolean glidingOf(Object e) { return false; }

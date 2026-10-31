@@ -21,7 +21,7 @@ public final class Media {
         return playing && !title.isEmpty() && now - seen < 8000;
     }
     /** playback position in seconds, moving smoothly between file updates */
-    public static double pos() { return Math.min(dur, pos + (playing ? (System.currentTimeMillis() - at) / 1000.0 : 0)); }
+    public static double pos() { double p = pos + (playing ? (System.currentTimeMillis() - at) / 1000.0 : 0); return dur > 0 ? Math.min(dur, p) : p; } // no length (Telegram): the played time keeps counting
     public static double dur() { return dur; }
 
     /** cover art written by the launcher (128x128 png), null when the track has none */

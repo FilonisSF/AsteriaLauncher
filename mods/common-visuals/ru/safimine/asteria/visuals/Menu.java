@@ -141,9 +141,9 @@ public final class Menu {
         D.panel(x, y, x + w, y + h, 8);
         java.io.File cv = Media.coverFile(); if (cv == null || !g.image(Media.cover, cv, x + 6, y + 6, 36, 36)) { D.round(x + 6, y + 6, x + 42, y + 42, 7, V.a1(), V.a2()); D.icon("music", x + 16, y + 16, 16, 0xFFFFFFFF); }
         String t = Media.title; while (D.w(t) > w - 56 && t.length() > 3) t = t.substring(0, t.length() - 2); if (!t.equals(Media.title)) t += "…";
-        g.text(t, x + 48, y + 8, 0xFFFFFFFF, true); D.textS(Media.artist.isEmpty() ? (Media.active() ? "Играет" : "Пауза") : Media.artist, x + 48, y + 20, 0.8f, 0xFF9FB3C0);
+        g.text(t, x + 48, y + 8, 0xFFFFFFFF, true); D.textS(Media.artist.isEmpty() ? (Media.active() ? "Играет" : "Пауза") : Media.artist, x + 48, y + 20, 0.8f, 0xFFDCE6EE);
         double d = Media.dur(), p = Media.pos(); float f = d > 0 ? (float) Math.min(1, p / d) : 0;
-        Hud.timeBar(x + 48, y + 33, x + w - 8, d > 0 ? Media.time(p) : "", d > 0 ? Media.time(d) : "", f);
+        Hud.timeBar(x + 48, y + 33, x + w - 8, d > 0 || p > 0 ? Media.time(p) : "", d > 0 ? Media.time(d) : "", f);
         String[][] b = {{"prev", "prev"}, {Media.active() ? "pause" : "play", "toggle"}, {"next", "next"}, {"vol-", "voldown"}, {"mute", "mute"}, {"vol+", "volup"}};
         float bx = x + 8, by = y + 50, bw = (w - 16) / b.length;
         for (String[] k : b) { boolean hov = mx >= bx && mx < bx + bw - 3 && my >= by && my < by + 18;
