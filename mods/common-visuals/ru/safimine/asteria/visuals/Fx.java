@@ -76,21 +76,37 @@ public final class Fx {
         while (MARKS.size() > (int) V.num("markers", "max")) MARKS.remove(0);
         saveMarks(); Hud.notify("Метки", "«" + name + "» поставлена", true); sound("blip", 0.5f);
     }
-    /** chat: ".метка X Y Z [название]" / ".mark ..." adds a marker, ".метки очистить" removes all; true = the message is ours, don't send it */
-    /** three numbers in a row in a chat line ("тп на 100 80 -2010", "x: 12, y: 64, z: -5"): the coordinates, or null; the height must look like one */
-    private static final java.util.regex.Pattern XYZ = java.util.regex.Pattern.compile("(?<![\\w.])(-?\\d{1,8}(?:\\.\\d+)?)[\\s,;/]+(?:[yY]\\s*[:=]?\\s*)?(-?\\d{1,4}(?:\\.\\d+)?)[\\s,;/]+(?:[zZ]\\s*[:=]?\\s*)?(-?\\d{1,8}(?:\\.\\d+)?)(?![\\w.])");
+    // coordinates in a chat line: whole numbers only (no "5 000,00", "12.5"), no leading zeros ("000" is a thousands group), not glued to a word,
+    // not followed by more digit groups or by a currency ("5 000 монет", "100 ꒙")
+    private static final String CN = "(-?(?:0|[1-9][0-9]{0,7}))", CSEP = "(?:[ \\t]*[,;/][ \\t]*|[ \\t]+)",
+        CSTART = "(?<![\\w.,-])(?<![0-9][ \\u00A0\\u202F])(?<![$€₽꒙ꒉ⛀][ \\t]?)",
+        CEND = "(?![.,]?[0-9])(?!\\w)(?![ \\u00A0\\u202F][0-9])(?![ \\t\\u00A0\\u202F]*(?:монет|сапфир|руб|коин|coin|₽|꒙|ꒉ|⛀|\\$|€|%))";
+    private static String clabel(String c) { return "(?:(?<!\\w)" + c + "[ \\t]*[:=]?[ \\t]*)"; }
+    private static final int CFLAGS = java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE | java.util.regex.Pattern.UNICODE_CHARACTER_CLASS;
+    /** X Y Z, each optionally labelled: "тп на 100 80 -2010", "x: 12, y: 64, z: -5", "[100/64/-200]" */
+    private static final java.util.regex.Pattern XYZ = java.util.regex.Pattern.compile(CSTART + clabel("[xх]") + "?" + CN + CSEP + clabel("[yу]") + "?" + CN + CSEP + clabel("z") + "?" + CN + CEND, CFLAGS);
+    /** X Z only when it is clearly a position: labelled ("x: 100 z: -200") or in brackets with ", " ("(100, -200)"; not "[1/3]" pages or "(1 500)") */
+    private static final java.util.regex.Pattern XZ = java.util.regex.Pattern.compile(CSTART + clabel("[xх]") + CN + CSEP + clabel("z") + CN + CEND, CFLAGS),
+        XZ_BR = java.util.regex.Pattern.compile("[\\[(][ \\t]*" + CN + "[ \\t]*,[ \\t]+" + CN + "[ \\t]*[\\])]", CFLAGS);
+    /** the coordinates in a chat line as "X Y Z" (or "X ~ Z": the height is taken from the player), or null; the height must look like one */
     public static String chatCoords(String line) {
-        if (line == null || !V.on("markers") || line.contains("⌖")) return null; java.util.regex.Matcher m = XYZ.matcher(line.replaceAll("(?i)\\b[xyz]\\s*[:=]\\s*", " "));
-        while (m.find()) { double y = Double.parseDouble(m.group(2)); if (y >= -64 && y <= 320) return m.group(1) + " " + m.group(2) + " " + m.group(3); }
+        if (line == null || !V.on("markers") || line.contains("⌖")) return null; return findCoords(line);
+    }
+    static String findCoords(String line) {
+        java.util.regex.Matcher m = XYZ.matcher(line);
+        while (m.find()) { int y = Integer.parseInt(m.group(2)); if (y >= -64 && y <= 320) return m.group(1) + " " + m.group(2) + " " + m.group(3); }
+        if ((m = XZ.matcher(line)).find() || (m = XZ_BR.matcher(line)).find()) return m.group(1) + " ~ " + m.group(2);
         return null;
     }
+    /** chat: ".метка X Y Z [название]" / ".mark ..." adds a marker (Y may be "~": the player's height), ".метки очистить" removes all; true = the message is ours, don't send it */
     public static boolean chatCommand(Game g, String msg) {
         String s = msg.trim(), low = s.toLowerCase();
         if (!(low.startsWith(".метк") || low.startsWith(".mark"))) return false;
         marksServer(g);
         if (low.contains("очист") || low.contains("clear")) { MARKS.clear(); saveMarks(); Hud.notify("Метки", "Все метки убраны", false); return true; }
-        String[] p = s.split("\\s+");
-        try { double x = Double.parseDouble(p[1].replace(",", "")), y = Double.parseDouble(p[2].replace(",", "")), z = Double.parseDouble(p[3].replace(",", ""));
+        String[] p = s.split("\\s+"); double[] cam = CAM;
+        try { double x = Double.parseDouble(p[1].replace(",", "")), z = Double.parseDouble(p[3].replace(",", "")),
+                y = p[2].equals("~") ? (cam != null ? cam[1] - 1.62 : 64) : Double.parseDouble(p[2].replace(",", ""));
             StringBuilder n = new StringBuilder(); for (int i = 4; i < p.length; i++) n.append(i > 4 ? " " : "").append(p[i]);
             addMark(Math.floor(x) + 0.5, Math.floor(y), Math.floor(z) + 0.5, n.length() == 0 ? "Метка " + (MARKS.size() + 1) : n.toString());
         } catch (Exception e) { Hud.notify("Метки", "Пример: .метка 100 64 -200 База", false); }
