@@ -131,6 +131,14 @@ public final class Hud {
         D.icon("chevR", x + 136, y + 29, 12, D.a(V.a2(), 0.9f)); // crafting arrow
         D.g.text("Крафт", x + 97, y + 6, 0xFFB9CBD4, false);
     }
+    /** the creative inventory: the same panel and slot tiles, and a scroll pill on the right instead of the vanilla scroller */
+    public static void creativeScreen(Gfx g, int x, int y, int w, int h, java.util.List<int[]> slots, float scroll) {
+        D.g = g; D.frame();
+        D.panel(x, y, x + w, y + h, 10, false);
+        for (int[] sl : slots) { float sx = x + sl[0] - 1, sy = y + sl[1] - 1; D.round(sx, sy, sx + 18, sy + 18, 4, 0x2EFFFFFF); D.round(sx + 0.5f, sy + 0.5f, sx + 17.5f, sy + 17.5f, 3.5f, D.alpha(0x070B12, 150)); }
+        float tx = x + 175, ty = y + 18, th = 112; D.round(tx, ty, tx + 12, ty + th, 6, 0x22FFFFFF);
+        float py = ty + 1 + (th - 17) * Math.max(0, Math.min(1, scroll)); D.round(tx + 1.5f, py, tx + 10.5f, py + 15, 4.5f, V.a1(), V.a2());
+    }
     private static int totemCount(Game game, Object[] inv) { int n = 0; for (Object st : inv) if (st != null && game.itemId(st).endsWith("totem_of_undying")) n += game.count(st); Object off = game.offhand(); if (off != null && game.itemId(off).endsWith("totem_of_undying")) n += game.count(off); return n; }
     private static void totems(Game game, Object[] inv) {
         int n = 0; Object one = null;
@@ -200,7 +208,8 @@ public final class Hud {
     /** draws an element at its saved position; x/y > 0.5 anchor to the right/bottom edge so elements grow away from the edge */
     private static void place(String id, int W, int H, float s, Size size, Runnable draw) {
         V.Mod m = V.mod(id); if (m == null || !(m.on || editing)) return;
-        s *= m.hs; float[] wh = size.get(); float w = wh[0] * s, h = wh[1] * s; if (w <= 0 || h <= 0) return;
+        // the hotbar is always the size of the vanilla one: the same on every screen and HUD scale
+        s = id.equals("hotbar") ? 1 : s * m.hs; float[] wh = size.get(); float w = wh[0] * s, h = wh[1] * s; if (w <= 0 || h <= 0) return;
         float x = m.hud[0] > 0.5f ? m.hud[0] * W - w : m.hud[0] * W, y = m.hud[1] > 0.5f ? m.hud[1] * H - h : m.hud[1] * H;
         if (centred(id) || Math.abs(m.hud[0] - 0.5f) < 0.002f) x = m.hud[0] * W - w / 2; // centred elements (or put in the middle in the editor)
         if (Math.abs(m.hud[1] - 0.5f) < 0.002f) y = H / 2f - h / 2;
@@ -391,19 +400,23 @@ public final class Hud {
             double[] p = game.pos(e, pt); double dx = p[0] - me[0], dy = p[1] - me[1], dz = p[2] - me[2], dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
             if (dist > range) continue;
             float[] sp = Fx.project(p[0], p[1] + game.height(e) + 0.62, p[2], W, H); if (sp == null) continue;
-            float k = (float) (V.num("nametags", "scale") * Math.max(0.7, Math.min(1.35, 8 / Math.max(1, sp[2]))) * (1 - 0.45 * Fx.zoomT)), y = sp[1]; // smaller while zooming: the player stays visible
+            // the size follows the distance seen through the zoom: zooming in makes it bigger with the player, never smaller
+            float k = (float) (V.num("nametags", "scale") * Math.max(0.7, Math.min(1.6, 8 / Math.max(1, sp[2] * Fx.zoomFactor())))), y = sp[1];
             D.g.push(sp[0], y, k); try { tag(game, e); } finally { D.g.pop(); }
         }
     }
     private static void tag(Game game, Object e) {
         float y = 0;
-        if (V.bool("nametags", "hearts")) { float hp = Math.max(0, game.hp(e)), mx = Math.max(1, game.maxHp(e)); int n = (int) Math.ceil(Math.min(40, mx) / 2), per = Math.min(10, n), rows = (n + per - 1) / per;
-            String v = String.format("%.1f", hp / 2); float w = per * 8 + 4 + D.w(v) * 0.8f + 4; y -= rows * 8 + 4;
-            D.round(-w / 2, y - 2, w / 2, y + rows * 8 + 1, 4, D.alpha(0x05090D, 150));
-            for (int i = 0; i < n; i++) { float hx = -w / 2 + 3 + (i % per) * 8, hy = y + (i / per) * 8; float f = Math.max(0, Math.min(1, hp / 2 - i));
-                D.icon("heart", hx, hy, 7.5f, 0x80303030); if (f > 0) { D.icon("heart", hx, hy, 7.5f, f >= 1 ? 0xFFF43F5E : 0xFFFB7185); } }
-            D.textS(v, -w / 2 + per * 8 + 5, y + (rows * 8 - 7) / 2f, 0.8f, dur(hp / mx));
-            y -= 2; }
+        if (V.bool("nametags", "hearts")) { // a clean health capsule: a heart, a smooth bar coloured by health, the number in hearts
+            float hp = Math.max(0, game.hp(e)), mx = Math.max(1, game.maxHp(e)), f = Math.min(1, hp / mx), shown = D.anim("tag" + System.identityHashCode(e), f, 8);
+            String v = String.format(java.util.Locale.ROOT, "%.1f", hp / 2); float w = 92, h = 13; y -= h + 3;
+            D.round(-w / 2, y, w / 2, y + h, 6.5f, D.alpha(0x05090D, 185)); D.round(-w / 2, y, w / 2, y + 0.8f, 0.4f, 0x18FFFFFF);
+            D.circle(-w / 2 + 7.5f, y + 6.5f, 5, 0x33F43F5E); D.icon("heart", -w / 2 + 3.5f, y + 2.5f, 8, 0xFFF43F5E);
+            float bx0 = -w / 2 + 15, bx1 = w / 2 - 25; D.round(bx0, y + 4.5f, bx1, y + 8.5f, 2, 0x33FFFFFF);
+            D.round(bx0, y + 4.5f, bx0 + (bx1 - bx0) * shown, y + 8.5f, 2, 0x99FFFFFF); // trailing damage
+            D.round(bx0, y + 4.5f, bx0 + Math.max(3, (bx1 - bx0) * f), y + 8.5f, 2, dur(f), D.mix(dur(f), 0xFFFFFFFF, 0.3f));
+            D.g.text(v, w / 2 - 4 - D.w(v), y + 2.5f, 0xFFFFFFFF, true);
+            y -= 3; }
         List<Game.Item> items = new ArrayList<>();
         if (V.bool("nametags", "hands")) { Game.Item h = game.heldBy(e); if (h != null) items.add(h); }
         if (V.bool("nametags", "armor")) items.addAll(game.armorOf(e));
@@ -474,8 +487,13 @@ public final class Hud {
     private static String alertT = "", alertS = ""; private static int alertC; private static long alertAt; private static String alertIcon = "heart"; private static float alertDur = 2.8f;
     public static void alert(String title, String text, int color, String icon) { alert(title, text, color, icon, ""); }
     /** key: which phrase the announcer says (alert_<key>.wav); otherwise a soft signal, never the "module off" voice */
+    /** the thing the alert is about: an item stack (the armour piece) or an effect type (the potion), drawn instead of the plain icon */
+    private static Object alertItem, alertEffect;
+    private static boolean pendingPic;
+    public static void alertWith(Object item, Object effect) { alertItem = item; alertEffect = effect; pendingPic = true; }
     public static void alert(String title, String text, int color, String icon, String key) {
-        if (!V.on("alerts")) return; alertT = title; alertS = text; alertC = color; alertIcon = icon; alertAt = System.currentTimeMillis(); alertDur = 2.8f;
+        if (!V.on("alerts")) { alertItem = alertEffect = null; return; } alertT = title; alertS = text; alertC = color; alertIcon = icon; alertAt = System.currentTimeMillis(); alertDur = 2.8f;
+        if (pendingPic) pendingPic = false; else alertItem = alertEffect = null;
         Voice.alert(key.isEmpty() ? "generic" : key);
     }
     /** invites and messages from friends: the launcher writes config/asteria-notify.json, shown here for 6 s with a sound (even with the alerts module off) */
@@ -496,7 +514,10 @@ public final class Hud {
         D.round(x, y, x + w, y + h, 12, D.alpha(0x0B0E16, (int) (230 * a)));
         D.round(x, y, x + w, y + h, 12, D.a(alertC, 0.12f * a), D.a(alertC, 0.03f * a));
         D.round(x + 7, y + 6, x + 27, y + 26, 10, D.a(alertC, 0.22f * a));
-        D.icon(alertIcon, x + 10, y + 9, 14, D.a(D.mix(alertC, 0xFFFFFFFF, 0.25f), a));
+        boolean pic = false;
+        if (alertItem != null) try { D.g.item(alertItem, (int) (x + 9), (int) (y + 8)); pic = true; } catch (Throwable ignored) {}
+        if (!pic && alertEffect != null) try { pic = D.g.effectIcon(alertEffect, (int) (x + 9), (int) (y + 8), 16); } catch (Throwable ignored) {}
+        if (!pic) D.icon(alertIcon, x + 10, y + 9, 14, D.a(D.mix(alertC, 0xFFFFFFFF, 0.25f), a));
         D.g.text(alertT, x + 35, y + 7, D.a(0xFFFFFFFF, a), false); D.textS(alertS, x + 35, y + 19, 0.8f, D.a(0xFFB9CBD4, a));
     }
     /** a module switched by its key: sound + notification */

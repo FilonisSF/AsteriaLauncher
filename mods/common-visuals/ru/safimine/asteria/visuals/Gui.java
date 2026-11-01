@@ -40,7 +40,7 @@ public final class Gui {
         float a = D.ease(openT);
         D.rect(0, 0, screenW, screenH, D.alpha(0x02060A, (int) (150 * a)));
         // a scale that is a whole number of half screen pixels: the text stays as sharp as in the HUD (no zoom animation for the same reason)
-        { float k = g.pxScale() * 2, fit = Math.min(1.5f * V.menuScale, Math.min((screenW - 24) / W, (screenH - 24) / H)); sw = Math.max(1, (float) Math.floor(fit * k)) / k; } // bigger on big screens: letters as readable as in Lunar
+        { float k = g.pxScale() * 2, fit = Math.min(1.5f, Math.min((screenW - 24) / W, (screenH - 24) / H)) * V.menuScale; sw = Math.max(1, (float) Math.round(fit * k)) / k; } // the size slider works after the screen fit (it was capped by the screen before) // bigger on big screens: letters as readable as in Lunar
         ox = (screenW - W * sw) / 2; oy = (screenH - H * sw) / 2 + (1 - a) * 12;
         float lmx = (mx - ox) / sw, lmy = (my - oy) / sw;
         g.push(ox, oy, sw);
@@ -118,9 +118,10 @@ public final class Gui {
         boolean hov = in(mx, my, x0, y, x1, y + 32) && my > 44;
         float p = D.anim("on." + m.id, m.on ? 1 : 0, 12);
         D.round(x0, y, x1, y + h, 7, hov ? 0x1EFFFFFF : 0x12FFFFFF);
-        hit(x0, y, x1, y + 32, "card", () -> { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); if (V.on("sounds") && V.bool("sounds", "menu")) Fx.sound(m.on ? "module_enable" : "module_disable", (float) V.num("sounds", "volume")); });
+        hit(x0, y, x1, y + 32, "card", () -> { m.on = !m.on; V.changed(); Hud.notify(m.name, m.on ? "Включено" : "Выключено", m.on); Voice.toggled(m); });
         D.g.text(m.name, x0 + 10, y + 6, D.mix(0xFFCFE0E8, 0xFFFFFFFF, p), false);
-        D.textS(m.desc, x0 + 10, y + 18, 0.72f, 0xFF7E97A4);
+        { String d = m.desc; float room = (x1 - x0) - 118; while (d.length() > 4 && D.w(d) * 0.72f > room) d = d.substring(0, d.length() - 2); if (!d.equals(m.desc)) d = d.trim() + "…"; // fits the card, the controls stay clear
+          D.textS(d, x0 + 10, y + 18, 0.72f, 0xFF8FA6B2); }
         // switch
         float sx = x1 - 30; toggleSwitch(sx, y + 10, p);
         // bind pill
@@ -378,22 +379,38 @@ public final class Gui {
             if (in(lastMx, lastMy, b.x, b.y, b.x + b.w, b.y + b.h)) { b.mod.hs = Math.max(0.5f, Math.min(2.5f, Math.round((b.mod.hs + (amount > 0 ? 0.05f : -0.05f)) * 20) / 20f)); V.changed(); return; } } return; }
         scrollTarget -= (float) amount * 28; }
     /** @return true if the key was used (Esc with nothing to cancel returns false -> the screen closes) */
+    /** Ctrl+A selects all (the next key replaces it), Ctrl+C / Ctrl+X copy, Ctrl+V pastes, Ctrl+Backspace drops the last word; null = not a Ctrl key */
+    static boolean selAll;
+    private static String editKeys(int code, String text, boolean oneLine) {
+        Game g = Fx.G; if (g == null || !(g.rawKey(341) || g.rawKey(345))) return null;
+        switch (code) {
+            case 65: selAll = true; return text;
+            case 67: g.setClipboard(text); return text;
+            case 88: g.setClipboard(text); selAll = false; return "";
+            case 86: { String p = g.clipboard(); if (oneLine) p = p.replaceAll("[\\r\\n\\t]+", " "); String r = (selAll ? "" : text) + p; selAll = false; return r.length() > 200 ? r.substring(0, 200) : r; }
+            case 259: { selAll = false; String t = text.replaceAll("\\s+$", ""); int i = t.lastIndexOf(' '); return i < 0 ? "" : t.substring(0, i + 1); }
+            default: return null;
+        }
+    }
     public static boolean key(int code) {
         if (listening != null) { listening.bind = code == 256 || code == 259 ? 0 : code; listening = null; V.changed(); return true; }
         if (textEdit != null) {
-            if (code == 259 && !textEdit.text.isEmpty()) { textEdit.text = textEdit.text.substring(0, textEdit.text.length() - 1); V.changed(); }
-            if (code == 256 || code == 257) textEdit = null;
+            String e = editKeys(code, textEdit.text, false); if (e != null) { textEdit.text = e; V.changed(); return true; }
+            if (code == 259 && !textEdit.text.isEmpty()) { textEdit.text = selAll ? "" : textEdit.text.substring(0, textEdit.text.length() - 1); selAll = false; V.changed(); }
+            if (code == 256 || code == 257) { textEdit = null; selAll = false; }
             return true;
         }
         if (Hud.editing) { if (code == 256) { Hud.editing = false; return true; } return false; }
         if (searchFocus) {
-            if (code == 259 && !search.isEmpty()) { search = search.substring(0, search.length() - 1); return true; }
+            String e = editKeys(code, search, true); if (e != null) { search = e; return true; }
+            if (code == 259 && !search.isEmpty()) { search = selAll ? "" : search.substring(0, search.length() - 1); selAll = false; return true; }
             if (code == 256 || code == 257) { searchFocus = false; if (code == 256) search = ""; return true; }
             return code != 256;
         }
         return false;
     }
-    public static void ch(char c) { if (textEdit != null) { if (c >= ' ' && textEdit.text.length() < 100) { textEdit.text += c; V.changed(); } return; } if (searchFocus && c >= ' ' && search.length() < 24) { search += c; scrollTarget = 0; } }
+    public static void ch(char c) { if (selAll && c >= ' ') { selAll = false; if (textEdit != null) textEdit.text = ""; else if (searchFocus) search = ""; } // typing over Ctrl+A replaces it
+        if (textEdit != null) { if (c >= ' ' && textEdit.text.length() < 100) { textEdit.text += c; V.changed(); } return; } if (searchFocus && c >= ' ' && search.length() < 24) { search += c; scrollTarget = 0; } }
 
     // ------------------------------------------------------------------ util
     private static void hit(float x1, float y1, float x2, float y2, String id, Runnable r) { HITS.add(new Hit(x1, y1, x2, y2, id, r)); }

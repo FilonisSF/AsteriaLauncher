@@ -151,7 +151,7 @@ public final class Menu {
             boolean hov = (mx - cx) * (mx - cx) + (my - cy) * (my - cy) <= r * r;
             if (play) { D.circle(cx, cy, r + (hov ? 0.8f : 0), V.a1()); D.circle(cx, cy, r - 0.6f + (hov ? 0.8f : 0), D.mix(V.a1(), V.a2(), 0.6f)); D.icon(k[0], cx - 5, cy - 5, 10, 0xFFFFFFFF); }
             else { if (hov) D.circle(cx, cy, r, D.a(V.a2(), 0.25f));
-                if (k[0].startsWith("vol")) { D.icon("volume", cx - 6, cy - 4.5f, 9, 0xFFDCE6EE); String sgn = k[0].equals("vol+") ? "+" : "−"; D.textS(sgn, cx + 3, cy - 4, 0.8f, 0xFFFFFFFF); }
+                if (k[0].startsWith("vol")) { D.round(cx - 7, cy - 7, cx + 7, cy + 7, 7, 0x1FFFFFFF); String sgn = k[0].equals("vol+") ? "+" : "−"; D.g.text(sgn, cx - D.w(sgn) / 2, cy - 4, 0xFFFFFFFF, false); } // volume: a clear − / + in a soft circle
                 else D.icon(k[0], cx - 5, cy - 5, 10, 0xFFFFFFFF); }
             PB.add(new float[]{cx - r, cy - r, cx + r, cy + r}); PBC.add(k[1]); }
         if (down && !wasDown) for (int i = 0; i < PB.size(); i++) { float[] r = PB.get(i); if (mx >= r[0] && mx < r[2] && my >= r[1] && my < r[3]) { Media.cmd(PBC.get(i)); break; } }

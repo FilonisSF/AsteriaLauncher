@@ -74,7 +74,7 @@ public final class D {
     static void glass(float x1, float y1, float x2, float y2, float r) {
         r = Math.max(r, Math.min(9, (y2 - y1) / 2));
         if (V.shadow) for (int i = 4; i >= 1; i--) round(x1 - i * 0.4f, y1 + i * 0.7f, x2 + i * 0.4f, y2 + i * 1.1f, r + i, alpha(0x000000, 14 / i));
-        round(x1, y1, x2, y2, r, alpha(0x081019, (int) (120 + 95 * V.bg)), alpha(0x081019, (int) (135 + 100 * V.bg)));   // smoked glass: white text stays readable even on a bright sky
+        round(x1, y1, x2, y2, r, alpha(0x081019, (int) (30 + 210 * V.bg)), alpha(0x081019, (int) (40 + 210 * V.bg)));   // smoked glass; "Прозрачность панелей" really makes it see-through
         round(x1, y1, x2, y2, r, alpha(0xFFFFFF, 12), alpha(0xFFFFFF, 4));                                               // clear glass body
         round(x1 + 1.2f, y1 + 1.2f, x2 - 1.2f, y1 + Math.min((y2 - y1) * 0.5f, 14), Math.max(0, r - 1.2f), alpha(0xFFFFFF, 22), alpha(0xFFFFFF, 0)); // top light
         rim(x1, y1, x2, y2, r, 0.9f, 190, 45);                                                                          // specular rim
@@ -97,6 +97,7 @@ public final class D {
     /** a soft vertical sheen sliding across the panel every few seconds (all panels in sync by screen x) */
     static void glare(float x1, float y1, float x2, float y2) {
         float t = (System.currentTimeMillis() % 4200) / 1400f; if (t > 1) return;
+        float in = Math.min(6, (y2 - y1) / 3); x1 += in; x2 -= in; y1 += in * 0.6f; y2 -= in * 0.6f; // inside the rounded corners: a straight sheen poked out of them
         float w = x2 - x1, cx = x1 - 14 + (w + 28) * t, a = Math.max(x1, cx - 14), b = Math.min(x2, cx + 14); if (b <= a) return;
         float m = Math.max(a, Math.min(b, cx));
         hgrad(a, y1 + 1, m, y2 - 1, 0x00FFFFFF, 0x22FFFFFF); hgrad(m, y1 + 1, b, y2 - 1, 0x22FFFFFF, 0x00FFFFFF);
@@ -162,7 +163,7 @@ public final class D {
         if (y2 - y1 > 8) round(x1 + 2, y1 + 1.5f, x2 - 2, y1 + (y2 - y1) * 0.4f, Math.max(0, r - 2), alpha(0xFFFFFF, (int) (16 + 20 * p)));
     }
     /** the soft edge of every shape: about one real screen pixel, whatever the GUI scale (edges looked stair-stepped) */
-    static float feather() { return Math.max(0.3f, 1.1f / Math.max(1f, g.pxScale())); }
+    static float feather() { return Math.max(0.25f, 0.7f / Math.max(1f, g.pxScale())); } // under a screen pixel: smooth, not soft
     public static void circle(float cx, float cy, float rad, int c) { ring(cx, cy, 0, rad, c, c); if (rad > 1.2f) ring(cx, cy, rad, rad + feather(), c, c & 0x00FFFFFF); }
     /** ring / disc (inner radius 0 = disc); colour inner -> outer */
     public static void ring(float cx, float cy, float rin, float rout, int cin, int cout) {

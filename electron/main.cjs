@@ -147,7 +147,7 @@ const visCode = (cfg) => { const c = { ...cfg, modules: { ...(cfg?.modules || {}
 const visDecode = (s) => { try { s = String(s || '').trim(); if (!s.startsWith('AST1:')) return null; const o = JSON.parse(zlib.inflateRawSync(Buffer.from(s.slice(5), 'base64url')).toString()); return o && o.modules ? o : null } catch { return null } }
 ipcMain.handle('vis:code', (_, cfg) => { const c = visCode(cfg); clipboard.writeText(c); return c })
 ipcMain.handle('vis:share', async (_, cfg) => { const code = visCode(cfg); await resolveApi().catch(() => {})
-  const r = await net.fetch(apiBase() + '/vcfg', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }), signal: AbortSignal.timeout(6000) }).then((x) => x.json()).catch(() => null)
+  const r = await net.fetch(apiBase() + '/vcfg', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }), signal: AbortSignal.timeout(25000) }) // a sleeping free server needs ~20 s to wake: then still a short code.then((x) => x.json()).catch(() => null)
   const out = r?.id || code; clipboard.writeText(out); return { id: r?.id || null, code } })
 // ---------- sharing with a friend: a 6-letter code for a mod pack, skin, cape or crosshair
 const longShare = (kind, data) => 'ASH1:' + zlib.deflateRawSync(Buffer.from(JSON.stringify({ kind, data }))).toString('base64url')
@@ -489,6 +489,7 @@ function mediaStart() {
 function mediaLine(o) {
   mediaRetry = 0
   if (o.cover !== undefined) { mediaCover = o.cover ? Buffer.from(o.cover, 'base64') : null; mediaCoverKey = o.key || ''; delete o.cover }
+  else if ((o.key || '').split('#')[0] !== (mediaCoverKey || '').split('#')[0]) { mediaCover = null; mediaCoverKey = o.key || '' } // a new track: the old picture goes at once (it stayed until the new one came)
   o.at = Date.now()
   // players report the position with ~0.5 s of noise (and lines arrive late while the launcher is busy): a small difference from the
   // running clock is pulled in gently instead of jumping back and forth; a seek or a new track (> 1.5 s off) still jumps at once

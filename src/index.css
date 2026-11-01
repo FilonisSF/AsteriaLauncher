@@ -406,3 +406,5 @@ button.pill:hover{background:color-mix(in srgb,var(--a2) 14%,var(--pill-bg));col
 .lite .aurora,.lite .grain,.lite .app-art,.lite .mp-bgart{display:none!important}
 .lite .glass,.lite .card,.lite .palette,.lite .ask{background-color:color-mix(in srgb,var(--card,#0b1a24) 96%,transparent)}
 .lite .spin-soft,.lite .mp-title .marq,.lite .mp-eq.on i{animation:none!important}
+/* very wide monitors: the launcher keeps a comfortable width in the middle instead of pushing the title bar and the buttons to the far edges */
+.wide-cap{width:100%;max-width:1920px;margin-left:auto;margin-right:auto}

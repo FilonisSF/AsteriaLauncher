@@ -147,6 +147,8 @@ public final class Fx {
         int pv = g.perspective(); double yawD = pv == 2 ? r.camYaw() + 180 : r.camYaw(), pitD = pv == 2 ? -r.camPitch() : r.camPitch(); // the camera turns every frame, the player only every tick
         double ex = a[2] + (pNow[0] - pTick[0]), ey = a[3] + (pNow[1] - pTick[1]), ez = a[4] + (pNow[2] - pTick[2]);
         double yaw = Math.toRadians(yawD), pit = Math.toRadians(pitD - (kind == 5 ? 20 : 0)); double vx = -Math.sin(yaw) * Math.cos(pit) * speed, vy = -Math.sin(pit) * speed, vz = Math.cos(yaw) * Math.cos(pit) * speed;
+        // the thrower's own motion is added, as the game does (sideways always, up / down only in the air): running or jumping bends the path
+        { double[] a0 = g.pos(self, 0); double mx = pTick[0] - a0[0], my = pTick[1] - a0[1], mz = pTick[2] - a0[2]; vx += mx; vz += mz; if (!g.onGround()) vy += my; }
         double x = ex - Math.cos(yaw) * 0.16, y = ey - 0.1, z = ez - Math.sin(yaw) * 0.16;
         List<double[]> pts = new ArrayList<>(); double[] hit = null, nrm = null; pts.add(new double[]{x, y, z});
         for (int i = 0; i < 300 && hit == null; i++) { double nx = x + vx, ny = y + vy, nz = z + vz;
@@ -208,15 +210,15 @@ public final class Fx {
     private static void alerts(Game g, long now) {
         if (!V.on("alerts") || now - alertAll < 300) return; alertAll = now; Object self = g.self(); if (self == null) return;
         if (V.bool("alerts", "armor")) for (Game.Item it : g.armor()) if (it.max > 0) { float left = 1f - it.damage / (float) it.max;
-            if (left * 100 < V.num("alerts", "armorpct") && once("arm" + it.name, now, 60000)) Hud.alert("Броня ломается!", it.name + " — осталось " + Math.round(left * 100) + "%", 0xFFFFB547, "shield", "armor"); }
+            if (left * 100 < V.num("alerts", "armorpct") && once("arm" + it.name, now, 60000)) { Hud.alertWith(it.stack, null); Hud.alert("Броня ломается!", it.name + " — осталось " + Math.round(left * 100) + "%", 0xFFFFB547, "shield", "armor"); } }
         if (V.bool("alerts", "hp")) { float hp = g.hp(self); if (hp > 0 && hp <= V.num("alerts", "hpval") * 2 && once("hp", now, 8000)) Hud.alert("Мало здоровья!", String.format(java.util.Locale.ROOT, "%.1f ❤", hp / 2).replace("❤", "сердца"), 0xFFFF4D6A, "heart", "hp"); }
         if (V.bool("alerts", "food")) { int f = g.food(); if (f >= 0 && f <= 6 && once("food", now, 30000)) Hud.alert("Голод", "Поешьте — бег скоро отключится", 0xFFF59E0B, "shop", "food"); }
         if (V.bool("alerts", "totem")) { int tot = 0; for (Object st : g.inventory()) if (st != null && g.itemId(st).endsWith("totem_of_undying")) tot += g.count(st); Object off = g.offhand(); if (off != null && g.itemId(off).endsWith("totem_of_undying")) tot += g.count(off);
             if (lastTotems >= 0 && tot < lastTotems && now - selfPopAt < 2500) Hud.alert("Тотем использован", tot == 0 ? "Тотемов больше нет!" : "Осталось: " + tot, tot == 0 ? 0xFFFF4D6A : 0xFFFACC15, "shield"); lastTotems = tot; }
-        if (V.bool("alerts", "effect")) for (Game.Effect e : g.effects()) if (e.ticks > 0 && e.ticks < 100 && once("ef" + e.name, now, 20000)) Hud.alert("Эффект заканчивается", e.name + " — 5 сек", 0xFF60A5FA, "clock", "effect");
+        if (V.bool("alerts", "effect")) for (Game.Effect e : g.effects()) if (e.ticks > 0 && e.ticks < 100 && once("ef" + e.name, now, 20000)) { Hud.alertWith(null, e.type); Hud.alert("Эффект заканчивается", e.name + " — 5 сек", 0xFF60A5FA, "clock", "effect"); }
         // other players near you: their armour almost broken
         if (V.bool("alerts", "enemyarmor")) for (Object e : g.players()) { if (e == self || !g.alive(e)) continue; double[] p = g.pos(e, 1), me = g.pos(self, 1); if (Math.abs(p[0] - me[0]) + Math.abs(p[2] - me[2]) > 40) continue;
-            for (Game.Item it : g.armorOf(e)) if (it.max > 0) { float left = 1f - it.damage / (float) it.max; if (left * 100 < V.num("alerts", "enemypct") && once("earm" + g.playerName(e) + it.name, now, 90000)) {
+            for (Game.Item it : g.armorOf(e)) if (it.max > 0) { float left = 1f - it.damage / (float) it.max; if (left * 100 < V.num("alerts", "enemypct") && once("earm" + g.playerName(e) + it.name, now, 90000)) { Hud.alertWith(it.stack, null);
                 Hud.alert("У " + g.playerName(e) + " ломается броня", it.name + " — " + Math.round(left * 100) + "%", 0xFFF59E0B, "shield", "enemy_armor"); break; } } }
     }
     // ------------------------------------------------------------------ pets: following and looks
@@ -237,7 +239,8 @@ public final class Fx {
     static long petSeed(String owner, long now) { return (now / 3000) * 3000 + (owner == null ? 0 : owner.toLowerCase().hashCode() & 0x7FFFFFFFL) * 3000; }
     static boolean onGroundKind(int k) { return k == MINI || (k >= 10 && k != 14 && k != 17 && k != 20); } // 16 = own model: walks // 3D pets walk, the pictures and the bee float
     /** one tick of a pet near its owner: wanders around when the owner stands, follows behind (never in front) when the owner moves */
-    static void follow(Follow f, double[] o, boolean ground, long seed) {
+    static void follow(Follow f, double[] o, boolean ground, long seed) { follow(f, o, ground, seed, Double.NaN); }
+    static void follow(Follow f, double[] o, boolean ground, long seed, double ownerYaw) {
         double oy = o[1] + (ground ? 0 : 1.35);
         if (f.pos == null || Math.abs(f.pos[0] - o[0]) + Math.abs(f.pos[2] - o[2]) > 16) { f.pos = new double[]{o[0] - 1.5, ground ? groundY(o[0] - 1.5, o[1] + 0.5, o[2] - 1.5) : oy, o[2] - 1.5}; f.prev = f.pos.clone(); f.owner = o.clone(); } // a walker lands on the ground, not in the air next to a flying owner
         f.prev = f.pos.clone();
@@ -245,7 +248,7 @@ public final class Fx {
         long now = System.currentTimeMillis(); java.util.Random rn = new java.util.Random(seed / 3000);
         if (v > 0.06) { double nx = vx / v, nz = vz / v, side = (seed & 1) == 0 ? 1 : -1; // behind and a bit aside: out of the way in a fight
             f.spot = new double[]{o[0] - nx * 2.1 - nz * 0.8 * side, o[2] - nz * 2.1 + nx * 0.8 * side}; f.wanderAt = now + 1500; }
-        else if (f.spot == null || now > f.wanderAt) { double a = rn.nextDouble() * Math.PI * 2, d = 1.3 + rn.nextDouble() * 1.1; f.spot = new double[]{o[0] + Math.cos(a) * d, o[2] + Math.sin(a) * d}; f.wanderAt = now + 4500 + rn.nextInt(5000); } // a calm stroll now and then
+        else if (f.spot == null || now > f.wanderAt) { double a = Double.isNaN(ownerYaw) ? rn.nextDouble() * Math.PI * 2 : Math.toRadians(ownerYaw) - Math.PI / 2 + (rn.nextDouble() - 0.5) * 1.6, d = 1.6 + rn.nextDouble() * 0.9; /* a spot behind the owner */ f.spot = new double[]{o[0] + Math.cos(a) * d, o[2] + Math.sin(a) * d}; f.wanderAt = now + 4500 + rn.nextInt(5000); } // a calm stroll now and then
         double dx = f.spot[0] - f.pos[0], dz = f.spot[1] - f.pos[2], d = Math.sqrt(dx * dx + dz * dz), far = Math.sqrt(Math.pow(o[0] - f.pos[0], 2) + Math.pow(o[2] - f.pos[2], 2));
         // smooth: the speed changes gradually (no jerks), walking pace when wandering, a bit faster than the owner when catching up
         // following: a little faster than the owner; standing owner: a slow walking pace (it dashed around at the catch-up speed before), and only a far pet hurries back
@@ -404,13 +407,13 @@ public final class Fx {
         wasSprint = spr; DASH.removeIf(q -> now0 - q[5] > 600);
         alerts(g, now0);
         // our pet
-        G = g; if (V.on("pet")) { if (selfF == null) selfF = new Follow(); follow(selfF, p, onGroundKind(V.mode("pet", "kind")), petSeed(V.user, now0)); petPos = selfF.pos; petPrev = selfF.prev; } else { selfF = null; petPos = null; }
+        G = g; if (V.on("pet")) { if (selfF == null) selfF = new Follow(); follow(selfF, p, onGroundKind(V.mode("pet", "kind")), petSeed(V.user, now0), g.yawOf(self)); petPos = selfF.pos; petPrev = selfF.prev; } else { selfF = null; petPos = null; }
         // pets of other Asteria players (list refreshed every 10 s)
         if (now0 - petsAt > (revOk ? 2000 : 10000)) { petsAt = now0; if (revOk) checkRev(); else fetchPets(); }
         if (V.bool("pet", "others") && !PET_OF.isEmpty()) {
             java.util.Set<String> seen = new java.util.HashSet<>();
             for (Object e : g.players()) { String n = g.playerName(e).toLowerCase(); double[] k = PET_OF.get(n); if (k == null) continue; seen.add(n); OTHER_E.put(n, e);
-                Follow f = OTHER_F.computeIfAbsent(n, x -> new Follow()); follow(f, g.pos(e, 1), onGroundKind((int) k[0]), petSeed(n, now0)); }
+                Follow f = OTHER_F.computeIfAbsent(n, x -> new Follow()); follow(f, g.pos(e, 1), onGroundKind((int) k[0]), petSeed(n, now0), g.yawOf(e)); }
             OTHER_F.keySet().retainAll(seen); OTHER_E.keySet().retainAll(seen);
         } else OTHER_F.clear();
         // particles left behind while moving
@@ -532,14 +535,14 @@ public final class Fx {
         if (!FX_OF.isEmpty()) for (Object e : g.players()) { String fx = FX_OF.get(g.playerName(e).toLowerCase()); if (fx == null || !g.alive(e)) continue;
             if (fx.contains("halo")) halo(r, g, e, pt, now); if (fx.contains("hat,") || fx.endsWith("hat")) hat(r, g, e, pt, now, g.yawOf(e));
             if (V.bool("cosmetics", "others") && fx.contains("c:")) try { String[] c = fx.substring(fx.indexOf("c:") + 2).split("[,;]")[0].split("\\."); double[] q = g.pos(e, pt);
-                Cosmetics.who = g.playerName(e).toLowerCase(); if (g.glidingOf(e)) Cosmetics.glide = 90 + g.pitchOf(e, pt); Cosmetics.draw(r, q, g.bodyYawOf(e, pt), g.headYawOf(e, pt), g.pitchOf(e, pt), g.sneakingOf(e), g.height(e), Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2]), c.length > 3 ? (int) Long.parseLong(c[3], 16) : -1, !g.onGroundOf(e), lit(g, q), now); } catch (Throwable ex) { err("cosmetics", ex); } finally { Cosmetics.who = ""; Cosmetics.glide = Double.NaN; } }
+                Cosmetics.who = g.playerName(e).toLowerCase(); if (g.glidingOf(e)) Cosmetics.glide = 90 + g.pitchOf(e, pt); Cosmetics.draw(r, q, g.bodyYawOf(e, pt), g.headYawOf(e, pt), g.pitchOf(e, pt), g.sneakingOf(e), bodyH(g, e), Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2]), c.length > 3 ? (int) Long.parseLong(c[3], 16) : -1, !g.onGroundOf(e), lit(g, q), now); } catch (Throwable ex) { err("cosmetics", ex); } finally { Cosmetics.who = ""; Cosmetics.glide = Double.NaN; } }
         boolean wingElytra = V.on("elytrawings") && g.elytraOf(self); // the wing-elytra are the wings then: no second pair from the cosmetics
         if (V.on("cosmetics") && g.thirdPerson()) try { double[] q = g.pos(self, pt); if (g.glidingOf(self)) Cosmetics.glide = 90 + g.pitchOf(self, pt);
-            Cosmetics.draw(r, q, g.bodyYawOf(self, pt), g.headYawOf(self, pt), g.pitchOf(self, pt), g.sneakingOf(self), g.height(self), wingElytra ? 0 : V.mode("cosmetics", "wings"), V.mode("cosmetics", "hat"), V.mode("cosmetics", "back"), V.bool("cosmetics", "tint") ? -1 : V.color("cosmetics", "color"), !g.onGround(), lit(g, q), now); } catch (Throwable ex) { err("cosmetics", ex); } finally { Cosmetics.glide = Double.NaN; }
+            Cosmetics.draw(r, q, g.bodyYawOf(self, pt), g.headYawOf(self, pt), g.pitchOf(self, pt), g.sneakingOf(self), bodyH(g, self), wingElytra ? 0 : V.mode("cosmetics", "wings"), V.mode("cosmetics", "hat"), V.mode("cosmetics", "back"), V.bool("cosmetics", "tint") ? -1 : V.color("cosmetics", "color"), !g.onGround(), lit(g, q), now); } catch (Throwable ex) { err("cosmetics", ex); } finally { Cosmetics.glide = Double.NaN; }
         // wings instead of the elytra: folded on the ground, beating in flight, the body lying along the flight
         if (wingElytra && g.thirdPerson()) try { double[] q = g.pos(self, pt); int[] map = {1, 2, 3, 4, 6, 7, 8}; boolean fly = g.glidingOf(self);
             if (fly) Cosmetics.glide = 90 + g.pitchOf(self, pt);
-            Cosmetics.draw(r, q, g.bodyYawOf(self, pt), g.headYawOf(self, pt), g.pitchOf(self, pt), g.sneakingOf(self), g.height(self), map[Math.max(0, Math.min(6, V.mode("elytrawings", "style")))], 0, 0, V.bool("elytrawings", "tint") ? -1 : 0xFFE8F4FF, fly, lit(g, q), now);
+            Cosmetics.draw(r, q, g.bodyYawOf(self, pt), g.headYawOf(self, pt), g.pitchOf(self, pt), g.sneakingOf(self), bodyH(g, self), map[Math.max(0, Math.min(6, V.mode("elytrawings", "style")))], 0, 0, V.bool("elytrawings", "tint") ? -1 : 0xFFE8F4FF, fly, lit(g, q), now);
         } catch (Throwable ex) { err("elytra", ex); } finally { Cosmetics.glide = Double.NaN; }
         if (V.on("markers") && !MARKS.isEmpty()) markBeams(r, g, now);
         if (V.on("hitboxes") && g.hitboxDebug()) try { hitboxes(r, g, pt); } catch (Throwable ex) { err("cosmetics", ex); }
@@ -766,7 +769,7 @@ public final class Fx {
     };
     static void drawVox(R3 r, Vox m, double[] pos, Follow f, double size, float lt, long now) {
         double t = now / 1000.0, mv = Math.min(1, f.speed * 9), ph = f.phase, style = m.pv[7], k = size * 0.04, yaw = Math.toRadians(f.yaw), cy = Math.cos(yaw), sy = Math.sin(yaw);
-        double beat = t * (7 + 3 * mv), wA = 0.3 + 0.75 * Math.sin(beat), wB = -0.15 + 0.5 * Math.sin(beat - 1.1), wSweep = 0.2 * Math.sin(beat + 0.5); // style 4: a real wingbeat
+        double beat = t * (4.2 + 2.2 * mv), wA = 0.3 + 0.75 * Math.sin(beat), wB = -0.15 + 0.5 * Math.sin(beat - 1.1), wSweep = 0.2 * Math.sin(beat + 0.5); // style 4: a real wingbeat
         double hop = style == 4 ? -0.7 * Math.cos(beat) + 0.35 * Math.sin(t * 1.3) : style == 1 ? Math.abs(Math.sin(ph * 0.8)) * 3.2 * mv : style == 3 ? 1.2 * Math.sin(t * 2.2) : style == 2 ? Math.abs(Math.sin(ph * 0.7)) * 2.4 * mv : Math.abs(Math.sin(ph)) * 0.5 * mv;
         double squash = style == 2 ? 1 - 0.18 * Math.sin(ph * 1.4) * mv + 0.04 * Math.sin(t * 3) : 1 + 0.03 * Math.sin(t * 2.4);
         boolean blink = (now / 100) % 38 == 0;
@@ -859,13 +862,15 @@ public final class Fx {
     /** glowing ring floating above the head, slowly turning and bobbing */
     /** a point given in the player's own frame (blocks from the feet: x left, y up along the body, z forward) in the world; an elytra flyer lies along the flight */
     interface BodyTf { double[] at(double x, double y, double z); }
+    /** the player's height for cosmetics: an elytra flyer's hitbox is only 0.6 high, which shrank wings, hats and the halo to a third (they seemed gone) */
+    static float bodyH(Game g, Object e) { float h = g.height(e); return g.glidingOf(e) || h < 1.0f ? 1.8f : h; }
     static BodyTf body(Game g, Object e, float pt) {
         double[] p = g.pos(e, pt); double yb = Math.toRadians(g.bodyYawOf(e, pt)), cy = Math.cos(yb), sy = Math.sin(yb);
         boolean fly = g.glidingOf(e); double a = fly ? Math.toRadians(90 + g.pitchOf(e, pt)) : 0, ca = Math.cos(a), sa = Math.sin(a);
         return (x, y, z) -> { double y2 = y * ca - z * sa, z2 = y * sa + z * ca; return new double[]{p[0] + x * cy - z2 * sy, p[1] + y2, p[2] + x * sy + z2 * cy}; };
     }
     private static void halo(R3 r, Game g, Object self, float pt, long now) {
-        BodyTf b = body(g, self, pt); double rad = V.num("halo", "size"), y = g.height(self) + V.num("halo", "height") + Math.sin(now / 700.0) * 0.03;
+        BodyTf b = body(g, self, pt); double rad = V.num("halo", "size"), y = bodyH(g, self) + V.num("halo", "height") + Math.sin(now / 700.0) * 0.03;
         double spin = now / 1000.0 * V.num("halo", "spin"), w = rad * 0.22; int seg = 48;
         r.begin(R3.STRIP, true);
         for (int i = 0; i <= seg; i++) { double a = spin + Math.PI * 2 * i / seg; int c = V.grad(i / (float) seg);
@@ -1007,7 +1012,7 @@ public final class Fx {
         }
     }
     private static void hat(R3 r, Game g, Object self, float pt, long now, float bodyYaw) {
-        BodyTf b = body(g, self, pt); double top = g.height(self) + 0.02, rad = V.num("chinahat", "size"); float a = (float) V.num("chinahat", "alpha");
+        BodyTf b = body(g, self, pt); double top = bodyH(g, self) + 0.02, rad = V.num("chinahat", "size"); float a = (float) V.num("chinahat", "alpha");
         int seg = 40; double[] apex = b.at(0, top + rad * 0.45, 0), rim[] = new double[seg + 1][];
         for (int i = 0; i <= seg; i++) { double an = Math.PI * 2 * i / seg; rim[i] = b.at(Math.cos(an) * rad, top, Math.sin(an) * rad); }
         r.begin(R3.TRIS, true);
@@ -1137,6 +1142,8 @@ public final class Fx {
     public static float noDip(float equip) { return V.on("swing") && V.mode("swing", "preset") != 0 && (G == null || !G.mainHandEmpty()) ? 0 : equip; }
     public static float[] swingPose(float ignored) {
         if (!V.on("swing")) return null; float swing = realSwing;
+        // in step with the real attack: the move lasts as long as the weapon recharges (a sword ~0.6 s, an axe ~1 s) and eases out at the end
+        if (G != null && !G.mainHandEmpty()) { float cd = G.cooldown(); if (cd < 0.995f) { float e = cd < 0.5f ? 2 * cd * cd : 1 - (float) Math.pow(-2 * cd + 2, 2) / 2; swing = e; } }
         int preset = V.mode("swing", "preset");
         float s = (float) Math.sin(Math.max(0, swing) * Math.PI), s2 = (float) Math.sin(Math.sqrt(Math.max(0, swing)) * Math.PI);
         if (preset == 5) return new float[]{0.02f, 0.06f - 0.05f * s, -0.05f, -70 + 45 * s2, 8, 0}; // flat: lies forward, chops down (also when idle)
@@ -1165,7 +1172,9 @@ public final class Fx {
     }
 
     // ------------------------------------------------------------------ zoom
-    static float zoomT; private static float zoomLevel = -1; private static boolean zoomHeld;
+    static float zoomT; private static float zoomLevel = -1; private static boolean zoomHeld; private static double baseFov = 70;
+    /** how much nearer things look through the zoom (1 = no zoom) */
+    static double zoomFactor() { return lastFov <= 0 ? 1 : Math.max(0.05, Math.min(1, Math.tan(Math.toRadians(lastFov) / 2) / Math.tan(Math.toRadians(baseFov) / 2))); }
     public static void zoomKey(boolean held) { if (held && !zoomHeld) zoomLevel = (float) V.num("zoom", "fov"); zoomHeld = held; }
     public static boolean zooming() { return zoomHeld && V.on("zoom"); }
     /** mouse wheel while zooming: stronger / weaker zoom. true = consumed */
@@ -1176,7 +1185,7 @@ public final class Fx {
     public static double fov(double base) {
         float target = zooming() ? 1 : 0;
         zoomT = V.on("zoom") && V.bool("zoom", "smooth") ? zoomT + (target - zoomT) * Math.min(1, D.dt * 14) : target;
-        if (zoomT < 0.002f) { zoomT = 0; lastFov = base; return base; }
+        baseFov = base; if (zoomT < 0.002f) { zoomT = 0; lastFov = base; return base; }
         double z = zoomLevel > 0 ? zoomLevel : V.num("zoom", "fov");
         return lastFov = base + (z - base) * zoomT;
     }
