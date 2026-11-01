@@ -68,10 +68,10 @@ public final class Asteria {
     public static boolean isLauncherPlayer(String name) {
         return name != null && ONLINE.contains(name.toLowerCase());
     }
-    public static Object skin(String name) { return name == null ? null : SKIN.get(name.toLowerCase()); }
+    public static Object skin(String name) { if (name == null) return null; String k = name.toLowerCase(); Object o = SKIN.get(k); if (o == null) fromDisk(k); return o; }
     /** the cape texture; an animated cape (GIF from the launcher) gives its current frame */
     public static Object cape(String name) {
-        Object o = name == null ? null : CAPE.get(name.toLowerCase());
+        Object o = name == null ? null : CAPE.get(name.toLowerCase()); if (o == null && name != null) fromDisk(name.toLowerCase());
         if (o instanceof Object[]) { Object[] f = (Object[]) o; return f.length == 0 ? null : f[(int) ((System.currentTimeMillis() / 90) % f.length)]; }
         return o;
     }
@@ -99,14 +99,15 @@ public final class Asteria {
 
     // ---------------------------------------------------------------- other launcher players (backend)
     private static final Map<String, Long> REV = new ConcurrentHashMap<>();
-    private static boolean revsOk = true; private static long onlineAt;
+    private static boolean revsOk = true; private static long onlineAt, revsFailAt;
     private static void poll() {
         long t0 = System.currentTimeMillis();
         if (revsOk) try { // {"nick": stamp, ...} of everyone online: re-download those whose stamp changed
             String s = new String(get(API + "/revs"), StandardCharsets.UTF_8).replaceAll("[{}\" ]", "");
             if (!s.isEmpty()) for (String kv : s.split(",")) { int i = kv.lastIndexOf(':'); if (i <= 0) continue; String n = kv.substring(0, i).toLowerCase(); long r; try { r = Long.parseLong(kv.substring(i + 1)); } catch (Exception e) { continue; }
                 SEEN.put(n, t0); Long old = REV.put(n, r); if (old != null && old != r) LAST.remove(n); }
-        } catch (Exception e) { revsOk = false; } // an old backend without /revs: the plain 10 s / 30 s polling
+        } catch (Exception e) { revsOk = false; revsFailAt = t0; } // an old or waking backend: the plain 10 s / 30 s polling, and /revs is tried again in a minute
+        if (!revsOk && t0 - revsFailAt > 60_000) revsOk = true;
         if (!revsOk && t0 - onlineAt < 10_000) return; onlineAt = t0;
         try {
             String s = new String(get(API + "/online"), StandardCharsets.UTF_8).replaceAll("[\\[\\]\" ]", "");
@@ -128,10 +129,20 @@ public final class Asteria {
                 byte[] png = get(API + "/" + kind + "/" + key + ".png");
                 int h = Arrays.hashCode(png);
                 Integer old = HASH.put(kind + key, h);
-                if (old == null || old != h) register(key, kind, png, null);
-            } catch (Exception e) { (kind.equals("skin") ? SKIN : CAPE).remove(key); HASH.remove(kind + key); }
+                if (old == null || old != h) { register(key, kind, png, null); try { File f = cacheFile(kind, key); f.getParentFile().mkdirs(); Files.write(f.toPath(), png); } catch (Exception ignored) {} }
+            } catch (NotFound e) { (kind.equals("skin") ? SKIN : CAPE).remove(key); HASH.remove(kind + key); cacheFile(kind, key).delete(); } // really none (removed in their launcher)
+            catch (Exception e) { LAST.put(key, now - (revsOk ? 300_000 : 30_000) + 15_000); } // the backend is waking up or the net hiccuped: keep what is shown, try again in 15 s
         }
         try { SLIM.put(key, new String(get(API + "/skinmeta/" + key), StandardCharsets.UTF_8).contains("true")); } catch (Exception ignored) {}
+    }
+
+    // ---------------------------------------------------------------- disk cache of other players' skins / capes: shown at once, even while the backend sleeps or is down
+    private static final Set<String> FROM_DISK = ConcurrentHashMap.newKeySet();
+    private static File cacheFile(String kind, String key) { return new File(new File(GAME_DIR, "config/asteria-cache"), kind + "-" + key.replaceAll("[^a-z0-9_]", "_") + ".png"); }
+    private static void fromDisk(String key) {
+        if (EX == null || !FROM_DISK.add(key) || (USER != null && key.equals(USER.toLowerCase()))) return;
+        EX.execute(safe(() -> { for (String kind : new String[]{"skin", "cape"}) { File f = cacheFile(kind, key);
+            if (f.exists() && !HASH.containsKey(kind + key) && System.currentTimeMillis() - f.lastModified() < 30L * 86400000) try { register(key, kind, Files.readAllBytes(f.toPath()), null); } catch (Exception ignored) {} } }));
     }
 
     private static int gen = 0;
@@ -185,13 +196,15 @@ public final class Asteria {
         HttpURLConnection c = (HttpURLConnection) new URL(u).openConnection();
         c.setConnectTimeout(5000); c.setReadTimeout(8000);
         c.setRequestProperty("User-Agent", "AsteriaMod");
-        if (c.getResponseCode() != 200) throw new Exception("http " + c.getResponseCode());
+        int code = c.getResponseCode(); if (code == 404) throw new NotFound(); if (code != 200) throw new Exception("http " + code);
         try (InputStream in = c.getInputStream(); ByteArrayOutputStream o = new ByteArrayOutputStream()) {
             byte[] b = new byte[8192]; int r;
             while ((r = in.read(b)) > 0) o.write(b, 0, r);
             return o.toByteArray();
         }
     }
+    /** the backend answered that there is no such thing (unlike a timeout or a sleeping server) */
+    public static final class NotFound extends Exception { NotFound() { super("http 404"); } }
     public static void post(String u, String json) {
         try {
             HttpURLConnection c = (HttpURLConnection) new URL(u).openConnection();

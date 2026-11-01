@@ -2,8 +2,33 @@
 // Admin panel:  http://<address>:8080/admin   (key is printed on start and saved to backend/data/admin-key.txt)
 // Env (optional): PORT=8080  ADMIN_KEY=...  STATS_KEY=...
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto')
-const VERSION = '1.7.0'
+const VERSION = '1.7.1'
 const DATA = path.join(__dirname, 'data'); fs.mkdirSync(DATA, { recursive: true })
+// ---- optional durable copy of backend/data in Supabase Storage: Render's free disk is wiped on every restart and deploy (friends, chats,
+// tokens, skins, plans were lost). Env SUPABASE_URL + SUPABASE_SERVICE_KEY (+ STORE_BUCKET, default "asteria-backend", a private bucket):
+// the state files come back before start, other files (skins, models, codes) when first asked for, and every write is copied there
+const STORE = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY ? { url: process.env.SUPABASE_URL.replace(/\/+$/, ''), key: process.env.SUPABASE_SERVICE_KEY, bucket: process.env.STORE_BUCKET || 'asteria-backend' } : null
+const STATE_FILES = ['tokens.json', 'plans.json', 'stats.json', 'seen.json', 'friends.json', 'friend-codes.json', 'chats.json', 'clans.json', 'events.json', 'launcher-config.json', 'cosmetics.json', 'admin-key.txt', 'stats-key.txt', 'ticket-private.pem']
+if (STORE) try { // synchronous on purpose: everything below reads these files at start
+  require('child_process').execFileSync(process.execPath, ['-e', `const fs = require('fs'), path = require('path'), [u, k, b, dir, ...files] = process.argv.slice(1)
+    Promise.all(files.map(async (f) => { const to = path.join(dir, f); if (fs.existsSync(to)) return; const r = await fetch(u + '/storage/v1/object/' + b + '/' + f, { headers: { authorization: 'Bearer ' + k, apikey: k }, signal: AbortSignal.timeout(20000) })
+      if (r.ok) { fs.writeFileSync(to, Buffer.from(await r.arrayBuffer())); console.log('restored ' + f) } })).catch((e) => console.log('restore: ' + e.message))`, STORE.url, STORE.key, STORE.bucket, DATA, ...STATE_FILES], { stdio: 'inherit', timeout: 90000 })
+} catch (e) { console.warn('!! could not restore backend/data from Supabase Storage: ' + e.message) }
+const relOf = (f) => { const r = path.relative(DATA, path.resolve(String(f))); return r && !r.startsWith('..') && !path.isAbsolute(r) ? r.split(path.sep).join('/') : null }
+const objUrl = (rel) => `${STORE.url}/storage/v1/object/${STORE.bucket}/${rel}`, storeHdr = () => ({ authorization: 'Bearer ' + STORE.key, apikey: STORE.key })
+const pending = new Map()
+const keep = (f) => { const rel = STORE && relOf(f); if (!rel) return; clearTimeout(pending.get(rel)); pending.set(rel, setTimeout(async () => { pending.delete(rel) // a burst of writes is sent once
+  try { const ex = fs.existsSync(path.join(DATA, rel)), r = await fetch(objUrl(rel), ex ? { method: 'POST', headers: { ...storeHdr(), 'x-upsert': 'true', 'content-type': 'application/octet-stream' }, body: fs.readFileSync(path.join(DATA, rel)), signal: AbortSignal.timeout(30000) } : { method: 'DELETE', headers: storeHdr(), signal: AbortSignal.timeout(30000) })
+    if (!r.ok && ex) console.warn('store ' + rel + ': ' + r.status) } catch (e) { console.warn('store ' + rel + ': ' + e.message); keep(f) } }, 2000)) }
+// every write / removal under backend/data is copied to the store (the handlers below just use fs as before)
+const _write = fs.writeFileSync, _rm = fs.rmSync
+fs.writeFileSync = function (f, ...a) { const r = _write.call(fs, f, ...a); keep(f); const rel = relOf(f); if (rel) missing.delete(rel); return r }
+fs.rmSync = function (f, ...a) { const r = _rm.call(fs, f, ...a); keep(f); return r }
+/** a file that is not on this disk (wiped): fetched from the durable copy once; true if it is here now */
+const missing = new Set()
+const fetchKept = async (f) => { const rel = STORE && relOf(f); if (!rel || missing.has(rel)) return false
+  try { const r = await fetch(objUrl(rel), { headers: storeHdr(), signal: AbortSignal.timeout(15000) }); if (!r.ok) { if (r.status === 400 || r.status === 404) missing.add(rel); return false }
+    fs.mkdirSync(path.dirname(f), { recursive: true }); _write.call(fs, f, Buffer.from(await r.arrayBuffer())); return true } catch { return false } }
 for (const d of ['premium', 'mods', 'skins']) fs.mkdirSync(path.join(DATA, d), { recursive: true })
 const rd = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(DATA, f), 'utf8')) } catch { return d } }
 const wr = (f, o) => fs.writeFileSync(path.join(DATA, f), JSON.stringify(o, null, 1))
@@ -23,9 +48,10 @@ let plans = rd('plans.json', {})
 let clans = rd('clans.json', null), events = rd('events.json', null) // pushed by the SafiClan plugin / AsteriaBridge
 // old format: { name: 'PREMIUM' } -> { name: { plan, until } }
 for (const [k, v] of Object.entries(plans)) if (typeof v === 'string') plans[k] = { plan: v, until: 0 }
-const online = new Map(), cosm = new Map(), presence = new Map()
+const online = new Map(), cosm = new Map(Object.entries(rd('cosmetics.json', {}))), presence = new Map() // cosmetics survive a restart: the mods see them before the next heartbeats
 // change stamps: the mods poll the tiny /rev, /revs and re-download a player's skin / cape / cosmetics only when they changed
-const revs = new Map(); let revAll = Date.now(); const bump = (n) => { revAll = Date.now(); revs.set(n, revAll) }, setCosm = (n, c) => { if (JSON.stringify(cosm.get(n)) !== JSON.stringify(c)) bump(n); cosm.set(n, c) }
+const revs = new Map(); let revAll = Date.now(), cosmDirty = false; const bump = (n) => { revAll = Date.now(); revs.set(n, revAll) }, setCosm = (n, c) => { if (JSON.stringify(cosm.get(n)) !== JSON.stringify(c)) { bump(n); cosmDirty = true } cosm.set(n, c) }
+setInterval(() => { if (cosmDirty) { cosmDirty = false; wr('cosmetics.json', Object.fromEntries(cosm)) } }, 10000)
 const NAME = /^\w{3,16}$/, MC = /^\d+\.\d+(\.\d+)?$/, PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 const clanOf = (n) => (clans?.clans || []).find((c) => (c.members || []).some((x) => String(x.name).toLowerCase() === n))
 const authed = (n, t) => !!(tokens[n] && t && tokens[n] === t)
@@ -61,7 +87,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end() }
   const u = new URL(req.url, 'http://x'), url = u.pathname.replace(/\/+$/, '').replace(/^\/asteria(?=\/|$)/, '') || '/', q = u.searchParams
   const json = (o, c = 200) => { res.statusCode = c; res.setHeader('content-type', 'application/json; charset=utf-8'); res.end(JSON.stringify(o)) }
-  const file = (f, type) => { if (!fs.existsSync(f)) { res.statusCode = 404; return res.end() } res.setHeader('content-type', type); res.setHeader('cache-control', 'no-cache'); fs.createReadStream(f).pipe(res) }
+  const file = (f, type, again) => { if (!fs.existsSync(f)) { if (STORE && !again) return void fetchKept(f).then((ok) => { if (ok) file(f, type, true); else { res.statusCode = 404; res.end() } }); res.statusCode = 404; return res.end() } res.setHeader('content-type', type); res.setHeader('cache-control', 'no-cache'); fs.createReadStream(f).pipe(res) }
   const admin = () => req.headers['x-admin'] === ADMIN
   const body = (limit, cb) => { const ch = []; let n = 0; req.on('data', (c) => { n += c.length; if (n > limit) { json({ error: 'too large' }, 413); req.destroy() } else ch.push(c) }).on('end', () => cb(Buffer.concat(ch))) }
   const jbody = (cb) => body(4_000_000, (b) => { let j; try { j = JSON.parse(b.toString() || '{}') } catch { return json({ error: 'bad json' }, 400) } cb(j) })
@@ -193,7 +219,16 @@ const server = http.createServer((req, res) => {
       if (j.act === 'request') { const c = String(j.code || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), key = c.slice(0, 4) + '-' + c.slice(4, 8), owner = fbyCode[key]
         if (!owner) return json({ error: 'bad code' }, 404); who = (seenName[owner] || owner) }
       const me = fr(n), w = who.toLowerCase()
-      if (j.act && j.act !== 'get') { if (!NAME.test(who) || w === n) return json({ error: 'bad name' }, 400); const other = fr(w)
+      if (j.act === 'restore') { // the backend lost its data: the launcher sends the friends it remembers. A pair comes back only when BOTH launchers
+        // name each other (or the other side still has it), so nobody can make himself someone's friend this way
+        if (/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(String(j.oldCode || '')) && fcodes[n] !== j.oldCode && !fbyCode[j.oldCode]) { delete fbyCode[fcodes[n]]; fcodes[n] = j.oldCode; fbyCode[j.oldCode] = n; wr('friend-codes.json', fcodes) } // the code given out before keeps working (a new one was made after the wipe)
+        me.restore = me.restore || []
+        for (const x of (Array.isArray(j.list) ? j.list : []).slice(0, 200).map(String)) { const xk = x.toLowerCase(); if (!NAME.test(x) || xk === n || me.f.some((y) => y.toLowerCase() === xk)) continue
+          const other = fr(xk)
+          if (other.f.some((y) => y.toLowerCase() === n) || (other.restore || []).some((y) => y.toLowerCase() === n)) { me.f.push(x); if (!other.f.some((y) => y.toLowerCase() === n)) other.f.push(j.name); other.restore = without(other.restore || [], n) }
+          else if (!me.restore.some((y) => y.toLowerCase() === xk)) me.restore.push(x) }
+        me.restore = me.restore.slice(-200); friendsDirty = true }
+      else if (j.act && j.act !== 'get') { if (!NAME.test(who) || w === n) return json({ error: 'bad name' }, 400); const other = fr(w)
         if (j.act === 'request') { if (me.f.some((x) => x.toLowerCase() === w)) return json({ error: 'already' }, 400)
           if (me.in.some((x) => x.toLowerCase() === w)) { me.in = without(me.in, w); other.out = without(other.out, n); me.f.push(who); other.f.push(j.name); note(w, 'accepted', j.name) } // they asked first: friends at once
           else if (!me.out.some((x) => x.toLowerCase() === w)) { me.out.push(who); other.in.push(j.name); note(w, 'request', j.name) } }
@@ -216,7 +251,9 @@ const server = http.createServer((req, res) => {
     if (url === '/heartbeat') {
       adopt(n, j.token)
       if (tokens[n] && !authed(n, j.token)) return json({ error: 'owned' }, 403)
-      online.set(n, Date.now()); seenDb[n] = Date.now(); presence.set(n, { ver: /^[0-9.]{3,10}$/.test(String(j.ver || '')) ? String(j.ver) : '', host: /^([a-z0-9-]+\.)+e4mc\.link$/.test(String(j.host || '')) ? String(j.host) : '', srv: /^[a-z0-9.-]{0,60}$/i.test(String(j.srv || '')) ? String(j.srv) : '' }); setCosm(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?(:m)?$/.test(String(j.pet || '')) ? String(j.pet) : '', fx: /^[a-z0-9:.,]{0,60}$/.test(String(j.fx || '')) ? String(j.fx || '') : '' }) // pet: "<kind>:<size>" from the visuals, '' = none; return json({ ok: true, ...planOf(n) })
+      online.set(n, Date.now()); seenDb[n] = Date.now(); presence.set(n, { ver: /^[0-9.]{3,10}$/.test(String(j.ver || '')) ? String(j.ver) : '', host: /^([a-z0-9-]+\.)+e4mc\.link$/.test(String(j.host || '')) ? String(j.host) : '', srv: /^[a-z0-9.-]{0,60}$/i.test(String(j.srv || '')) ? String(j.srv || '') : '' }); setCosm(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?(:m)?$/.test(String(j.pet || '')) ? String(j.pet) : '', fx: /^[a-z0-9:.,]{0,60}$/.test(String(j.fx || '')) ? String(j.fx || '') : '' }) // pet: "<kind>:<size>" from the visuals, '' = none
+      const has = {}; for (const k of ['skin', 'cape', 'mini']) has[k] = fs.existsSync(path.join(DATA, 'skins', `${k}-${n}.png`))
+      return json({ ok: true, ...planOf(n), has }) // the launcher uploads again what is missing (a wiped backend)
     }
     if (url === '/ticket') { // signed PREMIUM ticket, valid 3 days or until the subscription ends
       adopt(n, j.token); const p = planOf(n); if (p.plan !== 'PREMIUM') return json({ error: 'no premium', ...p }, 403)

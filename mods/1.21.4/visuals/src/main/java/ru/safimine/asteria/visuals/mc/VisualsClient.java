@@ -80,4 +80,15 @@ public class VisualsClient implements ClientModInitializer {
         if (ALL[i][k] == null) ALL[i][k] = Identifier.of("asteria_visuals", "f" + i + "s" + k); return ALL[i][k];
     }
     public static int category(Object stack) { return Game121.I.category(stack); }
+    /** the container screens drawn in the Asteria style (InventoryStyleMixin, ContainerStyleMixin): their titles are made light */
+    public static boolean styledScreen(Object s) { return ru.safimine.asteria.visuals.Hud.styledInventory() && (s instanceof net.minecraft.client.gui.screen.ingame.GenericContainerScreen || s instanceof net.minecraft.client.gui.screen.ingame.ShulkerBoxScreen
+        || s instanceof net.minecraft.client.gui.screen.ingame.HopperScreen || s instanceof net.minecraft.client.gui.screen.ingame.Generic3x3ContainerScreen || s instanceof net.minecraft.client.gui.screen.ingame.InventoryScreen); }
+    /** a screen title in a finer copy of our font (asteria_visuals:f<N>h<k>, oversample k / 2): it is drawn x times bigger than the chat */
+    public static net.minecraft.text.Text titleText(net.minecraft.text.Text t, int x) {
+        if (!V.allFont || V.font <= 0) return t; int i = Math.min(31, V.font), k = Math.max(2, Math.min(12, (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor() * 2 * x)));
+        Identifier id = Identifier.of("asteria_visuals", "f" + i + "h" + k); return net.minecraft.text.Text.empty().append(t).setStyle(net.minecraft.text.Style.EMPTY.withFont(id));
+    }
+    private static final ClassValue<Boolean> TTF = new ClassValue<Boolean>() { @Override protected Boolean computeValue(Class<?> c) { return c.getEnclosingClass() == net.minecraft.client.font.TrueTypeFont.class; } };
+    /** the shadow of our smooth (TrueType) letters: half a font pixel instead of a whole one */
+    public static float ttfShadow(Object glyph, float o) { return V.allFont && V.font > 0 && glyph != null && TTF.get(glyph.getClass()) ? o * 0.5f : o; }
 }

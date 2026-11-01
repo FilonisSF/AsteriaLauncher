@@ -25,6 +25,8 @@ public interface Game {
     List<Effect> effects();
     /** attack cooldown progress 0..1 (1 = ready) */
     float cooldown();
+    /** how many ticks the held weapon takes to recharge (a sword 12.5, an axe 20) */
+    default float attackTicks() { return 0; }
 
     // ---- entities (for world visuals and the target HUD)
     Object self();
@@ -134,6 +136,8 @@ public interface Game {
     default double[] aim() { return null; }
     /** is there a solid block at this point */
     default boolean solid(double x, double y, double z) { return false; }
+    /** the top of the collision shape of the block at this point, under x, z (0..1, a slab 0.5, a fence 1.5), or -1: nothing to stand on there */
+    default double blockTop(double x, double y, double z) { return solid(x, y, z) ? 1 : -1; }
     /** category of an item: 0 weapon, 1 tool, 2 block, 3 food, 4 other */
     default int category(Object stack) { return 4; }
     /** opens / closes the Asteria menu screen */

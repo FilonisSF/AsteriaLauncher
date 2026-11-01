@@ -9,7 +9,9 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import ru.safimine.asteria.visuals.Hud;
 import ru.safimine.asteria.visuals.mc.Gfx121;
@@ -25,4 +27,7 @@ public abstract class InventoryStyleMixin extends HandledScreen<PlayerScreenHand
             for (Slot s : this.handler.slots) slots.add(new int[]{s.x, s.y});
             Hud.inventoryScreen(new Gfx121(ctx), this.x, this.y, this.backgroundWidth, this.backgroundHeight, slots); } catch (Throwable ignored) {}
     }
+    /** the "Создание" title light on the dark panel */
+    @ModifyConstant(method = "drawForeground", constant = @Constant(intValue = 4210752), require = 0)
+    private int asteria$label(int c) { return Hud.styledInventory() ? Hud.LABEL : c; }
 }

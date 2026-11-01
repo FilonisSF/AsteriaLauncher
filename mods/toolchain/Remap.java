@@ -223,6 +223,9 @@ public class Remap {
             }
             // selector strings
             for (MethodNode m : cn.methods) for (List<AnnotationNode> al : Arrays.asList(m.visibleAnnotations, m.invisibleAnnotations)) if (al != null) for (AnnotationNode a : al) fixAnnotation(a, rev, targets, cn.name, m);
+            // @Mixin(targets = "a.b.Outer$Inner"): a class name in a string (non-public classes), renamed like the class references
+            for (List<AnnotationNode> al : Arrays.asList(cn.visibleAnnotations, cn.invisibleAnnotations)) if (al != null) for (AnnotationNode a : al) if (a.desc.equals("Lorg/spongepowered/asm/mixin/Mixin;") && a.values != null)
+                for (int i = 0; i < a.values.size(); i += 2) if (a.values.get(i).equals("targets")) { List<Object> l = new ArrayList<>(); for (Object t : (List<?>) a.values.get(i + 1)) l.add(rev.map(((String) t).replace('.', '/')).replace('/', '.')); a.values.set(i + 1, l); }
         }
         rev.mthByName.clear(); rev.mth.forEach((k, v) -> rev.mthByName.merge(k.substring(0, k.indexOf(' ')), v, (a, b) -> a.equals(b) ? a : "\0"));
         for (ClassNode cn : nodes.values()) {

@@ -762,7 +762,15 @@ async function friendsCall(act = 'get', who = '', accept = false, code = '', ext
       for (const x of j.notes) if (x.k === 'invite' || x.k === 'msg') friendAlert(x)
       if (!win?.isFocused()) for (const x of j.notes.filter((y) => y.k !== 'invite' && y.k !== 'msg')) try { new Notification({ title: 'AsteriaLauncher', body: x.k === 'request' ? x.who + ' хочет добавить вас в друзья' : x.k === 'accepted' ? x.who + ' принял(а) вашу заявку в друзья' : x.who + ' отклонил(а) заявку в друзья' }).show() } catch {} }
     if (act !== 'get' && j.friends === undefined) return j // invite / msg / chat: their own answer
-    friendsLast = { ...j, host: hostNow }; return friendsLast } catch (e) { return { error: 'Сервер Asteria недоступен' } } }
+    friendsLast = { ...j, host: hostNow }; rememberFriends(acc, act, who, j); return friendsLast } catch (e) { return { error: 'Сервер Asteria недоступен' } } }
+const restoreAt = {}
+function rememberFriends(acc, act, who, j) { if (!Array.isArray(j.friends)) return
+  const ck = 'friendsCache:' + acc.name.toLowerCase(), cache = store.get(ck, { friends: [], code: '' }), seen = new Set(), names = []
+  for (const x of [...(cache.friends || []), ...j.friends]) if (!seen.has(x.toLowerCase())) { seen.add(x.toLowerCase()); names.push(x) }
+  const list = act === 'remove' ? names.filter((x) => x.toLowerCase() !== String(who).toLowerCase()) : names // only your own "remove" drops a friend from the copy
+  store.set(ck, { friends: list, code: cache.code || j.code || '' })
+  const lost = list.some((x) => !j.friends.some((y) => y.toLowerCase() === x.toLowerCase())) || (cache.code && j.code && j.code !== cache.code)
+  if (lost && act !== 'restore' && Date.now() - (restoreAt[ck] || 0) > 600000) { restoreAt[ck] = Date.now(); friendsCall('restore', '', false, '', { list, oldCode: cache.code || '' }).catch(() => {}) } }
 ipcMain.handle('friends:get', () => friendsCall('get'))
 ipcMain.handle('friends:act', (_, act, who, accept) => act === 'request' ? friendsCall('request', '', false, String(who || '').trim()) : friendsCall(act, String(who || '').trim(), !!accept)) // requests: who = the friend code
 setInterval(() => { if (store.get('accounts', []).length && (!friendsLast || friendsLast.friends?.length || friendsLast.incoming?.length || friendsLast.outgoing?.length)) friendsCall('get').catch(() => {}) }, 8000) // invites and messages arrive within seconds, even with the Friends page closed
@@ -828,14 +836,15 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
       if (t0) { const el = Date.now() - t0, pv = store.get('perVer', {}); store.set('playMs', store.get('playMs', 0) + el); pv[version] = (pv[version] || 0) + el; store.set('perVer', pv); store.set('launches', store.get('launches', 0) + 1) }
       rpcIdle()
       playNow = null; try { send('', 0); win?.webContents.send('game', false); if (win?.isMinimized()) win.restore() } catch {} })
-    const tok = await getToken(acc.name).catch(() => null)
+    let tok = await getToken(acc.name).catch(() => null) // null when the backend was asleep: asked again with the next heartbeats
     const visNow = () => { try { return JSON.parse(fs.readFileSync(path.join(dir, 'config', 'asteria-visuals.json'), 'utf8')) } catch { return null } }
     const petOf = () => { const p = visNow()?.modules?.pet; if (!p?.on) return '' // other Asteria players see your pet (":m" = mini-me with a skin from the launcher)
       const mini = +p.s?.kind === 9 && +p.s?.miniskin === 1 && fs.existsSync(path.join(s.dir, 'skins', 'mini.png'))
       return `${+p.s?.kind || 0}:${(+p.s?.size || 1).toFixed(2)}${mini ? ':m' : ''}` }
     const fxOf = () => { const m = visNow()?.modules || {}; const c = m.cosmetics; const cos = c?.on ? `c:${+c.s?.wings || 0}.${+c.s?.hat || 0}.${+c.s?.back || 0}${c.s?.tint === false && c.s?.color ? '.' + String(c.s.color).replace('#', 'ff') : ''}` : ''
       return [m.halo?.on && 'halo', m.chinahat?.on && 'hat', m.trails?.on && 'trail', cos].filter(Boolean).join(',') }
-    const beat = () => fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf(), ver: version, host: hostNow, srv: join ? srv.host : '' }) }).catch(() => {}); playNow = { ver: version, srv: join ? srv.host + (srv.port && srv.port !== 25565 ? ':' + srv.port : '') : '' }; beat(); beatNow = beat; let cfgM = 0; const cfgF = path.join(dir, 'config', 'asteria-visuals.json')
+    const beat = async () => { if (!tok) tok = await getToken(acc.name).catch(() => null)
+      const j = await fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf(), ver: version, host: hostNow, srv: join ? srv.host : '' }) }).then((x) => x.json()).catch(() => null); healTex(acc, tok, j?.has) }; playNow = { ver: version, srv: join ? srv.host + (srv.port && srv.port !== 25565 ? ':' + srv.port : '') : '' }; beat(); beatNow = beat; let cfgM = 0; const cfgF = path.join(dir, 'config', 'asteria-visuals.json')
     hb = setInterval(() => { let m = 0; try { m = fs.statSync(cfgF).mtimeMs } catch {} if (m !== cfgM && cfgM) beat(); cfgM = m || cfgM; if (++hbN % 20 === 0) beat() }, 1000); let hbN = 0 // registers right away, so other launcher players see the icon at once
     await addServer(dir).catch(() => {}); for (const x of [...PARTNER_SERVERS, ...((store.get('remoteConf') || {}).servers || []), ...myServers()]) if (x.ip && x.ip !== HOST) await addServerEntry(dir, x.name || x.ip, x.port && +x.port !== 25565 ? x.ip + ':' + x.port : x.ip).catch(() => {}) // put back every time, even if deleted in the game
     game = await l.launch(opts); gameVer = version
@@ -977,6 +986,13 @@ function rpcGame(version, dir, joinHost) {
   tick(); rpcTimer = setInterval(tick, 5000) }
 app.whenReady().then(() => setTimeout(() => { resolveApi().then(() => rpcIdle()) }, 2500))
 ipcMain.handle('rpc:refresh', () => { rpcLast = ''; try { rpc?.destroy() } catch {} rpc = null; rpcReady = null; game ? null : rpcIdle() })
+/** the backend says it has no skin / cape / mini-me of ours (its disk was wiped): send ours again, at most every 5 minutes per kind */
+const healAt = {}
+async function healTex(acc, token, has) { if (!has || !token) return
+  for (const [kind, file] of [['skin', 'current.png'], ['cape', 'cape.png'], ['mini', 'mini.png']]) { if (has[kind] !== false || Date.now() - (healAt[kind] || 0) < 300000) continue
+    const f = [path.join(accTexDir(acc.name), file), path.join(settings().dir, 'skins', file)].find((x) => fs.existsSync(x)); if (!f) continue; healAt[kind] = Date.now()
+    const slim = kind === 'skin' && [path.join(accTexDir(acc.name), 'slim.flag'), path.join(settings().dir, 'skins', 'slim.flag')].some((x) => fs.existsSync(x))
+    await fetch(apiBase() + '/skin', { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ name: acc.name, kind, slim, png: fs.readFileSync(f).toString('base64'), token }) }).catch(() => {}) } }
 async function getToken(name) { const t = store.get('tokens', {}); if (t[name]) return t[name]
   try { const j = await (await net.fetch(apiBase() + '/claim', { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(6000), body: JSON.stringify({ name }) })).json(); if (j.token) { t[name] = j.token; store.set('tokens', t); return j.token } } catch {} return null }
 // ---------- player stats from the server plugin (via backend), remote config, Telegram feed

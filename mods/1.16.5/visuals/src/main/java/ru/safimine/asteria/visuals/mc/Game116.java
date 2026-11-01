@@ -76,6 +76,7 @@ final class Game116 implements Game {
         return out;
     }
     @Override public float cooldown() { return c.player == null ? 1 : c.player.getAttackCooldownProgress(0); }
+    @Override public float attackTicks() { return c.player == null ? 0 : c.player.getAttackCooldownProgressPerTick(); } // despite the name: ticks per full recharge
     @Override public Object self() { return c.player; }
     @Override public Object crosshairEntity() { return c.targetedEntity; }
     @Override public boolean living(Object e) { return e instanceof LivingEntity; }
@@ -176,6 +177,8 @@ final class Game116 implements Game {
         else if (id.endsWith("splash_potion") || id.endsWith("lingering_potion")) kind = 5;
         if (kind == 0) return null; double[] p = pos(c.player, 1); return new double[]{kind, power, p[0], p[1] + c.player.getStandingEyeHeight(), p[2], c.player.yaw, c.player.pitch}; }
     @Override public boolean solid(double x, double y, double z) { if (c.world == null) return false; BlockPos p = new BlockPos(x, y, z); return !c.world.getBlockState(p).getCollisionShape(c.world, p).isEmpty(); }
+    @Override public double blockTop(double x, double y, double z) { if (c.world == null) return -1; BlockPos p = new BlockPos(x, y, z); net.minecraft.util.shape.VoxelShape s = c.world.getBlockState(p).getCollisionShape(c.world, p); if (s.isEmpty()) return -1;
+        double lx = x - p.getX(), lz = z - p.getZ(), top = -1; for (net.minecraft.util.math.Box b : s.getBoundingBoxes()) if (lx >= b.minX - 0.1 && lx <= b.maxX + 0.1 && lz >= b.minZ - 0.1 && lz <= b.maxZ + 0.1) top = Math.max(top, b.maxY); return top; }
     @Override public int category(Object o) { ItemStack s = (ItemStack) o; if (s == null || s.isEmpty()) return 4; Object it = s.getItem();
         if (it instanceof net.minecraft.item.SwordItem || it instanceof net.minecraft.item.AxeItem || it instanceof net.minecraft.item.TridentItem || it instanceof net.minecraft.item.BowItem || it instanceof net.minecraft.item.CrossbowItem) return 0;
         if (it instanceof net.minecraft.item.MiningToolItem || it instanceof net.minecraft.item.ShearsItem || it instanceof net.minecraft.item.FishingRodItem) return 1;

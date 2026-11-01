@@ -5,13 +5,21 @@
 //     the client-intermediary.jar Fabric made in .asteria plus a Yarn checkout from GitHub
 //   - Fabric API (1.16.5 only): a fabric-api jar, its nested modules remapped to Yarn names
 //
-//   node mods/toolchain/build-win.cjs <work dir> [1.16.5 1.20.1 1.21.4]   ->  mods/dist/asteria-visuals-<v>.jar
+//   node mods/toolchain/build-win.cjs <work dir> [1.16.5 1.20.1 1.21.4]   ->  mods/dist/asteria-core-<v>.jar, asteria-visuals-<v>.jar
+//   (which of the two each version has: mods/versions.json; ASTERIA_ONLY=core or visuals builds just one kind)
 const fs = require('fs'), path = require('path'), os = require('os'), { execFileSync } = require('child_process')
 const MODS = path.resolve(__dirname, '..'), WORK = path.resolve(process.argv[2] || path.join(os.tmpdir(), 'asteria-build'))
 const VERS = process.argv.slice(3).length ? process.argv.slice(3) : ['1.16.5', '1.20.1', '1.21.4']
 const HOME = os.homedir(), ASTERIA = path.join(process.env.APPDATA || '', '.asteria'), LOOM = path.join(HOME, '.gradle/caches/fabric-loom')
 const JDK = process.env.ASTERIA_JDK || 'C:/Program Files/Java/jdk-21.0.12.1', JAVAC = path.join(JDK, 'bin/javac.exe'), JAVA = path.join(JDK, 'bin/java.exe'), JAR = path.join(JDK, 'bin/jar.exe')
-const REL = { '1.16.5': 8, '1.20.1': 17, '1.21.4': 21 }
+const REL = { '1.16.5': 8, '1.20.1': 17, '1.21.4': 21, '1.21.11': 21 }
+const KINDS = JSON.parse(fs.readFileSync(path.join(MODS, 'versions.json'), 'utf8'))
+// the two mods: the free core (tab star, skins and capes of launcher players, live settings) and the visuals
+const MOD = {
+  core: { id: 'asteria', name: 'AsteriaLauncher', entry: 'ru.safimine.asteria.AsteriaClient', common: 'common-core', pkg: 'ru/safimine/asteria/mixin',
+    desc: 'SafiMine / AsteriaLauncher: star in the tab list and above heads for launcher players, their skins and capes, settings from the launcher applied live.' },
+  visuals: { id: 'asteria_visuals', name: 'Asteria Visuals', entry: 'ru.safimine.asteria.visuals.mc.VisualsClient', common: 'common-visuals', pkg: 'ru/safimine/asteria/visuals/mc/mixin',
+    desc: 'Visuals of AsteriaLauncher: HUD, Click GUI (Right Shift), trails, particles, target marker, zoom and more.' } }
 const sh = (cmd, args, opt = {}) => execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 28, ...opt }).toString()
 const run = (cmd, args, opt) => { try { return sh(cmd, args, opt) } catch (e) { throw new Error(`${path.basename(cmd)} failed:\n${(e.stdout || '').toString()}${(e.stderr || '').toString()}`) } }
 const mk = (d) => (fs.mkdirSync(d, { recursive: true }), d)
@@ -66,26 +74,27 @@ function fabricApi(v, cp, mc) {
   return walk(path.join(ex, 'META-INF/jars'), (f) => f.endsWith('.jar')).map((j) => { const o = path.join(out, 'named-' + path.basename(j))
     if (!fs.existsSync(o)) run(JAVA, ['-cp', cp, 'Remap', 'lib', mc.yarn, mc.inter, j, o]); return o })
 }
-function build(v) {
-  const cp = toolchain(), { libs } = libraries(v), mc = minecraft(v, cp), fapi = fabricApi(v, cp, mc)
-  const W = path.join(WORK, v, 'visuals'); fs.rmSync(W, { recursive: true, force: true }); const named = mk(path.join(W, 'named')), inter = mk(path.join(W, 'inter'))
-  const src = [...walk(path.join(MODS, v, 'visuals/src/main/java'), (f) => f.endsWith('.java')), ...walk(path.join(MODS, 'common-visuals/ru'), (f) => f.endsWith('.java'))]
+function build(v, kind) {
+  const M = MOD[kind], cp = toolchain(), { libs } = libraries(v), mc = minecraft(v, cp), fapi = kind === 'visuals' ? fabricApi(v, cp, mc) : []
+  const W = path.join(WORK, v, kind); fs.rmSync(W, { recursive: true, force: true }); const named = mk(path.join(W, 'named')), inter = mk(path.join(W, 'inter'))
+  const src = [...walk(path.join(MODS, v, kind, 'src/main/java'), (f) => f.endsWith('.java')), ...walk(path.join(MODS, M.common, 'ru'), (f) => f.endsWith('.java'))]
   fs.writeFileSync(path.join(W, 'sources.txt'), src.map((f) => '"' + f.replace(/\\/g, '/') + '"').join('\n'))
   run(JAVAC, ['-nowarn', '-encoding', 'UTF-8', '--release', String(REL[v]), '-proc:none', '-d', named, '-cp', [mc.named, ...fapi, ...libs].join(';'), '@' + path.join(W, 'sources.txt')])
   run(JAVA, ['-Xmx3G', '-cp', cp, 'Remap', 'mod', mc.yarn, mc.inter, named, inter, mc.named, ...fapi])
-  for (const r of [path.join(MODS, v, 'visuals/src/main/resources'), path.join(MODS, 'common-visuals/resources')]) if (fs.existsSync(r)) fs.cpSync(r, inter, { recursive: true })
-  const mixDir = path.join(inter, 'ru/safimine/asteria/visuals/mc/mixin')
+  for (const r of [path.join(MODS, v, kind, 'src/main/resources'), path.join(MODS, M.common, 'resources')]) if (fs.existsSync(r)) fs.cpSync(r, inter, { recursive: true })
+  const mixDir = path.join(inter, M.pkg)
   const mix = fs.readdirSync(mixDir).filter((f) => f.endsWith('.class') && !f.includes('$')).map((f) => f.slice(0, -6)).sort()
   const ver = fs.readFileSync(path.join(MODS, 'VERSION'), 'utf8').trim(), mcdep = fs.existsSync(path.join(MODS, v, 'mcdep')) ? fs.readFileSync(path.join(MODS, v, 'mcdep'), 'utf8').trim() : v
-  fs.writeFileSync(path.join(inter, 'asteria_visuals.mixins.json'), JSON.stringify({ required: true, minVersion: '0.8', package: 'ru.safimine.asteria.visuals.mc.mixin', compatibilityLevel: 'JAVA_' + REL[v], client: mix, injectors: { defaultRequire: 1 } }))
-  fs.writeFileSync(path.join(inter, 'fabric.mod.json'), JSON.stringify({ schemaVersion: 1, id: 'asteria_visuals', version: ver, name: 'Asteria Visuals',
-    description: 'Visuals of AsteriaLauncher: HUD, Click GUI (Right Shift), trails, particles, target marker, zoom and more.', authors: ['SafiMine'], contact: { homepage: 'https://safimine.ru' },
-    icon: 'assets/asteria_visuals/icon.png', environment: 'client', entrypoints: { client: ['ru.safimine.asteria.visuals.mc.VisualsClient'] }, mixins: ['asteria_visuals.mixins.json'],
+  fs.writeFileSync(path.join(inter, M.id + '.mixins.json'), JSON.stringify({ required: true, minVersion: '0.8', package: M.pkg.replace(/\//g, '.'), compatibilityLevel: 'JAVA_' + REL[v], client: mix, injectors: { defaultRequire: 1 } }))
+  fs.writeFileSync(path.join(inter, 'fabric.mod.json'), JSON.stringify({ schemaVersion: 1, id: M.id, version: ver, name: M.name,
+    description: M.desc, authors: ['SafiMine'], contact: { homepage: 'https://safimine.ru' },
+    icon: `assets/${M.id}/icon.png`, environment: 'client', entrypoints: { client: [M.entry] }, mixins: [M.id + '.mixins.json'],
     depends: { fabricloader: '>=0.11', minecraft: mcdep, ...(fapi.length ? { fabric: '*' } : {}) } }))
-  const out = path.join(MODS, 'dist', `asteria-visuals-${v}.jar`); fs.rmSync(out, { force: true })
+  const out = path.join(MODS, 'dist', `asteria-${kind}-${v}.jar`); fs.rmSync(out, { force: true })
   run(JAR, ['--create', '--file', out, '-C', inter, '.'])
   console.log(`built ${out} (${Math.round(fs.statSync(out).size / 1024)} KB, mixins: ${mix.join(', ')})`)
 }
 let bad = 0
-for (const v of VERS) { try { build(v) } catch (e) { bad++; console.error(`\n===== ${v} FAILED =====\n` + e.message.slice(0, 20000)) } }
+for (const v of VERS) for (const kind of ['core', 'visuals']) { if (!KINDS[v]?.[kind] || (process.env.ASTERIA_ONLY && process.env.ASTERIA_ONLY !== kind)) continue
+  try { build(v, kind) } catch (e) { bad++; console.error(`\n===== ${v} ${kind} FAILED =====\n` + e.message.slice(0, 20000)) } }
 process.exit(bad ? 1 : 0)

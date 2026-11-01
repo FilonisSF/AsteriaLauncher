@@ -128,8 +128,15 @@ public final class Hud {
         D.round(x + 25, y + 7, x + 76, y + 79, 8, D.alpha(0x05080D, 170)); // the player's stage
         D.round(x + 25, y + 7, x + 76, y + 79, 8, D.a(V.a1(), 0.10f), D.a(V.a2(), 0.04f));
         for (int[] sl : slots) { float sx = x + sl[0] - 1, sy = y + sl[1] - 1; D.round(sx, sy, sx + 18, sy + 18, 4, 0x2EFFFFFF); D.round(sx + 0.5f, sy + 0.5f, sx + 17.5f, sy + 17.5f, 3.5f, D.alpha(0x070B12, 150)); }
-        D.icon("chevR", x + 136, y + 29, 12, D.a(V.a2(), 0.9f)); // crafting arrow
-        D.g.text("Крафт", x + 97, y + 6, 0xFFB9CBD4, false);
+        D.icon("chevR", x + 136, y + 29, 12, D.a(V.a2(), 0.9f)); // crafting arrow (the "Создание" title is the game's own, made light by the mixin)
+    }
+    /** the colour of the screen titles on our panel */
+    public static final int LABEL = 0xC9D6DE;
+    /** chests, shulker boxes, hoppers, dispensers: the same panel and slot tiles */
+    public static void containerScreen(Gfx g, int x, int y, int w, int h, java.util.List<int[]> slots) {
+        D.g = g; D.frame();
+        D.panel(x, y, x + w, y + h, 10, false);
+        for (int[] sl : slots) { float sx = x + sl[0] - 1, sy = y + sl[1] - 1; D.round(sx, sy, sx + 18, sy + 18, 4, 0x2EFFFFFF); D.round(sx + 0.5f, sy + 0.5f, sx + 17.5f, sy + 17.5f, 3.5f, D.alpha(0x070B12, 150)); }
     }
     /** the creative inventory: the same panel and slot tiles, and a scroll pill on the right instead of the vanilla scroller */
     public static void creativeScreen(Gfx g, int x, int y, int w, int h, java.util.List<int[]> slots, float scroll) {

@@ -238,18 +238,19 @@ public final class Fx {
                 Hud.alert("У " + g.playerName(e) + " ломается броня", it.name + " — " + Math.round(left * 100) + "%", 0xFFF59E0B, "shield", "enemy_armor"); break; } } }
     }
     // ------------------------------------------------------------------ pets: following and looks
-    static final class Follow { double[] pos, prev, owner, spot; double phase, speed, yaw, idleYaw, vx, vz; long wanderAt; }
+    static final class Follow { double[] pos, prev, owner, spot; double phase, speed, yaw, prevYaw, drawYaw, beat, idleYaw, vx, vz; long wanderAt, beatAt; }
     /** world light for our models: never darker than half (inside a block or at night they stayed black) */
     static float lit(Game g, double[] p) { float a = Math.max(g.light(p[0], p[1] + 0.4, p[2]), g.light(p[0], p[1] + 1.4, p[2])); return 0.55f + 0.45f * Math.max(0, Math.min(1, a)); }
     static Game G; // for the pets' ground height
     /** top of the ground under x, z near y (pets stand on it instead of sinking into slopes and steps) */
     static double groundY(double x, double y, double z) { if (G == null) return y; int by = (int) Math.floor(y);
-        // the real top of what is under the pet: full blocks, slabs, stairs, carpets (sampled inside the block), with room above it;
+        // the real top of what is under the pet: full blocks, slabs, stairs, carpets (the block's own shape, a slab is half high), with room above it;
         // at most a step up (it climbed walls and tree trunks into the sky before) and far down (after flying with the owner)
-        for (int k = (int) Math.floor(y + 0.2); k >= by - 48; k--) { if (!G.solid(x, k + 0.04, z)) continue; double top = k + 0.0625;
-            for (double h : new double[]{0.95, 0.8, 0.6, 0.45, 0.3, 0.15}) if (G.solid(x, k + h, z)) { top = k + Math.min(1, h + 0.05); break; }
-            if (!G.solid(x, top + 0.3, z)) return top; }
+        for (int k = (int) Math.floor(y + 0.2); k >= by - 48; k--) { double t = G.blockTop(x, k + 0.5, z); if (t < 0) continue; double top = k + t;
+            if (!solidAt(x, top + 0.3, z)) return top; }
         return y; }
+    /** is this very point inside a block's shape (above a slab is free, unlike in Game.solid) */
+    private static boolean solidAt(double x, double y, double z) { double t = G.blockTop(x, y, z); return t >= 0 && y - Math.floor(y) < t; }
     private static Follow selfF; private static final java.util.Map<String, Follow> OTHER_F = new java.util.HashMap<>();
     /** the same for everyone: the owner's nick + the clock in 3 s steps, so the pet wanders to the same spots on every screen */
     static long petSeed(String owner, long now) { return (now / 3000) * 3000 + (owner == null ? 0 : owner.toLowerCase().hashCode() & 0x7FFFFFFFL) * 3000; }
@@ -259,7 +260,7 @@ public final class Fx {
     static void follow(Follow f, double[] o, boolean ground, long seed, double ownerYaw) {
         double oy = o[1] + (ground ? 0 : 1.35);
         if (f.pos == null || Math.abs(f.pos[0] - o[0]) + Math.abs(f.pos[2] - o[2]) > 16) { f.pos = new double[]{o[0] - 1.5, ground ? groundY(o[0] - 1.5, o[1] + 0.5, o[2] - 1.5) : oy, o[2] - 1.5}; f.prev = f.pos.clone(); f.owner = o.clone(); } // a walker lands on the ground, not in the air next to a flying owner
-        f.prev = f.pos.clone();
+        f.prev = f.pos.clone(); f.prevYaw = f.yaw;
         double vx = o[0] - f.owner[0], vz = o[2] - f.owner[2], v = Math.sqrt(vx * vx + vz * vz); f.owner = o.clone();
         long now = System.currentTimeMillis(); java.util.Random rn = new java.util.Random(seed / 3000);
         if (v > 0.06) { double nx = vx / v, nz = vz / v, side = (seed & 1) == 0 ? 1 : -1; // behind and a bit aside: out of the way in a fight
@@ -331,24 +332,35 @@ public final class Fx {
                 if (c.getResponseCode() != 200) { revOk = false; return; } String s; try (java.io.InputStream in = c.getInputStream()) { s = new java.util.Scanner(in, "UTF-8").useDelimiter("\\A").next(); }
                 if (!s.equals(revLast)) { revLast = s; fetchPets(); } } catch (Throwable e) { revOk = false; } finally { revBusy = false; } }, "asteria-rev"); t.setDaemon(true); t.start();
     }
+    /** the last list of everyone's pets and effects, kept on disk: shown at once on the next start, even while the backend sleeps */
+    private static java.io.File petCache() { return new java.io.File(V.dir(), "asteria-cache/cosmetics.json"); }
+    private static boolean petsLoaded;
+    private static void loadPetCache() {
+        if (petsLoaded) return; petsLoaded = true;
+        try { java.io.File f = petCache(); if (f.exists() && PET_OF.isEmpty()) parsePets(new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8)); } catch (Throwable ignored) {}
+    }
+    private static void parsePets(String body) {
+        com.google.gson.JsonObject all = new com.google.gson.JsonParser().parse(body).getAsJsonObject();
+        java.util.Map<String, double[]> m = new java.util.HashMap<>(); java.util.Map<String, String> f = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, com.google.gson.JsonElement> en : all.entrySet()) {
+            com.google.gson.JsonObject v = en.getValue().getAsJsonObject(); String p = v.has("pet") ? v.get("pet").getAsString() : "";
+            String fx = v.has("fx") ? v.get("fx").getAsString() : ""; if (!fx.isEmpty()) f.put(en.getKey().toLowerCase(), fx);
+            String[] q = p.split(":"); if (q.length < 2) continue;
+            try { m.put(en.getKey().toLowerCase(), new double[]{Integer.parseInt(q[0]), Double.parseDouble(q[1]), q.length > 2 && q[2].equals("m") ? 1 : 0}); } catch (Exception ignored) {}
+        }
+        PET_OF = m; FX_OF = f;
+    }
     private static void fetchPets() {
         final String api = System.getProperty("asteria.api"); if (api == null || api.isEmpty()) return;
         Thread t = new Thread(() -> {
             try {
                 java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(api + "/cosmetics").openConnection();
                 c.setConnectTimeout(5000); c.setReadTimeout(8000); c.setRequestProperty("User-Agent", "AsteriaVisuals");
-                if (c.getResponseCode() != 200) return;
+                if (c.getResponseCode() != 200) { revLast = ""; return; } // asked again on the next check (the stamp was taken, the list was not)
                 String body; try (java.io.InputStream in = c.getInputStream()) { java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream(); byte[] b = new byte[8192]; int r; while ((r = in.read(b)) > 0) o.write(b, 0, r); body = new String(o.toByteArray(), java.nio.charset.StandardCharsets.UTF_8); }
-                com.google.gson.JsonObject all = new com.google.gson.JsonParser().parse(body).getAsJsonObject();
-                java.util.Map<String, double[]> m = new java.util.HashMap<>(); java.util.Map<String, String> f = new java.util.HashMap<>();
-                for (java.util.Map.Entry<String, com.google.gson.JsonElement> en : all.entrySet()) {
-                    com.google.gson.JsonObject v = en.getValue().getAsJsonObject(); String p = v.has("pet") ? v.get("pet").getAsString() : "";
-                    String fx = v.has("fx") ? v.get("fx").getAsString() : ""; if (!fx.isEmpty()) f.put(en.getKey().toLowerCase(), fx);
-                    String[] q = p.split(":"); if (q.length < 2) continue;
-                    try { m.put(en.getKey().toLowerCase(), new double[]{Integer.parseInt(q[0]), Double.parseDouble(q[1]), q.length > 2 && q[2].equals("m") ? 1 : 0}); } catch (Exception ignored) {}
-                }
-                PET_OF = m; FX_OF = f;
-            } catch (Throwable ignored) {}
+                parsePets(body); revOk = true; // the backend answers again: back to the quick stamp checks
+                try { java.io.File f = petCache(); f.getParentFile().mkdirs(); java.nio.file.Files.write(f.toPath(), body.getBytes(java.nio.charset.StandardCharsets.UTF_8)); } catch (Throwable ignored) {}
+            } catch (Throwable e) { revLast = ""; }
         }, "asteria-pets"); t.setDaemon(true); t.start();
     }
     static final String[] PETS = {"trinket/cat","trinket/ghost","trinket/flame","trinket/gem","trinket/atom","trinket/flower","trinket/donut","trinket/ball","trinket/banana"};
@@ -425,7 +437,7 @@ public final class Fx {
         // our pet
         G = g; if (V.on("pet")) { if (selfF == null) selfF = new Follow(); follow(selfF, p, onGroundKind(V.mode("pet", "kind")), petSeed(V.user, now0), g.yawOf(self)); petPos = selfF.pos; petPrev = selfF.prev; } else { selfF = null; petPos = null; }
         // pets of other Asteria players (list refreshed every 10 s)
-        if (now0 - petsAt > (revOk ? 2000 : 10000)) { petsAt = now0; if (revOk) checkRev(); else fetchPets(); }
+        loadPetCache(); if (now0 - petsAt > (revOk ? 2000 : 10000)) { petsAt = now0; if (revOk) checkRev(); else fetchPets(); }
         if (V.bool("pet", "others") && !PET_OF.isEmpty()) {
             java.util.Set<String> seen = new java.util.HashSet<>();
             for (Object e : g.players()) { String n = g.playerName(e).toLowerCase(); double[] k = PET_OF.get(n); if (k == null) continue; seen.add(n); OTHER_E.put(n, e);
@@ -645,10 +657,11 @@ public final class Fx {
     /** a pet of any kind at its interpolated place, lit like the world around it, with a soft shadow under it */
     static void drawAny(R3 r, Game g, Follow f, int kind, double size, Object skin, String who, long now) {
         float t = r.partial(); double[] pp = {f.prev[0] + (f.pos[0] - f.prev[0]) * t, f.prev[1] + (f.pos[1] - f.prev[1]) * t, f.prev[2] + (f.pos[2] - f.prev[2]) * t};
+        f.drawYaw = f.prevYaw + (((f.yaw - f.prevYaw) % 360 + 540) % 360 - 180) * t; // the turn is smooth between the ticks too
         float lt = lit(g, pp);
         shadow(r, pp[0], pp[1] - (onGroundKind(kind) ? 0 : 1.35) + 0.02, pp[2], 0.32 * size, lt);
         if (kind == MINI && skin != null) { drawMini(r, who, pp, skin, size, lt); return; }
-        if (kind == 16) { java.io.File mf = who.isEmpty() ? Model.own("pet") : Model.other(who, "pet"); double mv = Math.min(1, f.speed * 9), hop = Math.abs(Math.sin(f.phase)) * 0.08 * mv + Math.sin(now / 600.0) * 0.015, yaw = Math.toRadians(f.yaw), cy = Math.cos(yaw), sy = Math.sin(yaw), k = size;
+        if (kind == 16) { java.io.File mf = who.isEmpty() ? Model.own("pet") : Model.other(who, "pet"); double mv = Math.min(1, f.speed * 9), hop = Math.abs(Math.sin(f.phase)) * 0.08 * mv + Math.sin(now / 600.0) * 0.015, yaw = Math.toRadians(f.drawYaw), cy = Math.cos(yaw), sy = Math.sin(yaw), k = size;
             if (Model.draw(r, mf, (x, y, z) -> new double[]{pp[0] + (x * cy - z * sy) * k, pp[1] + (y + hop) * k, pp[2] + (x * sy + z * cy) * k}, lt)) return; }
         int vi = kind < 16 ? kind - 10 : kind - 11; if (kind >= 10 && kind != 16 && vi < VOX.length) { drawVox(r, VOX[vi], pp, f, size, lt, now); return; }
         drawPet(r, pp, kind, size, now, f, lt);
@@ -784,8 +797,10 @@ public final class Fx {
             pair(9.6, 9.9, -2.0, 10.0, 10.5, 1.6, 0xFFC8A57A, 12))),
     };
     static void drawVox(R3 r, Vox m, double[] pos, Follow f, double size, float lt, long now) {
-        double t = now / 1000.0, mv = Math.min(1, f.speed * 9), ph = f.phase, style = m.pv[7], k = size * 0.04, yaw = Math.toRadians(f.yaw), cy = Math.cos(yaw), sy = Math.sin(yaw);
-        double beat = t * (4.2 + 2.2 * mv), wA = 0.3 + 0.75 * Math.sin(beat), wB = -0.15 + 0.5 * Math.sin(beat - 1.1), wSweep = 0.2 * Math.sin(beat + 0.5); // style 4: a real wingbeat
+        double t = now / 1000.0, mv = Math.min(1, f.speed * 9), ph = f.phase, style = m.pv[7], k = size * 0.04, yaw = Math.toRadians(f.drawYaw), cy = Math.cos(yaw), sy = Math.sin(yaw);
+        // the wingbeat phase runs on: it was the clock times a speed-dependent rate, so every small change of speed threw the wings around (a frantic flutter)
+        f.beat += (f.beatAt == 0 ? 0 : Math.min(0.1, (now - f.beatAt) / 1000.0)) * (4.2 + 1.6 * mv); f.beatAt = now;
+        double beat = f.beat, wA = 0.3 + 0.75 * Math.sin(beat), wB = -0.15 + 0.5 * Math.sin(beat - 1.1), wSweep = 0.2 * Math.sin(beat + 0.5); // style 4: a real wingbeat
         double hop = style == 4 ? -0.7 * Math.cos(beat) + 0.35 * Math.sin(t * 1.3) : style == 1 ? Math.abs(Math.sin(ph * 0.8)) * 3.2 * mv : style == 3 ? 1.2 * Math.sin(t * 2.2) : style == 2 ? Math.abs(Math.sin(ph * 0.7)) * 2.4 * mv : Math.abs(Math.sin(ph)) * 0.5 * mv;
         double squash = style == 2 ? 1 - 0.18 * Math.sin(ph * 1.4) * mv + 0.04 * Math.sin(t * 3) : 1 + 0.03 * Math.sin(t * 2.4);
         boolean blink = (now / 100) % 38 == 0;
@@ -1156,11 +1171,30 @@ public final class Fx {
     public static float vanillaSwing(float s) { realSwing = s; return V.on("swing") && V.mode("swing", "preset") != 0 && (G == null || !G.mainHandEmpty()) ? 0 : s; } // an empty hand keeps the vanilla swing (our styles move items)
     /** our swing styles: the item stays up after a hit instead of dipping down for the attack cooldown */
     public static float noDip(float equip) { return V.on("swing") && V.mode("swing", "preset") != 0 && (G == null || !G.mainHandEmpty()) ? 0 : equip; }
+    /** our own swing clock (an item in the hand): it starts with the real swing and runs in milliseconds, so the move is smooth at any fps,
+     *  lasts the "Длительность" or the weapon's recharge (whichever is longer) and is never restarted by a second timer half-way (a double hit) */
+    private static long swingAt; private static float swingDur = 1; private static float[] swingFrom, swingLast;
+    /** the player swings the main hand (LivingEntity.swingHand): a new move once the current one is half done, like vanilla */
+    public static void onSwing() {
+        if (!V.on("swing")) return; long now = System.currentTimeMillis(); float p = swingAt == 0 ? 1 : (now - swingAt) / swingDur; if (p < 0.5f) return;
+        swingFrom = p < 1 ? swingLast : null; swingAt = now; // a swing over an unfinished one blends out of where the item is now (no jump)
+        float ticks = (float) V.num("swing", "speed"); if (G != null && !G.mainHandEmpty()) ticks = Math.max(ticks, Math.min(40, G.attackTicks())); swingDur = ticks * 50;
+    }
+    private static float smooth(float x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
     public static float[] swingPose(float ignored) {
-        if (!V.on("swing")) return null; float swing = realSwing;
-        // in step with the real attack: the move lasts as long as the weapon recharges (a sword ~0.6 s, an axe ~1 s) and eases out at the end
-        if (G != null && !G.mainHandEmpty()) { float cd = G.cooldown(); if (cd < 0.995f) { float e = cd < 0.5f ? 2 * cd * cd : 1 - (float) Math.pow(-2 * cd + 2, 2) / 2; swing = e; } }
+        if (!V.on("swing")) return null; float swing = realSwing, p = 1; boolean own = G != null && !G.mainHandEmpty();
+        if (own) { p = swingAt == 0 ? 1 : Math.min(1, (System.currentTimeMillis() - swingAt) / swingDur); swing = p >= 1 ? 0 : p < 0.5f ? 2 * p * p : 1 - (float) Math.pow(-2 * p + 2, 2) / 2; }
         int preset = V.mode("swing", "preset");
+        float[] pose = presetPose(preset, swing);
+        // the presets that start or end away from the rest pose (sweep, slash, overhead) fade in and out, or the item jumped at the end
+        if (pose != null && (preset == 6 || preset == 9 || preset == 10)) { float env = smooth(swing / 0.15f) * (1 - smooth((swing - 0.8f) / 0.2f)); for (int i = 0; i < 6; i++) pose[i] *= env; }
+        if (own && swingFrom != null && p < 0.25f) { float k = smooth(p / 0.25f); float[] out = new float[6];
+            for (int i = 0; i < 6; i++) { float a = swingFrom[i], b = pose == null ? 0 : pose[i]; if (i >= 3) a = b + ((a - b) % 360 + 540) % 360 - 180; out[i] = a + (b - a) * k; } pose = out; }
+        else if (p >= 0.25f) swingFrom = null;
+        swingLast = pose == null ? new float[6] : pose.clone();
+        return pose;
+    }
+    private static float[] presetPose(int preset, float swing) {
         float s = (float) Math.sin(Math.max(0, swing) * Math.PI), s2 = (float) Math.sin(Math.sqrt(Math.max(0, swing)) * Math.PI);
         if (preset == 5) return new float[]{0.02f, 0.06f - 0.05f * s, -0.05f, -70 + 45 * s2, 8, 0}; // flat: lies forward, chops down (also when idle)
         if (swing <= 0) return null;
