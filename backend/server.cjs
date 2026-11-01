@@ -11,11 +11,11 @@ const STORE = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY ? { u
 const STATE_FILES = ['tokens.json', 'plans.json', 'stats.json', 'seen.json', 'friends.json', 'friend-codes.json', 'chats.json', 'clans.json', 'events.json', 'launcher-config.json', 'cosmetics.json', 'admin-key.txt', 'stats-key.txt', 'ticket-private.pem']
 if (STORE) try { // synchronous on purpose: everything below reads these files at start
   require('child_process').execFileSync(process.execPath, ['-e', `const fs = require('fs'), path = require('path'), [u, k, b, dir, ...files] = process.argv.slice(1)
-    Promise.all(files.map(async (f) => { const to = path.join(dir, f); if (fs.existsSync(to)) return; const r = await fetch(u + '/storage/v1/object/' + b + '/' + f, { headers: { authorization: 'Bearer ' + k, apikey: k }, signal: AbortSignal.timeout(20000) })
+    Promise.all(files.map(async (f) => { const to = path.join(dir, f); if (fs.existsSync(to)) return; const r = await fetch(u + '/storage/v1/object/' + b + '/' + f, { headers: k.startsWith('sb_') ? { apikey: k } : { authorization: 'Bearer ' + k, apikey: k }, signal: AbortSignal.timeout(20000) })
       if (r.ok) { fs.writeFileSync(to, Buffer.from(await r.arrayBuffer())); console.log('restored ' + f) } })).catch((e) => console.log('restore: ' + e.message))`, STORE.url, STORE.key, STORE.bucket, DATA, ...STATE_FILES], { stdio: 'inherit', timeout: 90000 })
 } catch (e) { console.warn('!! could not restore backend/data from Supabase Storage: ' + e.message) }
 const relOf = (f) => { const r = path.relative(DATA, path.resolve(String(f))); return r && !r.startsWith('..') && !path.isAbsolute(r) ? r.split(path.sep).join('/') : null }
-const objUrl = (rel) => `${STORE.url}/storage/v1/object/${STORE.bucket}/${rel}`, storeHdr = () => ({ authorization: 'Bearer ' + STORE.key, apikey: STORE.key })
+const objUrl = (rel) => `${STORE.url}/storage/v1/object/${STORE.bucket}/${rel}`, storeHdr = () => STORE.key.startsWith('sb_') ? { apikey: STORE.key } : { authorization: 'Bearer ' + STORE.key, apikey: STORE.key } // new sb_secret_ keys go in apikey only, the old service_role JWT also as Bearer
 const pending = new Map()
 const keep = (f) => { const rel = STORE && relOf(f); if (!rel) return; clearTimeout(pending.get(rel)); pending.set(rel, setTimeout(async () => { pending.delete(rel) // a burst of writes is sent once
   try { const ex = fs.existsSync(path.join(DATA, rel)), r = await fetch(objUrl(rel), ex ? { method: 'POST', headers: { ...storeHdr(), 'x-upsert': 'true', 'content-type': 'application/octet-stream' }, body: fs.readFileSync(path.join(DATA, rel)), signal: AbortSignal.timeout(30000) } : { method: 'DELETE', headers: storeHdr(), signal: AbortSignal.timeout(30000) })

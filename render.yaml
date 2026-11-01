@@ -16,7 +16,8 @@ services:
       - key: NODE_VERSION
         value: "20"
       # the free disk is wiped on every restart / deploy: with these two set, backend/data is kept in a private
-      # Supabase Storage bucket (STORE_BUCKET, default "asteria-backend") and comes back by itself
+      # Supabase Storage bucket (STORE_BUCKET, default "asteria-backend") and comes back by itself.
+      # SUPABASE_SERVICE_KEY: a secret key (sb_secret_...) or the legacy service_role key
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY
