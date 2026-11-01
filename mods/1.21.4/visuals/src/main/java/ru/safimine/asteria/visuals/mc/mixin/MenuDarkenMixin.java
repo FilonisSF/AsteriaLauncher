@@ -16,4 +16,7 @@ public class MenuDarkenMixin {
     private void asteria$noDarken(DrawContext ctx, CallbackInfo ci) {
         if (Menu.on() && MinecraftClient.getInstance().world == null) { ctx.fill(0, 0, ctx.getScaledWindowWidth(), ctx.getScaledWindowHeight(), 0x30000000); ci.cancel(); }
     }
+    /** our background is already blurred: the vanilla blur pass only made the menus darker and muddier */
+    @Inject(method = "applyBlur", at = @At("HEAD"), cancellable = true, require = 0)
+    private void asteria$noBlur(CallbackInfo ci) { if (Menu.on() && MinecraftClient.getInstance().world == null) ci.cancel(); }
 }

@@ -433,7 +433,7 @@ export default function App() {
           {[['min', 'min'], ['max', 'max'], ['close', 'close']].map(([a, i]) => <button key={a} onClick={() => api.win(a)} className={'iconbtn ' + (a === 'close' ? 'hover:!bg-rose-500 hover:!text-white' : '')}><Icon n={i} s={15} /></button>)}
         </div>
       </div>
-      <div className="flex flex-1 gap-4 p-4 pt-1 min-h-0 relative z-10 shell">
+      <div className="flex flex-1 gap-4 p-4 pt-1 min-h-0 relative z-10 shell wide-cap">
         {/* ---------- navigation rail */}
         <nav className="side glass">
           <div className="brand"><Wordmark tag big /></div>

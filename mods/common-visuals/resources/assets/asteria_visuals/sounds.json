@@ -238,5 +238,40 @@
   "sounds": [
    "asteria_visuals:wv_tother4"
   ]
+ },
+ "wv_armor": {
+  "sounds": [
+   "asteria_visuals:wv_armor"
+  ]
+ },
+ "wv_effect": {
+  "sounds": [
+   "asteria_visuals:wv_effect"
+  ]
+ },
+ "wv_enemy_armor": {
+  "sounds": [
+   "asteria_visuals:wv_enemy_armor"
+  ]
+ },
+ "wv_food": {
+  "sounds": [
+   "asteria_visuals:wv_food"
+  ]
+ },
+ "wv_friend": {
+  "sounds": [
+   "asteria_visuals:wv_friend"
+  ]
+ },
+ "wv_hp": {
+  "sounds": [
+   "asteria_visuals:wv_hp"
+  ]
+ },
+ "wv_shield": {
+  "sounds": [
+   "asteria_visuals:wv_shield"
+  ]
  }
 }

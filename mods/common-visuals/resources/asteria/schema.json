@@ -1953,6 +1953,12 @@
      "def": 0
     },
     {
+     "id": "tint",
+     "name": "Цвет темы визуалов",
+     "type": "bool",
+     "def": true
+    },
+    {
      "id": "color",
      "name": "Свой цвет",
      "type": "color",

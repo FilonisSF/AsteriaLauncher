@@ -16,6 +16,6 @@ public abstract class MenuBackgroundMixin {
     @Inject(method = "renderPanoramaBackground", at = @At("HEAD"), cancellable = true, require = 0)
     private void asteria$bg(DrawContext ctx, float delta, CallbackInfo ci) {
         if (!Menu.on()) return;
-        try { Menu.onTitle = MinecraftClient.getInstance().currentScreen instanceof net.minecraft.client.gui.screen.TitleScreen; Menu.background(new Gfx121(ctx), ctx.getScaledWindowWidth(), ctx.getScaledWindowHeight()); ci.cancel(); } catch (Throwable ignored) {}
+        try { Menu.onTitle = MinecraftClient.getInstance().currentScreen instanceof net.minecraft.client.gui.screen.TitleScreen; Menu.background(new Gfx121(ctx), ctx.getScaledWindowWidth(), ctx.getScaledWindowHeight()); ctx.draw(); ci.cancel(); /* into the frame now: the vanilla blur ran before our queued picture and blurred black */ } catch (Throwable ignored) {}
     }
 }

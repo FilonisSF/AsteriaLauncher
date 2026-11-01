@@ -64,7 +64,7 @@ while ($true) {
       $ownAt = $now; $ownPlaying = $playing; $pos = $ownPos }
     $o = @{ title = $p.Title; artist = $p.Artist; playing = $playing; pos = [math]::Round($pos, 1); dur = [math]::Round($dur, 1); app = $s.SourceAppUserModelId; key = $key }
     # players change the title first and the picture a moment later: read the cover again a few times after a new track and send it when it changes
-    if ($key -ne $lastKey) { $lastKey = $key; $coverTries = 4; $coverNext = [DateTime]::Now }
+    if ($key -ne $lastKey) { $lastKey = $key; $coverTries = 6; $coverNext = [DateTime]::Now.AddMilliseconds(400); $lastCover = '' } # a new track: read the picture a little later and a few times (browsers swap it late)
     if ($coverTries -gt 0 -and [DateTime]::Now -ge $coverNext) { $coverTries--; $coverNext = [DateTime]::Now.AddMilliseconds(700); $c = Cover $p; if (-not $c) { $c = '' }
       if ($c -ne $lastCover) { $lastCover = $c; $o.cover = $c; $o.key = "$key#" + $c.Length } }
   }

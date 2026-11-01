@@ -110,6 +110,8 @@ final class Game120 implements Game {
     @Override public boolean glidingOf(Object e) { return e instanceof net.minecraft.entity.LivingEntity && ((net.minecraft.entity.LivingEntity) e).isFallFlying(); }
     @Override public boolean mainHandEmpty() { return c.player == null || c.player.getMainHandStack().isEmpty(); }
     @Override public boolean spectator() { return c.player != null && c.player.isSpectator(); }
+    @Override public String clipboard() { try { String s = c.keyboard.getClipboard(); return s == null ? "" : s; } catch (Throwable e) { return ""; } }
+    @Override public void setClipboard(String s) { try { c.keyboard.setClipboard(s); } catch (Throwable ignored) {} }
     @Override public void autoMouse(int button, int hold, boolean click) { if (c.player == null) return; KeyBinding k = button == 0 ? c.options.attackKey : c.options.useKey;
         if (hold >= 0) k.setPressed(hold == 1); if (click) KeyBinding.onKeyPressed(((ru.safimine.asteria.visuals.mc.mixin.BoundKeyAccessor) k).asteria$bound()); }
     @Override public boolean hitboxDebug() { try { return c.getEntityRenderDispatcher().shouldRenderHitboxes(); } catch (Throwable t) { return false; } }
