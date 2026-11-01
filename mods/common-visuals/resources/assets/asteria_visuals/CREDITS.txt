@@ -2,4 +2,7 @@ Particle / circle / hotbar / trinket textures and sounds in this folder come fro
 (https://modrinth.com/mod/soup-api), used with the author's permission. See LICENSE_SoupVisuals.txt.
 Everything else in Asteria Visuals is (c) SafiMine.
 
-WellVisuals: some pictures (marker pin, jump circles, target markers, speed lines, particles) and sounds (module on/off, kill, totem) are used with the permission of the WellVisuals author. Files: textures/fx/wv/*, sounds/wv_*.ogg
+WellVisuals: some pictures (marker pin, jump circles, target markers, speed lines, particles) and sounds (kill, menu open / close) are used with the permission of the WellVisuals author. Files: textures/fx/wv/*, sounds/wv_kill*.ogg, wv_open.ogg, wv_close.ogg
+
+The spoken phrases (sounds/wv_enable, wv_disable, wv_totem*, wv_tother*, wv_hp, wv_armor, wv_food, wv_effect, wv_enemy_armor, wv_shield, wv_friend)
+are synthesized with Silero TTS v5_cis_base_nostress (MIT licence, https://github.com/snakers4/silero-models), voice ru_ekaterina: tools/make_voice.py
