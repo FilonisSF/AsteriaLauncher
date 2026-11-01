@@ -154,27 +154,35 @@ public final class Fx {
             r.end(); }
     }
     // ------------------------------------------------------------------ trajectories: the flight of what you are about to throw / shoot
+    private static double[] trajMotion = new double[3]; private static long trajAt;
     private static void trajectory(R3 r, Game g, long now) {
-        double[] a = g.aim(); if (a == null || a[0] == 0) return; int kind = (int) a[0];
-        double speed = kind == 1 ? 3 * a[1] : kind == 2 ? 3.15 : kind == 4 ? 2.5 : kind == 5 ? 0.5 : 1.5, grav = kind == 1 || kind == 2 || kind == 4 ? 0.05 : kind == 5 ? 0.05 : 0.03, drag = 0.99;
-        if (kind == 1 && a[1] < 0.1) return;
+        double[] a = g.aim(); if (a == null || a[0] == 0) return; int kind = (int) a[0]; float pt0 = r.partial();
+        // the bow's pull from the use ticks plus the frame between ticks (it jumped 20 times a second); the formula is the game's own
+        double power = a[1]; if (kind == 1 && a.length > 7) { double t = (a[7] + pt0) / 20.0; power = Math.min(1, (t * t + t * 2) / 3); }
+        // the game's numbers: arrows 3 x pull, crossbow 3.15, trident 2.5, potions 0.5 and bottles 0.7 thrown 20 degrees up, the rest 1.5
+        double speed = kind == 1 ? 3 * power : kind == 2 ? 3.15 : kind == 4 ? 2.5 : kind == 5 ? 0.5 : kind == 6 ? 0.7 : 1.5, grav = kind == 1 || kind == 2 || kind == 4 || kind == 5 ? 0.05 : kind == 6 ? 0.07 : 0.03;
+        boolean arrow = kind == 1 || kind == 2 || kind == 4; double drag = 0.99, wdrag = arrow ? (kind == 4 ? 0.99 : 0.6) : 0.8;
+        if (kind == 1 && power < 0.1) return;
         // start from the interpolated eye and the camera's own angles: no shaking while walking or turning
         float pt = r.partial(); Object self = g.self(); double[] pNow = g.pos(self, pt), pTick = g.pos(self, 1); boolean fp = g.perspective() == 0;
         int pv = g.perspective(); double yawD = pv == 2 ? r.camYaw() + 180 : r.camYaw(), pitD = pv == 2 ? -r.camPitch() : r.camPitch(); // the camera turns every frame, the player only every tick
         double ex = a[2] + (pNow[0] - pTick[0]), ey = a[3] + (pNow[1] - pTick[1]), ez = a[4] + (pNow[2] - pTick[2]);
-        double yaw = Math.toRadians(yawD), pit = Math.toRadians(pitD - (kind == 5 ? 20 : 0)); double vx = -Math.sin(yaw) * Math.cos(pit) * speed, vy = -Math.sin(pit) * speed, vz = Math.cos(yaw) * Math.cos(pit) * speed;
-        // the thrower's own motion is added, as the game does (sideways always, up / down only in the air): running or jumping bends the path
-        { double[] a0 = g.pos(self, 0); double mx = pTick[0] - a0[0], my = pTick[1] - a0[1], mz = pTick[2] - a0[2]; vx += mx; vz += mz; if (!g.onGround()) vy += my; }
-        double x = ex - Math.cos(yaw) * 0.16, y = ey - 0.1, z = ez - Math.sin(yaw) * 0.16;
+        double yaw = Math.toRadians(yawD), pit = Math.toRadians(pitD - (kind == 5 || kind == 6 ? 20 : 0)); double vx = -Math.sin(yaw) * Math.cos(pit) * speed, vy = -Math.sin(pit) * speed, vz = Math.cos(yaw) * Math.cos(pit) * speed;
+        // the thrower's own motion is added, as the game does (sideways always, up / down only in the air): running or jumping bends the path.
+        // It changes once a tick, so it is eased in over a few frames instead of making the whole line jump
+        { double[] mv = g.velocity(self); float k = (float) (1 - Math.exp(-Math.min(0.2, (now - trajAt) / 1000.0) * 18)); trajAt = now;
+          for (int c = 0; c < 3; c++) trajMotion[c] += ((c == 1 && g.onGround() ? 0 : mv[c]) - trajMotion[c]) * k;
+          vx += trajMotion[0]; vy += trajMotion[1]; vz += trajMotion[2]; }
+        double x = ex, y = ey - 0.1, z = ez; // the game starts every arrow and thrown thing in the middle, 0.1 below the eyes
         List<double[]> pts = new ArrayList<>(); double[] hit = null, nrm = null; pts.add(new double[]{x, y, z});
         for (int i = 0; i < 300 && hit == null; i++) { double nx = x + vx, ny = y + vy, nz = z + vz;
             for (int s = 1; s <= 8; s++) { double fx = x + vx * s / 8, fy = y + vy * s / 8, fz = z + vz * s / 8;
-                if (g.solid(fx, fy, fz)) { double ox = x + vx * (s - 1) / 8, oy = y + vy * (s - 1) / 8, oz = z + vz * (s - 1) / 8; // the exact surface: halve the step between outside and inside
-                    for (int k = 0; k < 8; k++) { double mx = (ox + fx) / 2, my = (oy + fy) / 2, mz = (oz + fz) / 2; if (g.solid(mx, my, mz)) { fx = mx; fy = my; fz = mz; } else { ox = mx; oy = my; oz = mz; } }
+                if (g.inShape(fx, fy, fz)) { double ox = x + vx * (s - 1) / 8, oy = y + vy * (s - 1) / 8, oz = z + vz * (s - 1) / 8; // the exact surface (slabs, fences, stairs by their shape): halve the step between outside and inside
+                    for (int k = 0; k < 10; k++) { double mx = (ox + fx) / 2, my = (oy + fy) / 2, mz = (oz + fz) / 2; if (g.inShape(mx, my, mz)) { fx = mx; fy = my; fz = mz; } else { ox = mx; oy = my; oz = mz; } }
                     nrm = Math.floor(ox) != Math.floor(fx) ? new double[]{Math.signum(ox - fx), 0, 0} : Math.floor(oz) != Math.floor(fz) ? new double[]{0, 0, Math.signum(oz - fz)} : new double[]{0, Math.signum(oy - fy) == 0 ? 1 : Math.signum(oy - fy), 0};
                     hit = new double[]{ox, oy, oz}; break; } }
             if (hit != null) { pts.add(hit); break; }
-            x = nx; y = ny; z = nz; pts.add(new double[]{x, y, z}); vx *= drag; vy = vy * drag - grav; vz *= drag; if (y < -64) break; }
+            x = nx; y = ny; z = nz; pts.add(new double[]{x, y, z}); double d = g.water(x, y, z) ? wdrag : drag; vx *= d; vy = vy * d - grav; vz *= d; if (y < -64) break; }
         // a smooth curve through the tick points (Catmull-Rom, 6 pieces per tick), then a thin ribbon facing the camera in the theme colours: invisible near the eyes, fading in after ~2 blocks
         if (pts.size() > 2) { List<double[]> sm = new ArrayList<>(); int m = pts.size();
             for (int i = 0; i < m - 1; i++) { double[] p0 = pts.get(Math.max(0, i - 1)), p1 = pts.get(i), p2 = pts.get(i + 1), p3 = pts.get(Math.min(m - 1, i + 2)); int parts = i == m - 2 && hit != null ? 1 : 6;

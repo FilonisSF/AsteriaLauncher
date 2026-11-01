@@ -30,6 +30,7 @@ public abstract class TitleMenuMixin {
             if (rb == null) return;
             int ry = rb.y; rb.visible = false; rb.active = false;
             for (Element e : s.children()) if (e instanceof ClickableWidget && e != rb && ((ClickableWidget) e).y > ry) ((ClickableWidget) e).y = ((ClickableWidget) e).y - 24;
+            asteria$untangle(s);
         } catch (Throwable ignored) {}
     }
 
@@ -41,5 +42,17 @@ public abstract class TitleMenuMixin {
     private void asteria$logo(MatrixStack m, int mx, int my, float delta, CallbackInfo ci) {
         if (!Menu.on()) return;
         try { Menu.logo(new Gfx116(m), MinecraftClient.getInstance().getWindow().getScaledWidth(), 30); } catch (Throwable ignored) {}
+        try { asteria$untangle((Screen) (Object) this); } catch (Throwable ignored) {} // buttons other mods add after our init (screen events)
+    }
+    /** buttons other mods put on the title screen (account switchers and such) stay where they were while ours move up a row:
+     *  a small one that lies on another button moves outwards, away from the middle, until it is free */
+    private static void asteria$untangle(Screen s) {
+        java.util.List<ClickableWidget> all = new java.util.ArrayList<>(); for (Element e : s.children()) if (e instanceof ClickableWidget && ((ClickableWidget) e).visible) all.add((ClickableWidget) e);
+        for (int i = all.size() - 1; i >= 0; i--) { ClickableWidget w = all.get(i), o = asteria$hit(w, all); if (w.getWidth() > 24 || o == null) continue; // the one added last moves
+            w.y = o.y; int dir = w.x + w.getWidth() / 2 < s.width / 2 ? -24 : 24; // into the row of the button it lay on, then sideways
+            for (int n = 0; n < 8 && asteria$hit(w, all) != null; n++) w.x += dir; }
+    }
+    private static ClickableWidget asteria$hit(ClickableWidget w, java.util.List<ClickableWidget> all) {
+        for (ClickableWidget o : all) if (o != w && w.x < o.x + o.getWidth() && o.x < w.x + w.getWidth() && w.y < o.y + 20 && o.y < w.y + 20) return o; return null;
     }
 }

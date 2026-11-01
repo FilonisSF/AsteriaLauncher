@@ -174,9 +174,13 @@ final class Game120 implements Game {
     @Override public double[] aim() { if (c.player == null) return null; ItemStack s = c.player.getMainHandStack(); String id = itemId(s); int kind = 0; double power = 1;
         if (id.endsWith(":bow")) { kind = 1; if (!c.player.isUsingItem()) return null; float t = c.player.getItemUseTime() / 20f; power = Math.min(1, (t * t + t * 2) / 3); }
         else if (id.endsWith(":crossbow")) kind = 2; else if (id.endsWith("ender_pearl") || id.endsWith("snowball") || id.endsWith(":egg")) kind = 3; else if (id.endsWith("trident")) { if (!c.player.isUsingItem()) return null; kind = 4; }
-        else if (id.endsWith("splash_potion") || id.endsWith("lingering_potion")) kind = 5;
-        if (kind == 0) return null; double[] p = pos(c.player, 1); return new double[]{kind, power, p[0], p[1] + c.player.getStandingEyeHeight(), p[2], c.player.getYaw(), c.player.getPitch()}; }
+        else if (id.endsWith("splash_potion") || id.endsWith("lingering_potion")) kind = 5; else if (id.endsWith("experience_bottle")) kind = 6;
+        if (kind == 0) return null; double[] p = pos(c.player, 1); return new double[]{kind, power, p[0], p[1] + c.player.getStandingEyeHeight(), p[2], c.player.getYaw(), c.player.getPitch(), c.player.isUsingItem() ? c.player.getItemUseTime() : 0}; }
     @Override public boolean solid(double x, double y, double z) { if (c.world == null) return false; BlockPos p = BlockPos.ofFloored(x, y, z); return !c.world.getBlockState(p).getCollisionShape(c.world, p).isEmpty(); }
+    @Override public double[] velocity(Object e) { net.minecraft.util.math.Vec3d v = ((net.minecraft.entity.Entity) e).getVelocity(); return new double[]{v.x, v.y, v.z}; }
+    @Override public boolean inShape(double x, double y, double z) { if (c.world == null) return false; BlockPos p = BlockPos.ofFloored(x, y, z); net.minecraft.util.shape.VoxelShape s = c.world.getBlockState(p).getCollisionShape(c.world, p); if (s.isEmpty()) return false;
+        double lx = x - p.getX(), ly = y - p.getY(), lz = z - p.getZ(); for (net.minecraft.util.math.Box b : s.getBoundingBoxes()) if (lx >= b.minX && lx <= b.maxX && ly >= b.minY && ly <= b.maxY && lz >= b.minZ && lz <= b.maxZ) return true; return false; }
+    @Override public boolean water(double x, double y, double z) { return c.world != null && c.world.getFluidState(BlockPos.ofFloored(x, y, z)).isIn(net.minecraft.registry.tag.FluidTags.WATER); }
     @Override public double blockTop(double x, double y, double z) { if (c.world == null) return -1; BlockPos p = BlockPos.ofFloored(x, y, z); net.minecraft.util.shape.VoxelShape s = c.world.getBlockState(p).getCollisionShape(c.world, p); if (s.isEmpty()) return -1;
         double lx = x - p.getX(), lz = z - p.getZ(), top = -1; for (net.minecraft.util.math.Box b : s.getBoundingBoxes()) if (lx >= b.minX - 0.1 && lx <= b.maxX + 0.1 && lz >= b.minZ - 0.1 && lz <= b.maxZ + 0.1) top = Math.max(top, b.maxY); return top; }
     @Override public int category(Object o) { ItemStack s = (ItemStack) o; if (s == null || s.isEmpty()) return 4; Object it = s.getItem();

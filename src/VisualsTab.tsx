@@ -193,7 +193,7 @@ export default function VisualsTab({ plan, bg, onBuy, say, ver }: { plan: string
         <Switch on={c.theme.menu !== false} set={(v) => theme({ menu: v })} label="Свой стиль меню Minecraft" hint="Неоновые кнопки, логотип AsteriaLauncher вместо Minecraft, фон Asteria и без кнопки Realms" />
         <Switch on={!!c.theme.glare} set={(v) => theme({ glare: v })} label="Блик по панелям" hint="Иногда по панелям HUD пробегает светлый блик" />
         <Range label="Прозрачность подложки" min={0} max={1} step={0.05} v={c.theme.bg} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ bg: v })} />
-        <Range label="Размер HUD (шаг 25% — текст всегда чёткий)" min={0.75} max={2} step={0.25} v={Math.round(c.theme.scale * 4) / 4} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ scale: v })} />
+        <Range label="Размер HUD" min={0.5} max={2} step={0.05} v={c.theme.scale} show={(x) => Math.round(x * 100) + '%'} set={(v) => theme({ scale: Math.round(v * 20) / 20 })} />
       </div>
       <Tilt className="rounded-2xl overflow-hidden relative h-fit" max={4}><img src={bg} className="w-full aspect-video object-cover" /><div className="absolute inset-0"><Preview c={c} /></div></Tilt>
     </div>}

@@ -39,6 +39,7 @@ public class VisualsClient implements ClientModInitializer {
     public static void tick(MinecraftClient c) {
         try {
             V.tick();
+            if (TEST_SHOT != null && c.currentScreen instanceof net.minecraft.client.gui.screen.TitleScreen && ++shotTick == 100) testShot(c); // test runs only (-Dasteria.test.shot=<png>)
             while (MENU.wasPressed()) if (c.currentScreen == null) c.setScreen(new AsteriaScreen());
             Fx.zoomKey(ZOOM.isPressed() && c.currentScreen == null);
             if (c.player != null && V.on("autosprint") && c.options.forwardKey.isPressed() && !c.player.isSneaking() && c.player.getHungerManager().getFoodLevel() > 6 && !c.player.isUsingItem()) c.player.setSprinting(true);
@@ -91,4 +92,15 @@ public class VisualsClient implements ClientModInitializer {
     private static final ClassValue<Boolean> TTF = new ClassValue<Boolean>() { @Override protected Boolean computeValue(Class<?> c) { return c.getEnclosingClass() == net.minecraft.client.font.TrueTypeFont.class; } };
     /** the shadow of our smooth (TrueType) letters: half a font pixel instead of a whole one */
     public static float ttfShadow(Object glyph, float o) { return V.allFont && V.font > 0 && glyph != null && TTF.get(glyph.getClass()) ? o * 0.5f : o; }
+    /** a glyph atlas of our fonts (asteria_visuals:f<N>s<k>/<page>, f<N>h<k>/<page>): drawn with smooth filtering */
+    public static boolean smoothFont(Identifier id) { String p = id.getPath(); return "asteria_visuals".equals(id.getNamespace()) && p.length() > 1 && p.charAt(0) == 'f' && Character.isDigit(p.charAt(1)); }
+    private static final String TEST_SHOT = System.getProperty("asteria.test.shot"); private static int shotTick;
+    /** test runs only: the game's picture (main framebuffer) to a PNG, to look at fonts and the HUD without a person at the screen */
+    private static void testShot(MinecraftClient c) {
+        try { net.minecraft.client.gl.Framebuffer fb = c.getFramebuffer(); int w = fb.textureWidth, h = fb.textureHeight; java.nio.ByteBuffer b = org.lwjgl.BufferUtils.createByteBuffer(w * h * 4);
+            org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, fb.getColorAttachment()); org.lwjgl.opengl.GL11.glGetTexImage(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, 0, org.lwjgl.opengl.GL11.GL_RGBA, org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE, b);
+            java.awt.image.BufferedImage im = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) { int i = ((h - 1 - y) * w + x) * 4; im.setRGB(x, y, (b.get(i) & 255) << 16 | (b.get(i + 1) & 255) << 8 | (b.get(i + 2) & 255)); }
+            javax.imageio.ImageIO.write(im, "png", new java.io.File(TEST_SHOT)); System.out.println("[Asteria test] shot " + TEST_SHOT); } catch (Throwable t) { t.printStackTrace(); }
+    }
 }

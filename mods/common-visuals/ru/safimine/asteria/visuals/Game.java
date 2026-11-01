@@ -138,6 +138,12 @@ public interface Game {
     default boolean solid(double x, double y, double z) { return false; }
     /** the top of the collision shape of the block at this point, under x, z (0..1, a slab 0.5, a fence 1.5), or -1: nothing to stand on there */
     default double blockTop(double x, double y, double z) { return solid(x, y, z) ? 1 : -1; }
+    /** is this point inside the collision shape of its block (a slab is solid only in its half, a fence only in its post) */
+    default boolean inShape(double x, double y, double z) { return solid(x, y, z); }
+    /** is there water at this point */
+    default boolean water(double x, double y, double z) { return false; }
+    /** the entity's motion per tick (what the game adds to a throw) */
+    default double[] velocity(Object e) { return new double[3]; }
     /** category of an item: 0 weapon, 1 tool, 2 block, 3 food, 4 other */
     default int category(Object stack) { return 4; }
     /** opens / closes the Asteria menu screen */
