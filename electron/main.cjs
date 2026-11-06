@@ -771,6 +771,20 @@ ipcMain.handle('maps:cf', async (_, mod, file, ver, name) => { await resolveApi(
 let hostNow = '', beatNow = null // beatNow: send the heartbeat at once (cosmetics changed in the launcher) // the e4mc address of the world this player opened to friends
 // requests go through the Asteria server under the active account; new notices (request / accepted / declined) are pushed to the window
 let friendsLast = null
+/** e4mc in the game log: the domain given to the opened world (never the broker the mod connects to, which friends cannot join),
+ *  its error (nothing to join: say why instead of handing out a dead address), and the world being closed */
+function togetherLog(line) {
+  // (a friend's domain we connect to, or the broker we ping, is not our world)
+  if (!/Connecting to|\bping\b|Unknown host|Connect(ed|ing) to server/i.test(line)) for (const m of line.matchAll(/\b((?:[a-z0-9-]+\.)+e4mc\.link)\b/gi)) { const d = m[1].toLowerCase(); if (/^broker\./.test(d) || d === hostNow) continue
+    hostNow = d; try { win?.webContents.send('together', { host: d }) } catch {} beatNow?.() }
+  if (/error occurred in e4mc|e4mc.*(exception|failed|error)/i.test(line) && !/\bat [a-z]/.test(line)) { const was = hostNow; hostNow = ''
+    try { win?.webContents.send('together', { host: '', error: 'e4mc не смог открыть мир для друзей: его сервер недоступен из вашей сети (часто блокирует провайдер). Попробуйте VPN или другую сеть и снова ESC → «Открыть для сети»' }) } catch {} if (was) beatNow?.() }
+  if (hostNow && /Stopping server|Stopping singleplayer server|Saving worlds/i.test(line)) { hostNow = ''; try { win?.webContents.send('together', { host: '' }) } catch {} beatNow?.() } }
+/** "join a friend" while the game runs: the core mod connects the running game (asteria-join.json); a different version cannot */
+ipcMain.handle('game:joinLive', (_, { host, port, ver }) => { if (!game || !gameDirNow) return { error: 'Игра не запущена' }
+  if (ver && gameVer && ver !== gameVer) return { error: `Друг играет на ${ver}, а у вас запущена ${gameVer} — закройте игру, и лаунчер запустит нужную версию` }
+  if (!/^[a-z0-9.-]{1,120}$/i.test(String(host || ''))) return { error: 'Неверный адрес' }
+  try { fs.writeFileSync(path.join(gameDirNow, 'asteria-join.json'), JSON.stringify({ host: String(host), port: +port || 25565, t: Date.now() })); return { ok: true } } catch (e) { return { error: 'Не получилось: ' + e.message } } })
 /** where the running game is: the server address from the mod's asteria-status.json ("mp:host:port", fresh this session), '' in a menu / own world, null if unknown */
 /** what other players see: the pet ("<kind>:<size>", ":m" = mini-me with a skin from the launcher) and the effects, from a visuals config */
 function petOfVis(v, sdir) { const p = v?.modules?.pet; if (!p?.on) return ''
@@ -879,7 +893,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
     l.on('debug', (m) => { logBuf.push(String(m)); if (logBuf.length > 1000) logBuf.splice(0, 300) })
     l.on('data', (m) => { // NOTE: no per-line IPC — joining a world prints thousands of lines
       logBuf.push(String(m).trimEnd()); if (logBuf.length > 1000) logBuf.splice(0, 300)
-      const e4 = /([a-z0-9-]+\.)+e4mc\.link/i.exec(String(m)); if (e4 && e4[0] !== hostNow) { hostNow = e4[0].toLowerCase(); try { win?.webContents.send('together', hostNow) } catch {} } // the world is open to friends
+      togetherLog(String(m)) // the world opened to friends (its e4mc domain), e4mc failing, the world closed
       if (!started) { started = true; t0 = Date.now(); gameDirNow = dir; coverWritten = {}; rpcGame(version, dir, join ? srv.host : null); send('', 0); try { win?.webContents.send('game', true) } catch {}; if (s.hideOnLaunch !== false) win?.minimize() } })
     l.on('close', (code) => { const playedMs = t0 ? Date.now() - t0 : 0; if (code && playedMs < 120000) crashReason(dir, code) // a crash right at the start: tell the player why
       if (hb) clearInterval(hb); beatNow = null; game = null; gameVer = null; gameDirNow = null; hostNow = ''

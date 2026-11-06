@@ -8,6 +8,11 @@ type World = { path: string; name: string; version: string; mtime: number; size:
 type MapItem = { name: string; desc?: string; img?: string; url: string; ver?: string }
 type Pres = { online: boolean; ver?: string; host?: string; srv?: string }
 const api = (window as any).api
+/** join a friend: in the running game when there is one (the mod connects it), otherwise by launching that version */
+export async function joinFriend(play: (v: string, join?: boolean, server?: any) => void, running: boolean, ver: string, server: { host: string; port: number }, say: (s: string, k?: 'ok' | 'err' | 'info') => void) {
+  if (!running) return play(ver, true, server)
+  const r = await api.joinLive({ ...server, ver }); if (r?.error) return say(r.error, 'err'); say('Подключаемся в запущенной игре…', 'ok')
+}
 const mb = (b: number) => b > 1 << 30 ? (b / (1 << 30)).toFixed(1) + ' ГБ' : Math.max(0.1, b / (1 << 20)).toFixed(1) + ' МБ'
 const ago = (t: number) => { const d = (Date.now() - t) / 60000; return d < 60 ? Math.max(1, Math.round(d)) + ' мин назад' : d < 1440 ? Math.round(d / 60) + ' ч назад' : new Date(t).toLocaleDateString('ru') }
 
@@ -92,7 +97,7 @@ function cosmeticsOf(c: Profile['cosm']): string[] {
 }
 const srvOf = (a: string) => { const [host, port] = a.split(':'); return { host, port: +port || 25565 } }
 /** a friend's card: the skin in 3D with the cape, their cosmetics, where they play, and the way in */
-function FriendProfile({ n, p, close, play, running }: { n: string; p: Pres; close: () => void; play: (v: string, join?: boolean, server?: any) => void; running: boolean }) {
+function FriendProfile({ n, p, close, play, running, say }: { n: string; p: Pres; close: () => void; play: (v: string, join?: boolean, server?: any) => void; running: boolean; say: (s: string, k?: 'ok' | 'err' | 'info') => void }) {
   const [pr, setPr] = useState<Profile | null | undefined>(undefined); useEffect(() => { profileOf(n).then(setPr) }, [n])
   const cos = cosmeticsOf(pr?.cosm || null), plan = pr?.player?.plan === 'PREMIUM', clan = pr?.player?.clan
   return <div className="ask-bg" onClick={close}><div className="ask !max-w-[760px] w-full" onClick={(e) => e.stopPropagation()}>
@@ -105,8 +110,8 @@ function FriendProfile({ n, p, close, play, running }: { n: string; p: Pres; clo
           <div className="muted text-xs">{plan ? 'PREMIUM' : 'Игрок AsteriaLauncher'}{clan ? ' · клан ' + (clan.display || clan.name) : ''}</div></div></div>
         <div className="card rounded-2xl p-3"><div className="muted text-[11px] mb-1">Сейчас</div>
           <b className="text-sm">{!p.online ? 'Не в игре' : p.host ? 'Открыл свой мир для друзей · ' + (p.ver || '') : p.srv ? 'Играет на ' + p.srv + ' · ' + (p.ver || '') : 'В игре · ' + (p.ver || '')}</b>
-          {p.online && (p.host || p.srv) && p.ver && <button className="btn btn-primary !py-1.5 !px-4 text-sm mt-2 flex items-center gap-2" disabled={running}
-            onClick={() => { close(); play(p.ver!, true, p.host ? { host: p.host, port: 25565 } : srvOf(p.srv!)) }}><Icon n="play" s={13} />{p.host ? 'Присоединиться к миру' : 'Зайти к нему на сервер'}</button>}</div>
+          {p.online && (p.host || p.srv) && p.ver && <button className="btn btn-primary !py-1.5 !px-4 text-sm mt-2 flex items-center gap-2"
+            onClick={() => { close(); joinFriend(play, running, p.ver!, p.host ? { host: p.host, port: 25565 } : srvOf(p.srv!), say) }}><Icon n="play" s={13} />{p.host ? 'Присоединиться к миру' : 'Зайти к нему на сервер'}</button>}</div>
         <div className="card rounded-2xl p-3"><div className="muted text-[11px] mb-2">Косметика{pr && !pr.own ? ' · скин по нику' : ''}</div>
           {cos.length ? <div className="flex flex-wrap gap-1.5">{cos.map((c) => <span key={c} className="pill !text-xs">{c}</span>)}</div> : <div className="muted text-xs">{pr === undefined ? 'Загрузка…' : 'Ничего не надето'}</div>}</div>
         <button className="pill self-end" onClick={close}>Закрыть</button></div></div></div></div>
@@ -132,7 +137,7 @@ function Friends({ play, say, running }: { play: (v: string, join?: boolean, ser
   const [d, setD] = useState<{ code?: string; friends: string[]; incoming: string[]; outgoing: string[]; pres: Record<string, Pres>; host: string } | null>(null), [err, setErr] = useState(''), [nick, setNick] = useState(''), [host, setHost] = useState('')
   const take = (r: any) => { if (r?.error) { setErr(r.error); return false } setErr(''); setD(r); if (r?.host) setHost(r.host); return true }
   const load = () => api.friendsGet().then(take)
-  useEffect(() => { load(); const id = setInterval(load, 15000); const off = api.onTogether?.((h: string) => setHost(h)); const off2 = api.onFriendNotes?.(() => load()); return () => { clearInterval(id); off?.(); off2?.() } }, [])
+  useEffect(() => { load(); const id = setInterval(load, 15000); const off = api.onTogether?.((t: any) => { const h = typeof t === 'string' ? t : t?.host || ''; setHost(h); if (t?.error) say(t.error, 'err') }); const off2 = api.onFriendNotes?.(() => load()); return () => { clearInterval(id); off?.(); off2?.() } }, [])
   const act = async (a: string, who: string, ok?: boolean, msg?: string) => { if (take(await api.friendsAct(a, who, ok)) && msg) say(msg) }
   const add = () => { const c = nick.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length !== 8) return say('Код дружбы — 8 символов, например K7Q2-XD4M', 'err'); setNick(''); act('request', c, false, 'Заявка отправлена') }
   const pres = d?.pres || {}, sorted = [...(d?.friends || [])].sort((a, b) => +!!pres[b]?.online - +!!pres[a]?.online)
@@ -159,19 +164,22 @@ function Friends({ play, say, running }: { play: (v: string, join?: boolean, ser
       {d.outgoing.map((n) => <div key={n} className="flex items-center gap-3"><Avatar n={n} /><span className="flex-1 truncate">{n}</span><span className="muted text-[11px]">заявка отправлена</span>
         <button className="pill !text-xs" title="Отменить заявку" onClick={() => act('remove', n)}><Icon n="close" s={11} /></button></div>)}</div>}
     {d && !d.friends.length && !d.incoming.length && <div className="card rounded-3xl p-8 text-center muted">Отправьте заявку по коду дружбы — когда её примут, увидите, кто в игре, на какой версии, и сможете зайти в мир друга одной кнопкой</div>}
-    <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))' }}>
-      {sorted.map((n) => { const p = pres[n] || { online: false }; return <div key={n} className="card rounded-2xl p-3 flex items-center gap-3"><button title="Профиль" onClick={() => setProf(n)}><Avatar n={n} on={p.online} /></button>
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setProf(n)}><b className="block truncate">{n}</b><div className="muted text-[11px]">{!p.online ? 'Не в игре' : p.host ? 'Открыл мир · ' + p.ver : p.srv ? 'На сервере ' + p.srv + ' · ' + p.ver : 'В игре · ' + (p.ver || '')}</div></div>
-        {p.online && p.host && p.ver && <button className="btn !py-1 !px-3 text-xs" disabled={running} onClick={() => play(p.ver!, true, { host: p.host, port: 25565 })}>Присоединиться</button>}
-        {p.online && !p.host && p.srv && p.ver && <button className="pill !text-xs" disabled={running} onClick={() => play(p.ver!, true, srvOf(p.srv!))}>К нему</button>}
+    <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,460px),1fr))' }}>
+      {sorted.map((n) => { const p = pres[n] || { online: false }, status = !p.online ? 'Не в игре' : p.host ? 'Открыл мир · ' + p.ver : p.srv ? 'На сервере ' + p.srv + ' · ' + p.ver : 'В игре · ' + (p.ver || '')
+        return <div key={n} className="card rounded-2xl p-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <button className="flex items-center gap-3 flex-1 min-w-[180px] text-left" title="Профиль" onClick={() => setProf(n)}><Avatar n={n} on={p.online} />
+          <span className="min-w-0 flex-1"><b className="block truncate">{n}</b><span className="muted text-[11px] block truncate" title={status}>{status}</span></span></button>
+        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+        {p.online && p.host && p.ver && <button className="btn btn-primary !py-1 !px-3 text-xs whitespace-nowrap" onClick={() => joinFriend(play, running, p.ver!, { host: p.host!, port: 25565 }, say)}>Присоединиться</button>}
+        {p.online && !p.host && p.srv && p.ver && <button className="pill !text-xs whitespace-nowrap" onClick={() => joinFriend(play, running, p.ver!, srvOf(p.srv!), say)}>К нему</button>}
         <button className="pill !text-xs relative" title="Написать" onClick={() => { setChat(n); setUnread((u) => ({ ...u, [n]: 0 })) }}><Icon n="chat" s={12} />Чат{!!unread[n] && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: '#ef4444' }}>{unread[n]}</span>}</button>
         <div className="relative"><button className="pill !text-xs" title="Позвать к себе" onClick={async () => { setWhere(await api.friendWhere()); setInv(inv === n ? '' : n) }}><Icon n="user" s={12} />Позвать</button>
           {inv === n && <><div className="fixed inset-0 z-40" onClick={() => setInv('')} /><div className="pop z-50 right-0" style={{ width: 250 }}><div className="muted text-xs px-2 pb-1">Позвать {n}</div>
             <button className="target w-full text-left" disabled={!where.world} onClick={() => invite(n, 'world')}><b className="text-sm">В мой мир</b><span className="muted text-[11px] block">{where.world ? 'Мир открыт для друзей' : 'Сначала ESC → «Открыть для сети»'}</span></button>
             <button className="target w-full text-left" disabled={!where.here} onClick={() => invite(n, 'here')}><b className="text-sm">На мой сервер</b><span className="muted text-[11px] block">{where.here || 'Зайдите на сервер через лаунчер'}</span></button>
             <button className="target w-full text-left" onClick={() => invite(n, 'safimine')}><b className="text-sm">На SafiMine</b><span className="muted text-[11px] block">mc.safimine.ru</span></button></div></>}</div>
-        <button className="pill !text-xs" title="Удалить из друзей" onClick={() => act('remove', n, false, n + ' удалён из друзей')}><Icon n="close" s={11} /></button></div> })}</div>
+        <button className="pill !text-xs" title="Удалить из друзей" onClick={() => act('remove', n, false, n + ' удалён из друзей')}><Icon n="close" s={11} /></button></div></div> })}</div>
     {chat && <Chat who={chat} close={() => setChat('')} say={say} />}
-    {prof && <FriendProfile n={prof} p={pres[prof] || { online: false }} close={() => setProf('')} play={play} running={running} />}
+    {prof && <FriendProfile n={prof} p={pres[prof] || { online: false }} close={() => setProf('')} play={play} running={running} say={say} />}
     <div className="muted text-[11px]">Статус виден, когда друг играет через AsteriaLauncher. Игра вместе: включите «Играть вместе с друзьями» во вкладке «Мои миры», зайдите в мир и нажмите ESC → «Открыть для сети».</div></div>
 }

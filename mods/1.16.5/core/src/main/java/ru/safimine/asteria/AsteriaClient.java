@@ -30,6 +30,9 @@ public class AsteriaClient implements ClientModInitializer {
                 return id;
             }
             @Override public void reloadOptions() { reload(); }
+            @Override public void join(String host, int port) { // leave the world / server, then connect like the server list does
+                MinecraftClient c = MinecraftClient.getInstance(); if (c.world != null) { c.world.disconnect(); c.disconnect(); }
+                c.openScreen(new net.minecraft.client.gui.screen.ConnectScreen(new net.minecraft.client.gui.screen.TitleScreen(), c, host, port)); }
             @Override public String status() {
                 MinecraftClient c = MinecraftClient.getInstance();
                 if (c == null || c.world == null) return "menu";

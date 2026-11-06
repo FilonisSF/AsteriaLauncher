@@ -34,6 +34,8 @@ public final class Asteria {
         void reloadOptions();
         /** "menu", "sp" or "mp:<server address>" — for Discord Rich Presence in the launcher */
         String status();
+        /** leave the current world / server and connect to this one (render thread) */
+        default void join(String host, int port) {}
     }
 
     public static String API, USER, GAME_DIR;
@@ -58,6 +60,7 @@ public final class Asteria {
         // every task is wrapped: an exception must never cancel a repeating task
         EX.scheduleWithFixedDelay(safe(Asteria::localTextures), 3, 2, TimeUnit.SECONDS);
         EX.scheduleWithFixedDelay(safe(Asteria::liveOptions), 3, 1, TimeUnit.SECONDS);
+        EX.scheduleWithFixedDelay(safe(Asteria::joinRequest), 3, 1, TimeUnit.SECONDS);
         EX.scheduleWithFixedDelay(safe(Asteria::writeStatus), 5, 3, TimeUnit.SECONDS);
         if (API != null && !API.isEmpty()) EX.scheduleWithFixedDelay(safe(Asteria::poll), 2, 3, TimeUnit.SECONDS); // others see a new skin / cape within ~3 s (change stamps)
     }
@@ -172,6 +175,15 @@ public final class Asteria {
     }
 
     // ---------------------------------------------------------------- live settings from the launcher
+    /** "join a friend" while the game runs: the launcher drops asteria-join.json {"host": ..., "port": ...} into the game folder */
+    private static void joinRequest() {
+        File f = new File(GAME_DIR, "asteria-join.json"); if (!f.exists()) return;
+        try { String s = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8); f.delete();
+            java.util.regex.Matcher h = java.util.regex.Pattern.compile("\"host\"\\s*:\\s*\"([A-Za-z0-9.-]{1,120})\"").matcher(s), p = java.util.regex.Pattern.compile("\"port\"\\s*:\\s*(\\d{1,5})").matcher(s);
+            if (!h.find()) return; final String host = h.group(1); final int port = p.find() ? Integer.parseInt(p.group(1)) : 25565;
+            P.onClient(() -> { try { P.join(host, port); } catch (Throwable ignored) {} });
+        } catch (Exception ignored) {}
+    }
     private static void liveOptions() {
         File flag = new File(GAME_DIR, "asteria-live.flag");
         if (!flag.exists()) return;

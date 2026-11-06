@@ -13,7 +13,7 @@ import SkinStudio, { CapeMaker, GifCapeMaker } from './SkinStudio'
 import GameSettings from './GameSettings'
 import VisualsTab, { visDefaults, petPic } from './VisualsTab'
 import { MapsCatalog } from './MapsCatalog'
-import { Worlds } from './Worlds'
+import { Worlds, joinFriend } from './Worlds'
 import { LookPreview } from './LookPreview'
 import { BackupCard, UninstallCard } from './Backup'
 import { LegalCard } from './Legal'
@@ -407,7 +407,7 @@ export default function App() {
       {invite && <div className="fixed right-5 bottom-5 z-[95] card rounded-3xl p-4 w-[340px] shadow-2xl" style={{ borderColor: 'var(--a1)' }}>
         <div className="flex items-center gap-3"><span className="cmd-ic !w-11 !h-11 shrink-0" style={{ color: '#4ade80' }}><Icon n="user" s={20} /></span>
           <div className="min-w-0"><b className="block">Приглашение от {invite.who}</b><div className="muted text-xs truncate">{invite.where?.kind === 'world' ? 'В свой мир' : 'На сервер ' + (invite.where?.label || invite.where?.host)}{invite.where?.ver ? ' · Minecraft ' + invite.where.ver : ''}</div></div></div>
-        <div className="flex gap-2 mt-3"><button className="btn btn-primary flex-1 flex items-center justify-center gap-2" disabled={running} onClick={() => { const w = invite.where; setInvite(null); play(w.ver || ver, true, { host: w.host, port: w.port || 25565 }) }}><Icon n="play" s={15} />{running ? 'Игра уже запущена' : 'Зайти'}</button>
+        <div className="flex gap-2 mt-3"><button className="btn btn-primary flex-1 flex items-center justify-center gap-2" onClick={() => { const w = invite.where; setInvite(null); joinFriend(play, running, w.ver || ver, { host: w.host, port: w.port || 25565 }, say) }}><Icon n="play" s={15} />{running ? 'Зайти в игре' : 'Зайти'}</button>
           <button className="btn" onClick={() => setInvite(null)}>Позже</button></div></div>}
       <Fx kind={fx} dark={theme === 'dark'} /> {/* stays on while the game runs: a hidden / minimised window pauses the animation by itself */}
       {menu && <div className="fixed inset-0 z-20" onClick={() => setMenu('')} />}
