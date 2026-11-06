@@ -2,7 +2,7 @@
 // Admin panel:  http://<address>:8080/admin   (key is printed on start and saved to backend/data/admin-key.txt)
 // Env (optional): PORT=8080  ADMIN_KEY=...  STATS_KEY=...
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto')
-const VERSION = '1.7.3'
+const VERSION = '1.7.4'
 const DATA = path.join(__dirname, 'data'); fs.mkdirSync(DATA, { recursive: true })
 // ---- optional durable copy of backend/data in Supabase Storage: Render's free disk is wiped on every restart and deploy (friends, chats,
 // tokens, skins, plans were lost). Env SUPABASE_URL + SUPABASE_SERVICE_KEY (+ STORE_BUCKET, default "asteria-backend", a private bucket):
