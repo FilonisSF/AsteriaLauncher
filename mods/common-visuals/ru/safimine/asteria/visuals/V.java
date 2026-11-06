@@ -37,6 +37,9 @@ public final class V {
     // theme
     public static int accent = 0xFF22D3EE, accent2 = 0xFF3B82F6;
     public static boolean chroma = false, shadow = true, blur = true;
+    /** characters our font draws with "our font for all text": letters, digits and punctuation (Latin, Greek, Cyrillic). Everything else
+     *  (server resource-pack icons and spacers in the private use area, symbols, emoji) stays with the game's font, as the server meant it */
+    public static boolean ourGlyph(int cp) { return cp < 0x250 || (cp >= 0x370 && cp < 0x530) || (cp >= 0x2010 && cp < 0x2070) || cp == 0x2116; }
     public static float bg = 0.6f, scale = 1.25f, menuScale = 1; // menuScale: the Asteria menu window (0.6..1.4)
     /** HUD look: 0 = crystal panels, 1 = Asteria lines (thin lines, minimal backing) */
     public static int hudStyle = 0;

@@ -88,9 +88,10 @@ public class VisualsClient implements ClientModInitializer {
         if (ALL[i][k] == null) ALL[i][k] = new Identifier("asteria_visuals", "f" + i + "s" + k); return ALL[i][k];
     }
     public static int category(Object stack) { return Game116.I.category(stack); }
-    /** the container screens drawn in the Asteria style (InventoryStyleMixin, ContainerStyleMixin): their titles are made light */
-    public static boolean styledScreen(Object s) { return ru.safimine.asteria.visuals.Hud.styledInventory() && (s instanceof net.minecraft.client.gui.screen.ingame.GenericContainerScreen || s instanceof net.minecraft.client.gui.screen.ingame.ShulkerBoxScreen
-        || s instanceof net.minecraft.client.gui.screen.ingame.HopperScreen || s instanceof net.minecraft.client.gui.screen.ingame.Generic3x3ContainerScreen || s instanceof net.minecraft.client.gui.screen.ingame.InventoryScreen); }
+    /** the screen our inventory style was drawn on (its dark grey titles are made light) */
+    private static Object styled;
+    public static void markStyled(Object screen) { styled = screen; }
+    public static boolean styledScreen(Object s) { return s != null && s == styled && ru.safimine.asteria.visuals.Hud.styledInventory(); }
     /** a screen title in a finer copy of our font (asteria_visuals:f<N>h<k>, oversample k / 2): it is drawn x times bigger than the chat */
     public static net.minecraft.text.Text titleText(net.minecraft.text.Text t, int x) {
         if (!V.allFont || V.font <= 0) return t; int i = Math.min(31, V.font), k = Math.max(2, Math.min(12, (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor() * 2 * x)));
@@ -104,6 +105,7 @@ public class VisualsClient implements ClientModInitializer {
     private static final String TEST_SHOT = System.getProperty("asteria.test.shot"); private static int shotTick;
     /** test runs only: the game's picture (main framebuffer) to a PNG, to look at fonts and the HUD without a person at the screen */
     private static void testShot(MinecraftClient c) {
+        try { Class<?>[] pre = {net.minecraft.client.gui.screen.ingame.InventoryScreen.class, net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen.class, net.minecraft.client.gui.screen.ingame.GenericContainerScreen.class, net.minecraft.client.gui.screen.ingame.ShulkerBoxScreen.class, net.minecraft.client.gui.screen.ingame.CraftingScreen.class, net.minecraft.client.gui.screen.ingame.FurnaceScreen.class, net.minecraft.client.gui.screen.ingame.BrewingStandScreen.class, net.minecraft.client.gui.screen.ingame.AnvilScreen.class, net.minecraft.client.gui.screen.ingame.EnchantmentScreen.class, net.minecraft.client.gui.screen.ingame.BeaconScreen.class, net.minecraft.client.gui.screen.ingame.HorseScreen.class}; System.out.println("[Asteria test] screens loaded: " + pre.length); } catch (Throwable t) { t.printStackTrace(); } // their mixins apply on load: -Dmixin.debug.countInjections shows any that missed
         try { net.minecraft.client.gl.Framebuffer fb = c.getFramebuffer(); int w = fb.textureWidth, h = fb.textureHeight; java.nio.ByteBuffer b = org.lwjgl.BufferUtils.createByteBuffer(w * h * 4);
             org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, fb.getColorAttachment()); org.lwjgl.opengl.GL11.glGetTexImage(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, 0, org.lwjgl.opengl.GL11.GL_RGBA, org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE, b);
             java.awt.image.BufferedImage im = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);

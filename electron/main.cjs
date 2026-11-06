@@ -743,6 +743,18 @@ ipcMain.handle('maps:cf', async (_, mod, file, ver, name) => { await resolveApi(
 let hostNow = '', beatNow = null // beatNow: send the heartbeat at once (cosmetics changed in the launcher) // the e4mc address of the world this player opened to friends
 // requests go through the Asteria server under the active account; new notices (request / accepted / declined) are pushed to the window
 let friendsLast = null
+/** where the running game is: the server address from the mod's asteria-status.json ("mp:host:port", fresh this session), '' in a menu / own world, null if unknown */
+function liveServer(dir, since) { try { const j = JSON.parse(fs.readFileSync(path.join(dir, 'asteria-status.json'), 'utf8')); if (!j.ts || j.ts < (since || 0) - 5000 || Date.now() - j.ts > 30000) return null
+  return String(j.state || '').startsWith('mp:') ? String(j.state).slice(3).toLowerCase().replace(/:25565$/, '') : '' } catch { return null } }
+// a friend's profile: skin, cape and cosmetics from the Asteria server (5 min cache), the head falls back to the licence skin by nick
+const profCache = new Map()
+async function friendProfile(name) { const n = String(name || ''); if (!/^\w{3,16}$/.test(n)) return null; const c = profCache.get(n.toLowerCase()); if (c && Date.now() - c.t < 300000) return c.v
+  await resolveApi().catch(() => {}); const b = apiBase(), get = (u, json) => net.fetch(b + u, { signal: AbortSignal.timeout(8000) }).then((r) => !r.ok ? null : json ? r.json() : r.arrayBuffer().then((x) => 'data:image/png;base64,' + Buffer.from(x).toString('base64'))).catch(() => null)
+  const [skin, cape, meta, cosm, player] = await Promise.all([get(`/skin/${n}.png`), get(`/cape/${n}.png`), get(`/skinmeta/${n}`, true), get('/cosmetics', true), get(`/player/${n}`, true)])
+  const v = { name: n, skin: skin || await net.fetch(`https://mc-heads.net/skin/${n}`, { signal: AbortSignal.timeout(8000) }).then((r) => r.ok ? r.arrayBuffer() : null).then((x) => x ? 'data:image/png;base64,' + Buffer.from(x).toString('base64') : null).catch(() => null),
+    own: !!skin, cape, slim: !!meta?.slim, cosm: cosm?.[n.toLowerCase()] || null, player }
+  profCache.set(n.toLowerCase(), { t: Date.now(), v }); return v }
+ipcMain.handle('friends:profile', (_, name) => friendProfile(name))
 let playNow = null // { ver, srv } while a game of ours runs: what "invite a friend" points to
 /** a Windows notification with sound + a banner inside the running game */
 function friendAlert(x) {
@@ -777,13 +789,13 @@ setInterval(() => { if (store.get('accounts', []).length && (!friendsLast || fri
 /** invite a friend to where you are: your world opened to friends, the server you joined from the launcher, or SafiMine */
 ipcMain.handle('friends:invite', (_, who, kind) => {
   const where = kind === 'world' ? (hostNow ? { kind: 'world', host: hostNow, port: 25565, ver: playNow?.ver || '' } : null)
-    : kind === 'here' ? (playNow?.srv ? { kind: 'server', host: playNow.srv.split(':')[0], port: +playNow.srv.split(':')[1] || 25565, ver: playNow.ver } : null)
+    : kind === 'here' ? (playNow?.srv ? { kind: 'server', host: playNow.srv.split(':')[0], port: +playNow.srv.split(':')[1] || 25565, ver: playNow.ver, label: playNow.srv } : null)
     : { kind: 'server', host: HOST, port: PORT, ver: playNow?.ver || '1.16.5', label: 'SafiMine' }
   if (!where) return { error: kind === 'world' ? 'Сначала откройте мир для друзей: ESC → «Открыть для сети»' : 'Сначала зайдите на сервер через лаунчер' }
   return friendsCall('invite', String(who || ''), false, '', { where }) })
 ipcMain.handle('friends:msg', (_, who, text) => friendsCall('msg', String(who || ''), false, '', { text: String(text || '').slice(0, 500) }))
 ipcMain.handle('friends:chat', (_, who, after) => friendsCall('chat', String(who || ''), false, '', { after: +after || 0 }))
-ipcMain.handle('friends:where', () => ({ world: !!hostNow, here: playNow?.srv || '', ver: playNow?.ver || '' }))
+ipcMain.handle('friends:where', () => { if (playNow && gameDirNow) { const l = liveServer(gameDirNow); if (l !== null) playNow.srv = l } return { world: !!hostNow, here: playNow?.srv || '', ver: playNow?.ver || '' } })
 ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, together }) => {
   const srv = server && server.host ? { host: String(server.host), port: +server.port || 25565 } : { host: HOST, port: PORT }
   if (game) return { error: 'Игра уже запущена' }
@@ -844,7 +856,8 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
     const fxOf = () => { const m = visNow()?.modules || {}; const c = m.cosmetics; const cos = c?.on ? `c:${+c.s?.wings || 0}.${+c.s?.hat || 0}.${+c.s?.back || 0}${c.s?.tint === false && c.s?.color ? '.' + String(c.s.color).replace('#', 'ff') : ''}` : ''
       return [m.halo?.on && 'halo', m.chinahat?.on && 'hat', m.trails?.on && 'trail', cos].filter(Boolean).join(',') }
     const beat = async () => { if (!tok) tok = await getToken(acc.name).catch(() => null)
-      const j = await fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf(), ver: version, host: hostNow, srv: join ? srv.host : '' }) }).then((x) => x.json()).catch(() => null); healTex(acc, tok, j?.has) }; playNow = { ver: version, srv: join ? srv.host + (srv.port && srv.port !== 25565 ? ':' + srv.port : '') : '' }; beat(); beatNow = beat; let cfgM = 0; const cfgF = path.join(dir, 'config', 'asteria-visuals.json')
+      const live = liveServer(dir, t0) ?? (join ? srv.host + (srv.port && srv.port !== 25565 ? ':' + srv.port : '') : ''); if (playNow) playNow.srv = live // "invite to my server" and the friends' "join him" follow where you really are
+      const j = await fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf(), ver: version, host: hostNow, srv: live }) }).then((x) => x.json()).catch(() => null); healTex(acc, tok, j?.has) }; playNow = { ver: version, srv: join ? srv.host + (srv.port && srv.port !== 25565 ? ':' + srv.port : '') : '' }; beat(); beatNow = beat; let cfgM = 0; const cfgF = path.join(dir, 'config', 'asteria-visuals.json')
     hb = setInterval(() => { let m = 0; try { m = fs.statSync(cfgF).mtimeMs } catch {} if (m !== cfgM && cfgM) beat(); cfgM = m || cfgM; if (++hbN % 20 === 0) beat() }, 1000); let hbN = 0 // registers right away, so other launcher players see the icon at once
     await addServer(dir).catch(() => {}); for (const x of [...PARTNER_SERVERS, ...((store.get('remoteConf') || {}).servers || []), ...myServers()]) if (x.ip && x.ip !== HOST) await addServerEntry(dir, x.name || x.ip, x.port && +x.port !== 25565 ? x.ip + ':' + x.port : x.ip).catch(() => {}) // put back every time, even if deleted in the game
     game = await l.launch(opts); gameVer = version
@@ -972,6 +985,12 @@ async function rpcSend(act) {
     await rpc.user.setActivity(act); rpcLast = key } catch { rpc = null; rpcReady = null } }
 const btns = () => { const c = store.get('remoteConf') || {}, d = (c.links || []).find((l) => l.icon === 'discord'); return [{ label: 'AsteriaLauncher', url: c.site || 'https://safimine.ru' }, ...(d ? [{ label: 'Discord', url: d.url }] : [])].slice(0, 2) }
 function rpcIdle() { clearInterval(rpcTimer); rpcT = Date.now(); rpcSend({ details: 'В лаунчере', state: 'Выбирает версию', startTimestamp: rpcT, largeImageKey: LOGO_URL, largeImageText: 'AsteriaLauncher', buttons: btns() }) }
+/** a server's icon for Discord (https://api.mcsrvstat.us/icon/<address>), only once it is known to be a real picture; null until then / without one */
+const iconOk = new Map()
+function serverIcon(addr) { const a = String(addr || '').toLowerCase(), u = 'https://api.mcsrvstat.us/icon/' + encodeURIComponent(a); if (!a) return null
+  if (!iconOk.has(a)) { iconOk.set(a, null); net.fetch(u, { signal: AbortSignal.timeout(10000) }).then(async (r) => { const t = r.headers.get('content-type') || '', b = r.ok && t.startsWith('image/') ? Buffer.from(await r.arrayBuffer()) : null
+      iconOk.set(a, !!b && b.length > 200); if (iconOk.get(a)) rpcLast = '' }).catch(() => iconOk.set(a, false)) } // the next tick sends the picture
+  return iconOk.get(a) ? u : null }
 function rpcGame(version, dir, joinHost) {
   clearInterval(rpcTimer); const start = Date.now(); try { fs.rmSync(path.join(dir, 'asteria-status.json'), { force: true }) } catch {}
   const tick = () => { let st = joinHost ? 'mp:' + joinHost : 'menu'
@@ -980,8 +999,9 @@ function rpcGame(version, dir, joinHost) {
     const conf = store.get('remoteConf') || {}, servers = [{ name: 'SafiMine', ip: HOST }, ...(conf.servers || [])]
     if (st.startsWith('mp:') && st.length > 3) { const ip = st.slice(3).replace(/:25565$/, ''), host = ip.split(':')[0].toLowerCase()
       const known = servers.find((x) => x.ip && host.endsWith(String(x.ip).toLowerCase().split(':')[0])), name = known?.name || ip
+      const icon = known?.icon || serverIcon(st.slice(3)) // checked first: Discord drops a broken picture and our small logo along with it
       return rpcSend({ details: 'Играет на ' + name, state: (settings().streamer ? 'Сервер скрыт' : ip) + ' · ' + version, startTimestamp: start,
-        largeImageKey: known?.icon || `https://api.mcsrvstat.us/icon/${host}`, largeImageText: name, smallImageKey: LOGO_URL, smallImageText: 'Minecraft ' + version + ' · AsteriaLauncher', buttons: btns() }) }
+        largeImageKey: icon || LOGO_URL, largeImageText: name, ...(icon ? { smallImageKey: LOGO_URL } : {}), smallImageText: 'Minecraft ' + version + ' · AsteriaLauncher', buttons: btns() }) }
     rpcSend({ details: st === 'sp' ? 'Одиночная игра' : 'В главном меню', state: 'Minecraft ' + version, startTimestamp: start, largeImageKey: LOGO_URL, largeImageText: 'AsteriaLauncher', buttons: btns() }) }
   tick(); rpcTimer = setInterval(tick, 5000) }
 app.whenReady().then(() => setTimeout(() => { resolveApi().then(() => rpcIdle()) }, 2500))

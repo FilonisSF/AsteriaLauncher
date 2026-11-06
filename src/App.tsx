@@ -372,7 +372,9 @@ export default function App() {
   const skinW = (data: string) => new Promise<number>((ok) => { const i = new Image(); i.onload = () => ok(i.naturalWidth); i.onerror = () => ok(0); i.src = data })
   const useSkin = async (data: string) => { if ((await skinW(data)) > 64) return say('HD-скины не поддерживаются: нужен обычный скин 64×64', 'err') // HD skins are off everywhere
     setSkin(data); const r = await api.saveTexture({ data, kind: 'skin', slim: variant === 'slim' }); say(r?.uploaded ? t('uploaded') : t('savedLocal')) }
-  const play = async (v: string, join = false, server?: any, extra?: { world?: string; together?: boolean }) => { if (!me) { setAddOpen(true); return say('Сначала добавьте аккаунт', 'info') } let r: any; try { r = await api.launch({ version: v, join, lang, server, ...(extra || {}) }) } catch (e: any) { r = { error: 'Не удалось запустить: ' + (e?.message || e) } } if (r?.warn) say(r.warn, 'info'); if (r?.error) say(r.error, 'err') }
+  const play = async (v: string, join = false, server?: any, extra?: { world?: string; together?: boolean }) => { if (!me) { setAddOpen(true); return say('Сначала добавьте аккаунт', 'info') } let r: any
+    const together = extra?.together ?? (() => { try { return localStorage.getItem('asteria.together') === '1' } catch { return false } })() // "play together" (Worlds) is remembered for every launch
+    try { r = await api.launch({ version: v, join, lang, server, ...(extra || {}), together }) } catch (e: any) { r = { error: 'Не удалось запустить: ' + (e?.message || e) } } if (r?.warn) say(r.warn, 'info'); if (r?.error) say(r.error, 'err') }
   const install = async (slug: string) => { setBusy(slug)
     if (kind === 'mod') { const list = targets.filter((x) => tsel.includes(x.key)); const tg = list.length ? list : [{ key: instKeyNow, version: ver }]
       const r = await api.modsInstallTo(slug, tg); const ok = r.filter((x: any) => x.ok).length; say(ok === r.length ? `Установлено: ${slug}${r.length > 1 ? ' · сборок: ' + ok : ''}` : `Установлено в ${ok} из ${r.length} — для части версий мода нет`) }

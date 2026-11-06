@@ -124,7 +124,7 @@ public final class Hud {
     /** the inventory screen: one Asteria panel over the vanilla picture, a soft tile under every slot, a dark stage for the player */
     public static void inventoryScreen(Gfx g, int x, int y, int w, int h, java.util.List<int[]> slots) {
         D.g = g; D.frame();
-        D.panel(x, y, x + w, y + h, 10, false);
+        D.round(x, y, x + w, y + h, 10, 0xF60A0E15); D.panel(x, y, x + w, y + h, 10, false); // an opaque base: with a see-through theme the vanilla picture showed through (doubled slots)
         D.round(x + 25, y + 7, x + 76, y + 79, 8, D.alpha(0x05080D, 170)); // the player's stage
         D.round(x + 25, y + 7, x + 76, y + 79, 8, D.a(V.a1(), 0.10f), D.a(V.a2(), 0.04f));
         for (int[] sl : slots) { float sx = x + sl[0] - 1, sy = y + sl[1] - 1; D.round(sx, sy, sx + 18, sy + 18, 4, 0x2EFFFFFF); D.round(sx + 0.5f, sy + 0.5f, sx + 17.5f, sy + 17.5f, 3.5f, D.alpha(0x070B12, 150)); }
@@ -135,13 +135,13 @@ public final class Hud {
     /** chests, shulker boxes, hoppers, dispensers: the same panel and slot tiles */
     public static void containerScreen(Gfx g, int x, int y, int w, int h, java.util.List<int[]> slots) {
         D.g = g; D.frame();
-        D.panel(x, y, x + w, y + h, 10, false);
+        D.round(x, y, x + w, y + h, 10, 0xF60A0E15); D.panel(x, y, x + w, y + h, 10, false); // an opaque base: with a see-through theme the vanilla picture showed through (doubled slots)
         for (int[] sl : slots) { float sx = x + sl[0] - 1, sy = y + sl[1] - 1; D.round(sx, sy, sx + 18, sy + 18, 4, 0x2EFFFFFF); D.round(sx + 0.5f, sy + 0.5f, sx + 17.5f, sy + 17.5f, 3.5f, D.alpha(0x070B12, 150)); }
     }
     /** the creative inventory: the same panel and slot tiles, and a scroll pill on the right instead of the vanilla scroller */
     public static void creativeScreen(Gfx g, int x, int y, int w, int h, java.util.List<int[]> slots, float scroll) {
         D.g = g; D.frame();
-        D.panel(x, y, x + w, y + h, 10, false);
+        D.round(x, y, x + w, y + h, 10, 0xF60A0E15); D.panel(x, y, x + w, y + h, 10, false); // an opaque base: with a see-through theme the vanilla picture showed through (doubled slots)
         for (int[] sl : slots) { float sx = x + sl[0] - 1, sy = y + sl[1] - 1; D.round(sx, sy, sx + 18, sy + 18, 4, 0x2EFFFFFF); D.round(sx + 0.5f, sy + 0.5f, sx + 17.5f, sy + 17.5f, 3.5f, D.alpha(0x070B12, 150)); }
         float tx = x + 175, ty = y + 18, th = 112; D.round(tx, ty, tx + 12, ty + th, 6, 0x22FFFFFF);
         float py = ty + 1 + (th - 17) * Math.max(0, Math.min(1, scroll)); D.round(tx + 1.5f, py, tx + 10.5f, py + 15, 4.5f, V.a1(), V.a2());

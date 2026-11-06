@@ -275,7 +275,7 @@ public class Remap {
                     nl.add(r != null ? r : sel); }
                 a.values.set(i + 1, nl);
             } else if (d.equals("Lorg/spongepowered/asm/mixin/injection/At;") && k.equals("target")) {
-                a.values.set(i + 1, mapMemberRef((String) v, rev, where));
+                a.values.set(i + 1, mapMemberRef((String) v, rev, where, targets));
             } else if ((d.equals("Lorg/spongepowered/asm/mixin/gen/Accessor;") || d.equals("Lorg/spongepowered/asm/mixin/gen/Invoker;")) && k.equals("value")) {
                 String n = (String) v; String r = null;
                 if (d.endsWith("Accessor;")) { for (String t : targets) { r = rev.findField(t, n, new HashSet<>()); if (r != null) break; } }
@@ -287,10 +287,16 @@ public class Remap {
         }
     }
     /** "Lowner;name(desc)ret" or "Lowner;field:Ltype;" (named) -> intermediary */
-    static String mapMemberRef(String s, R rev, String where) {
-        int semi = s.indexOf(';'); if (!s.startsWith("L") || semi < 0) return s;
+    static String mapMemberRef(String s, R rev, String where, List<String> targets) {
+        int semi = s.indexOf(';');
+        if (!s.startsWith("L") && s.indexOf('(') > 0) { // "name(desc)" without an owner: matches the call on any class (this.drawTexture is owned by each screen); named through the mixin targets' hierarchy
+            String name = s.substring(0, s.indexOf('(')), desc = s.substring(s.indexOf('('));
+            for (String t : targets) if (rev.findMethod(t, name, desc, new HashSet<>()) != null) return rev.mapMethodName(t, name, desc) + rev.mapMethodDesc(desc);
+            ERR.add(where + ": @At target not found in " + targets + ": " + s); return s; }
+        if (!s.startsWith("L") || semi < 0) return s;
         String owner = s.substring(1, semi), rest = s.substring(semi + 1);
         int p = rest.indexOf('('), c = rest.indexOf(':');
+        if (p < 0 && c < 0 && !rest.isEmpty() && H.containsKey(owner)) { ERR.add(where + ": @At target without a descriptor is never renamed (it would not match in the game): " + s); return s; }
         if (p >= 0) { String name = rest.substring(0, p), desc = rest.substring(p);
             if (!name.startsWith("<") && rev.findMethod(owner, name, desc, new HashSet<>()) == null && !owner.startsWith("java/") && rev.cls.containsKey(owner)) ERR.add(where + ": @At target not mapped: " + s);
             return "L" + rev.map(owner) + ";" + rev.mapMethodName(owner, name, desc) + rev.mapMethodDesc(desc); }

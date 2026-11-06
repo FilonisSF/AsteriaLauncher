@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Icon } from './Icons'
 import { Dropdown, Switch } from './ui'
+import schema from '../mods/common-visuals/resources/asteria/schema.json'
+const Skin3D = lazy(() => import('./Skin3D'))
 
 type World = { path: string; name: string; version: string; mtime: number; size: number; icon: string | null }
 type MapItem = { name: string; desc?: string; img?: string; url: string; ver?: string }
@@ -13,7 +15,8 @@ const ago = (t: number) => { const d = (Date.now() - t) / 60000; return d < 60 ?
 export function Worlds({ ver, versions, play, say, running, initial }: { initial?: 'mine' | 'maps' | 'friends'; ver: string; versions: { value: string; label: string }[]; play: (v: string, join?: boolean, server?: any, extra?: any) => void; say: (s: string, k?: 'ok' | 'err' | 'info') => void; running: boolean }) {
   const [view, setView] = useState<'mine' | 'maps' | 'friends'>(initial === 'maps' ? 'mine' : initial || 'mine')
   const [worlds, setWorlds] = useState<World[]>([]), [maps, setMaps] = useState<MapItem[]>([]), [target, setTarget] = useState(ver), [busy, setBusy] = useState('')
-  const [together, setTogether] = useState(false), [q, setQ] = useState(''), [ask, setAsk] = useState<World | null>(null)
+  const [together, setTogether0] = useState(() => { try { return localStorage.getItem('asteria.together') === '1' } catch { return false } }), [q, setQ] = useState(''), [ask, setAsk] = useState<World | null>(null)
+  const setTogether = (v: boolean) => { setTogether0(v); try { localStorage.setItem('asteria.together', v ? '1' : '0') } catch {} say(v ? 'Игра вместе включена: при запуске поставится мод e4mc. В мире нажмите ESC → «Открыть для сети», и друзья увидят кнопку «Присоединиться»' : 'Игра вместе выключена', 'info') }
   const load = () => api.worlds().then(setWorlds)
   useEffect(() => { load(); api.maps().then(setMaps); return api.onFiles?.((d: any) => { if (d.kind === 'saves') load() }) }, []) // worlds made or deleted in the game appear at once
   const instKey = (v: string) => v // instances are named after the version
@@ -64,8 +67,50 @@ export function Worlds({ ver, versions, play, say, running, initial }: { initial
   </div>
 }
 
-const Avatar = ({ n, on }: { n: string; on?: boolean }) => <span className="relative shrink-0"><img src={'https://mc-heads.net/avatar/' + n + '/40'} className="w-10 h-10 rounded-xl" style={{ background: 'var(--chip)' }} onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.2' }} />
+type Profile = { name: string; skin: string | null; own: boolean; cape: string | null; slim: boolean; cosm: { cape?: string; badge?: string; pet?: string; fx?: string } | null; player: any }
+const profiles = new Map<string, Promise<Profile | null>>()
+const profileOf = (n: string) => { const k = n.toLowerCase(); if (!profiles.has(k)) profiles.set(k, api.friendProfile(n).catch(() => null)); return profiles.get(k)! }
+/** a friend's head: the face (and hat layer) of the skin, drawn from the skin texture: the page itself may not load pictures from other sites */
+function Head({ n, s = 40 }: { n: string; s?: number }) {
+  const [skin, setSkin] = useState<string | null>(null); useEffect(() => { let off = false; profileOf(n).then((p) => { if (!off) setSkin(p?.skin || null) }); return () => { off = true } }, [n])
+  const bg = (x: number) => ({ position: 'absolute' as const, inset: 0, backgroundImage: `url(${skin})`, backgroundSize: '800% 800%', backgroundPosition: `${x / 56 * 100}% ${8 / 56 * 100}%`, imageRendering: 'pixelated' as const })
+  return <span className="rounded-xl overflow-hidden flex items-center justify-center text-white font-bold" style={{ position: 'relative', width: s, height: s, flex: 'none', background: skin ? 'var(--chip)' : 'linear-gradient(135deg,var(--a1),var(--a2))' }}>
+    {skin ? <><span style={bg(8)} /><span style={bg(40)} /></> : n[0]?.toUpperCase()}</span>
+}
+const Avatar = ({ n, on }: { n: string; on?: boolean }) => <span className="relative shrink-0"><Head n={n} />
   {on !== undefined && <i className="absolute -right-1 -bottom-1 w-3 h-3 rounded-full" style={{ background: on ? '#3ee08f' : '#6b7280', border: '2px solid var(--bg)' }} />}</span>
+const MODS = (schema as any).modules as { id: string; s?: { id: string; options?: string[] }[] }[]
+const opt = (mod: string, set: string, i: number) => MODS.find((m) => m.id === mod)?.s?.find((x) => x.id === set)?.options?.[i]
+/** the cosmetics a friend shows to others (what their launcher sends with its heartbeat), in words */
+function cosmeticsOf(c: Profile['cosm']): string[] {
+  if (!c) return []; const out: string[] = []
+  if (c.cape) out.push('Плащ'); if (c.badge) out.push('Значок')
+  const pet = /^(\d+):/.exec(c.pet || ''); if (pet) { const k = opt('pet', 'kind', +pet[1]); out.push('Питомец' + (k ? ': ' + k : '')) }
+  for (const f of (c.fx || '').split(',')) { if (f === 'halo') out.push('Нимб'); else if (f === 'hat') out.push('Китайская шляпа'); else if (f === 'trail') out.push('Шлейф')
+    else if (f.startsWith('c:')) { const [w, h, b] = f.slice(2).split('.').map(Number); if (w) out.push('Крылья: ' + (opt('cosmetics', 'wings', w) || w)); if (h) out.push('Шапка: ' + (opt('cosmetics', 'hat', h) || h)); if (b) out.push('На спине: ' + (opt('cosmetics', 'back', b) || b)) } }
+  return out
+}
+const srvOf = (a: string) => { const [host, port] = a.split(':'); return { host, port: +port || 25565 } }
+/** a friend's card: the skin in 3D with the cape, their cosmetics, where they play, and the way in */
+function FriendProfile({ n, p, close, play, running }: { n: string; p: Pres; close: () => void; play: (v: string, join?: boolean, server?: any) => void; running: boolean }) {
+  const [pr, setPr] = useState<Profile | null | undefined>(undefined); useEffect(() => { profileOf(n).then(setPr) }, [n])
+  const cos = cosmeticsOf(pr?.cosm || null), plan = pr?.player?.plan === 'PREMIUM', clan = pr?.player?.clan
+  return <div className="ask-bg" onClick={close}><div className="ask !max-w-[760px] w-full" onClick={(e) => e.stopPropagation()}>
+    <div className="flex gap-5 flex-wrap">
+      <div className="w-[280px] h-[340px] rounded-2xl overflow-hidden shrink-0" style={{ background: 'var(--chip)' }}>
+        {pr?.skin ? <Suspense fallback={null}><Skin3D skin={pr.skin} slim={!!pr.slim} cape={pr.cape || undefined} height={340} scale={6} /></Suspense>
+          : <div className="h-full flex items-center justify-center muted text-sm">{pr === undefined ? 'Загрузка…' : 'Скин недоступен'}</div>}</div>
+      <div className="flex-1 min-w-[260px] flex flex-col gap-3">
+        <div className="flex items-center gap-3"><Avatar n={n} on={p.online} /><div className="min-w-0"><b className="block text-xl truncate">{n}</b>
+          <div className="muted text-xs">{plan ? 'PREMIUM' : 'Игрок AsteriaLauncher'}{clan ? ' · клан ' + (clan.display || clan.name) : ''}</div></div></div>
+        <div className="card rounded-2xl p-3"><div className="muted text-[11px] mb-1">Сейчас</div>
+          <b className="text-sm">{!p.online ? 'Не в игре' : p.host ? 'Открыл свой мир для друзей · ' + (p.ver || '') : p.srv ? 'Играет на ' + p.srv + ' · ' + (p.ver || '') : 'В игре · ' + (p.ver || '')}</b>
+          {p.online && (p.host || p.srv) && p.ver && <button className="btn btn-primary !py-1.5 !px-4 text-sm mt-2 flex items-center gap-2" disabled={running}
+            onClick={() => { close(); play(p.ver!, true, p.host ? { host: p.host, port: 25565 } : srvOf(p.srv!)) }}><Icon n="play" s={13} />{p.host ? 'Присоединиться к миру' : 'Зайти к нему на сервер'}</button>}</div>
+        <div className="card rounded-2xl p-3"><div className="muted text-[11px] mb-2">Косметика{pr && !pr.own ? ' · скин по нику' : ''}</div>
+          {cos.length ? <div className="flex flex-wrap gap-1.5">{cos.map((c) => <span key={c} className="pill !text-xs">{c}</span>)}</div> : <div className="muted text-xs">{pr === undefined ? 'Загрузка…' : 'Ничего не надето'}</div>}</div>
+        <button className="pill self-end" onClick={close}>Закрыть</button></div></div></div></div>
+}
 /** a chat with one friend: the last 300 messages are kept on the Asteria server; new ones come every 2.5 s while it is open */
 function Chat({ who, close, say }: { who: string; close: () => void; say: (s: string, k?: 'ok' | 'err' | 'info') => void }) {
   const [msgs, setMsgs] = useState<{ f: string; x: string; t: number }[]>([]), [text, setText] = useState(''), [sending, setSending] = useState(false), box = useRef<HTMLDivElement>(null), last = useRef(0)
@@ -92,6 +137,7 @@ function Friends({ play, say, running }: { play: (v: string, join?: boolean, ser
   const add = () => { const c = nick.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length !== 8) return say('Код дружбы — 8 символов, например K7Q2-XD4M', 'err'); setNick(''); act('request', c, false, 'Заявка отправлена') }
   const pres = d?.pres || {}, sorted = [...(d?.friends || [])].sort((a, b) => +!!pres[b]?.online - +!!pres[a]?.online)
   const [chat, setChat] = useState(''), [unread, setUnread] = useState<Record<string, number>>({}), [inv, setInv] = useState(''), [where, setWhere] = useState<{ world: boolean; here: string; ver: string }>({ world: false, here: '', ver: '' })
+  const [showCode, setShowCode] = useState(false), [prof, setProf] = useState('')
   useEffect(() => api.onFriendNotes?.((l: any[]) => { const add: Record<string, number> = {}; for (const x of l) if (x.k === 'msg' && x.who.toLowerCase() !== (chat || '').toLowerCase()) add[x.who] = (add[x.who] || 0) + 1; if (Object.keys(add).length) setUnread((u) => { const n = { ...u }; for (const k in add) n[k] = (n[k] || 0) + add[k]; return n }) }), [chat])
   const invite = async (who: string, kind: string) => { setInv(''); const r = await api.friendInvite(who, kind); if (r?.error) return say(r.error, 'err'); say('Приглашение отправлено: ' + who, 'ok') }
   return <div className="flex flex-col gap-3">
@@ -99,7 +145,9 @@ function Friends({ play, say, running }: { play: (v: string, join?: boolean, ser
       <button className="pill" onClick={() => { navigator.clipboard.writeText(host); say('Адрес скопирован') }}><Icon n="copy" s={13} />Копировать</button></div>}
     {/* always on top: your own code (it comes from the Asteria server; until then the card says so) */}
     <div className="card rounded-3xl p-4 flex items-center gap-3"><Icon n="user" s={18} /><div className="flex-1"><b>Мой код дружбы</b><div className="muted text-xs">{d?.code ? 'Дайте его другу — по нику добавить нельзя, только по коду' : 'Код появится, как только сервер Asteria ответит'}</div></div>
-      <span className="font-mono text-lg font-bold tracking-widest">{d?.code || '····-····'}</span>{d?.code && <button className="pill" onClick={() => { navigator.clipboard.writeText(d.code!); say('Код скопирован') }}><Icon n="copy" s={13} />Копировать</button>}</div>
+      <span className="font-mono text-lg font-bold tracking-widest">{d?.code ? (showCode ? d.code : '••••-••••') : '····-····'}</span>
+      {d?.code && <button className="pill" title={showCode ? 'Скрыть код' : 'Показать код'} onClick={() => setShowCode(!showCode)}><Icon n={showCode ? 'eyeOff' : 'eye'} s={13} />{showCode ? 'Скрыть' : 'Показать'}</button>}
+      {d?.code && <button className="pill" onClick={() => { navigator.clipboard.writeText(d.code!); say('Код скопирован') }}><Icon n="copy" s={13} />Копировать</button>}</div>
     <div className="card rounded-3xl p-4 flex gap-2 items-center"><input className="flex-1 font-mono tracking-widest uppercase" maxLength={9} placeholder="Код дружбы друга: XXXX-XXXX" value={nick} onChange={(e) => setNick(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
       <button className="btn-add" onClick={add}><span className="ic"><Icon n="plus" s={14} /></span>Отправить заявку</button></div>
     {err && <div className="card rounded-2xl p-3 text-sm" style={{ color: '#ff8a8a' }}>{err}</div>}
@@ -112,10 +160,10 @@ function Friends({ play, say, running }: { play: (v: string, join?: boolean, ser
         <button className="pill !text-xs" title="Отменить заявку" onClick={() => act('remove', n)}><Icon n="close" s={11} /></button></div>)}</div>}
     {d && !d.friends.length && !d.incoming.length && <div className="card rounded-3xl p-8 text-center muted">Отправьте заявку по коду дружбы — когда её примут, увидите, кто в игре, на какой версии, и сможете зайти в мир друга одной кнопкой</div>}
     <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))' }}>
-      {sorted.map((n) => { const p = pres[n] || { online: false }; return <div key={n} className="card rounded-2xl p-3 flex items-center gap-3"><Avatar n={n} on={p.online} />
-        <div className="flex-1 min-w-0"><b className="block truncate">{n}</b><div className="muted text-[11px]">{!p.online ? 'Не в игре' : p.host ? 'Открыл мир · ' + p.ver : p.srv ? 'На сервере ' + p.srv + ' · ' + p.ver : 'В игре · ' + (p.ver || '')}</div></div>
+      {sorted.map((n) => { const p = pres[n] || { online: false }; return <div key={n} className="card rounded-2xl p-3 flex items-center gap-3"><button title="Профиль" onClick={() => setProf(n)}><Avatar n={n} on={p.online} /></button>
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setProf(n)}><b className="block truncate">{n}</b><div className="muted text-[11px]">{!p.online ? 'Не в игре' : p.host ? 'Открыл мир · ' + p.ver : p.srv ? 'На сервере ' + p.srv + ' · ' + p.ver : 'В игре · ' + (p.ver || '')}</div></div>
         {p.online && p.host && p.ver && <button className="btn !py-1 !px-3 text-xs" disabled={running} onClick={() => play(p.ver!, true, { host: p.host, port: 25565 })}>Присоединиться</button>}
-        {p.online && !p.host && p.srv && p.ver && <button className="pill !text-xs" disabled={running} onClick={() => play(p.ver!, true, { host: p.srv, port: 25565 })}>К нему</button>}
+        {p.online && !p.host && p.srv && p.ver && <button className="pill !text-xs" disabled={running} onClick={() => play(p.ver!, true, srvOf(p.srv!))}>К нему</button>}
         <button className="pill !text-xs relative" title="Написать" onClick={() => { setChat(n); setUnread((u) => ({ ...u, [n]: 0 })) }}><Icon n="chat" s={12} />Чат{!!unread[n] && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: '#ef4444' }}>{unread[n]}</span>}</button>
         <div className="relative"><button className="pill !text-xs" title="Позвать к себе" onClick={async () => { setWhere(await api.friendWhere()); setInv(inv === n ? '' : n) }}><Icon n="user" s={12} />Позвать</button>
           {inv === n && <><div className="fixed inset-0 z-40" onClick={() => setInv('')} /><div className="pop z-50 right-0" style={{ width: 250 }}><div className="muted text-xs px-2 pb-1">Позвать {n}</div>
@@ -124,5 +172,6 @@ function Friends({ play, say, running }: { play: (v: string, join?: boolean, ser
             <button className="target w-full text-left" onClick={() => invite(n, 'safimine')}><b className="text-sm">На SafiMine</b><span className="muted text-[11px] block">mc.safimine.ru</span></button></div></>}</div>
         <button className="pill !text-xs" title="Удалить из друзей" onClick={() => act('remove', n, false, n + ' удалён из друзей')}><Icon n="close" s={11} /></button></div> })}</div>
     {chat && <Chat who={chat} close={() => setChat('')} say={say} />}
+    {prof && <FriendProfile n={prof} p={pres[prof] || { online: false }} close={() => setProf('')} play={play} running={running} />}
     <div className="muted text-[11px]">Статус виден, когда друг играет через AsteriaLauncher. Игра вместе: включите «Играть вместе с друзьями» во вкладке «Мои миры», зайдите в мир и нажмите ESC → «Открыть для сети».</div></div>
 }
