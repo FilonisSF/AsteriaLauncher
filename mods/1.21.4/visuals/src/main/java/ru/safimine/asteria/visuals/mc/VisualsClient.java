@@ -39,7 +39,8 @@ public class VisualsClient implements ClientModInitializer {
     public static void tick(MinecraftClient c) {
         try {
             V.tick();
-            if (TEST_SHOT != null && c.currentScreen instanceof net.minecraft.client.gui.screen.TitleScreen && ++shotTick == 100) testShot(c); // test runs only (-Dasteria.test.shot=<png>)
+            if (TEST_SHOT != null && (c.currentScreen instanceof net.minecraft.client.gui.screen.TitleScreen || c.currentScreen instanceof net.minecraft.client.gui.screen.DisconnectedScreen) && ++shotTick == 100) testShot(c);
+            if (TEST_SHOT != null && System.getProperty("asteria.test.disc") != null && shotTick == 50) c.setScreen(new net.minecraft.client.gui.screen.DisconnectedScreen(c.currentScreen, net.minecraft.text.Text.literal("Не удалось подключиться к серверу"), net.minecraft.text.Text.literal("Тест: соединение потеряно"))); // test runs only // test runs only (-Dasteria.test.shot=<png>)
             while (MENU.wasPressed()) if (c.currentScreen == null) c.setScreen(new AsteriaScreen());
             Fx.zoomKey(ZOOM.isPressed() && c.currentScreen == null);
             if (c.player != null && V.on("autosprint") && c.options.forwardKey.isPressed() && !c.player.isSneaking() && c.player.getHungerManager().getFoodLevel() > 6 && !c.player.isUsingItem()) c.player.setSprinting(true);

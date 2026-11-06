@@ -81,7 +81,11 @@ public final class V {
     public static final List<Preset> PRESETS = new ArrayList<>();
     public static String activePreset = "";
     private static long presetsMtime = -2;
-    private static long mtime = -2, ownWrite = -1, dirtyAt = 0;
+    private static long mtime = -2, ownWrite = -1, dirtyAt = 0, cosmMtime = -2;
+    /** the modules that belong to an account (what other players see on you): kept in the account's own file (-Dasteria.cosm, written by
+     *  the launcher), so two accounts never share them, even in two windows of the same game folder */
+    static final java.util.Set<String> COSM = new java.util.HashSet<>(java.util.Arrays.asList("cosmetics", "halo", "chinahat", "trails", "pet", "elytrawings"));
+    private static File cosmFile;
     public static Runnable onChange = () -> {};
 
     public static void init(String username) {
@@ -104,6 +108,7 @@ public final class V {
         } catch (Exception ex) { throw new RuntimeException("Asteria: schema.json", ex); }
         String dir = System.getProperty("asteria.gamedir", new File(".").getAbsolutePath());
         file = new File(new File(dir, "config"), "asteria-visuals.json");
+        String cp = System.getProperty("asteria.cosm"); if (cp != null && !cp.isEmpty()) cosmFile = new File(cp);
         presetsFile = new File(file.getParentFile(), "asteria-visuals-presets.json");
         reload(true); reloadPresets();
     }
@@ -128,11 +133,11 @@ public final class V {
     public static void changed() { dirtyAt = System.currentTimeMillis(); onChange.run(); }
 
     private static void reload(boolean force) {
-        long m = file.exists() ? file.lastModified() : -1;
-        if (!force && (m == mtime || m == ownWrite)) { mtime = m; return; }
-        mtime = m;
-        if (m < 0) return;
-        try { apply(new JsonParser().parse(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8)).getAsJsonObject(), true); } catch (Exception ignored) {}
+        long m = file.exists() ? file.lastModified() : -1, cm = cosmFile != null && cosmFile.exists() ? cosmFile.lastModified() : -1;
+        if (!force && (m == mtime || m == ownWrite) && cm == cosmMtime) { mtime = m; return; }
+        mtime = m; cosmMtime = cm;
+        if (m >= 0) try { apply(new JsonParser().parse(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8)).getAsJsonObject(), true); } catch (Exception ignored) {}
+        if (cm >= 0) try { apply(new JsonParser().parse(new String(Files.readAllBytes(cosmFile.toPath()), StandardCharsets.UTF_8)).getAsJsonObject(), false); } catch (Exception ignored) {} // the account's cosmetics win
     }
     private static void reloadPresets() {
         long m = presetsFile.exists() ? presetsFile.lastModified() : -1;
@@ -188,6 +193,8 @@ public final class V {
             file.getParentFile().mkdirs();
             Files.write(file.toPath(), new GsonBuilder().setPrettyPrinting().create().toJson(o).getBytes(StandardCharsets.UTF_8));
             ownWrite = file.lastModified(); mtime = ownWrite;
+            if (cosmFile != null) { JsonObject c = new JsonObject(), cm = new JsonObject(); for (String k : COSM) if (mods.has(k)) cm.add(k, mods.get(k)); c.add("modules", cm);
+                cosmFile.getParentFile().mkdirs(); Files.write(cosmFile.toPath(), new GsonBuilder().setPrettyPrinting().create().toJson(c).getBytes(StandardCharsets.UTF_8)); cosmMtime = cosmFile.lastModified(); }
             saveToPreset(o);
         } catch (Exception ignored) {}
     }

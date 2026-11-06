@@ -130,6 +130,14 @@ public final class Hud {
         for (int[] sl : slots) { float sx = x + sl[0] - 1, sy = y + sl[1] - 1; D.round(sx, sy, sx + 18, sy + 18, 4, 0x2EFFFFFF); D.round(sx + 0.5f, sy + 0.5f, sx + 17.5f, sy + 17.5f, 3.5f, D.alpha(0x070B12, 150)); }
         D.icon("chevR", x + 136, y + 29, 12, D.a(V.a2(), 0.9f)); // crafting arrow (the "Создание" title is the game's own, made light by the mixin)
     }
+    /** "Disconnected" / "Failed to connect": an Asteria card under the game's text and button instead of the bare dirt screen */
+    public static void disconnectPanel(Gfx g, int W, int H) {
+        D.g = g; D.frame(); float w = Math.min(W - 40, 400), h = Math.min(H - 40, 180), x = (W - w) / 2, y = H / 2f - h / 2 - 6;
+        D.round(0, 0, W, H, 0, 0x99000000);
+        D.round(x - 5, y - 5, x + w + 5, y + h + 5, 18, D.a(0xFFFF5470, 0.10f));
+        D.round(x, y, x + w, y + h, 14, 0xF60A0E15); D.panel(x, y, x + w, y + h, 14, false);
+        D.round(x + 16, y, x + w - 16, y + 2.5f, 1.2f, 0xFFFF5470, D.a(V.a1(), 0.9f)); // a red-to-theme line on top
+    }
     /** the colour of the screen titles on our panel */
     public static final int LABEL = 0xC9D6DE;
     /** chests, shulker boxes, hoppers, dispensers: the same panel and slot tiles */

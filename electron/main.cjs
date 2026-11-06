@@ -126,9 +126,33 @@ function writeVisuals(dir, v = store.get('visuals')) { if (!v) return; try { con
 const visLatest = () => { let best = store.get('visuals', null), t = store.get('visualsAt', 0)
   for (const d of instanceDirs()) { const f = path.join(d, 'config', 'asteria-visuals.json'); try { const m = fs.statSync(f).mtimeMs; if (m > t + 1500) { best = JSON.parse(fs.readFileSync(f, 'utf8')); t = m } } catch {} }
   if (best !== store.get('visuals', null)) { store.set('visuals', best); store.set('visualsAt', t) }
-  return best }
+  return withCosm(best, activeName()) }
+// ---- cosmetics belong to an account (halo, trail, china hat, wings / hat / back, pet, wing-elytra, and the launcher's cape / badge choice):
+// each account has config/asteria-cosm/<nick>.json in every game folder (the mod reads it over the shared config: -Dasteria.cosm), so switching
+// accounts, or two accounts in two windows, never carry one's cosmetics to the other
+const COSM_MODS = ['cosmetics', 'halo', 'chinahat', 'trails', 'pet', 'elytrawings']
+const activeName = () => (store.get('accounts', []).find((a) => a.id === store.get('active'))?.name || '').toLowerCase()
+const cosmFile = (dir, name) => path.join(dir, 'config', 'asteria-cosm', String(name).toLowerCase().replace(/[^a-z0-9_]/g, '_') + '.json')
+const cosmPart = (v) => { const o = {}; for (const k of COSM_MODS) if (v?.modules?.[k]) o[k] = v.modules[k]; return o }
+/** the account's cosmetics: its file (freshest copy among the game folders), else what the store kept; null = never set */
+function accCosm(name) { if (!name) return null; let best = null, t = -1
+  for (const d of instanceDirs()) { const f = cosmFile(d, name); try { const m = fs.statSync(f).mtimeMs; if (m > t) { best = JSON.parse(fs.readFileSync(f, 'utf8')).modules || {}; t = m } } catch {} }
+  return best || store.get('accCosm', {})[name]?.vis || null }
+/** writes the account's cosmetics into every game folder (and the store) */
+function setAccCosm(name, part) { if (!name) return; const all = store.get('accCosm', {}); all[name] = { ...(all[name] || {}), vis: part }; store.set('accCosm', all)
+  for (const d of instanceDirs()) try { const f = cosmFile(d, name); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify({ modules: part }, null, 1)) } catch {} }
+/** the shared config with this account's cosmetics in it (an account without any: all of them off) */
+function withCosm(v, name) { if (!v || !name) return v; const own = accCosm(name), nv = JSON.parse(JSON.stringify(v)); nv.modules = nv.modules || {}
+  for (const k of COSM_MODS) { if (own?.[k]) nv.modules[k] = own[k]; else if (own && nv.modules[k]) nv.modules[k] = { ...nv.modules[k], on: false } } return nv }
+/** before an account is used: its file exists (the very first account keeps what the shared config had, a new one starts with nothing on) */
+function ensureAccCosm(name) { if (!name || accCosm(name)) return; const first = !Object.keys(store.get('accCosm', {})).length
+  const base = store.get('visuals', null), part = cosmPart(base); if (!first) for (const k of Object.keys(part)) part[k] = { ...part[k], on: false }; setAccCosm(name, part) }
+/** the active account changes: its cosmetics (and cape / badge) come in, the previous one's stay with it */
+function switchAccount(id) { const from = activeName(); if (from) { ensureAccCosm(from); const all = store.get('accCosm', {}); all[from] = { ...(all[from] || {}), launcher: store.get('cosmetics', {}) }; store.set('accCosm', all) }
+  store.set('active', id); const to = activeName(); if (!to || to === from) return; ensureAccCosm(to)
+  store.set('cosmetics', store.get('accCosm', {})[to]?.launcher || {}); const v = visLatest(); if (v) { store.set('visuals', v); store.set('visualsAt', Date.now()); for (const d of instanceDirs()) writeVisuals(d, v) } }
 ipcMain.handle('vis:get', () => visLatest())
-const visSave = (v) => { store.set('visuals', v); store.set('visualsAt', Date.now()); for (const d of instanceDirs()) writeVisuals(d, v); setTimeout(() => beatNow?.(), 50); return { live: !!game } } // the mod re-reads the file every second
+const visSave = (v) => { store.set('visuals', v); store.set('visualsAt', Date.now()); for (const d of instanceDirs()) writeVisuals(d, v); setAccCosm(activeName(), cosmPart(v)); setTimeout(() => beatNow?.(), 50); return { live: !!game } } // the mod re-reads the file every second
 ipcMain.handle('vis:set', (_, v) => visSave(v))
 /** one module changed (Skins page cards): merged into the freshest config, so cards and the Visuals page never overwrite each other with an old copy */
 ipcMain.handle('vis:patch', (_, id, patch) => { const v = visLatest() || { modules: {} }; v.modules = v.modules || {}; const o = v.modules[id] || {}
@@ -393,7 +417,7 @@ ipcMain.handle('mods:list', async (_, ver) => {
 ipcMain.handle('mods:toggle', (_, file, ver) => { const d = path.join(inst(settings(), ver), 'mods'), f = path.join(d, path.basename(file))
   fs.renameSync(f, f.endsWith('.disabled') ? f.slice(0, -9) : f + '.disabled') })
 ipcMain.handle('mods:remove', (_, file, ver) => fs.rmSync(path.join(inst(settings(), ver), 'mods', path.basename(file)), { force: true }))
-ipcMain.handle('cosm:set', (_, c) => { store.set('cosmetics', c); beatNow?.() })
+ipcMain.handle('cosm:set', (_, c) => { store.set('cosmetics', c); const n = activeName(); if (n) { const all = store.get('accCosm', {}); all[n] = { ...(all[n] || {}), launcher: c }; store.set('accCosm', all) } beatNow?.() })
 app.whenReady().then(() => { create(); poll().then(() => !lastSt?.online && setTimeout(poll, 4000)); setInterval(poll, 20000) })
 ipcMain.on('win', (_, a) => { if (a === 'min') win.minimize(); else if (a === 'max') win.isMaximized() ? win.unmaximize() : win.maximize(); else win.close() })
 ipcMain.handle('link', (_, u) => LINKS.test(u) && shell.openExternal(u))
@@ -402,14 +426,14 @@ ipcMain.handle('settings:set', (_, s) => { store.set('settings', s); return sett
 ipcMain.handle('acc:list', () => ({ list: store.get('accounts', []).map(pub), active: store.get('active') }))
 ipcMain.handle('acc:offline', (_, name) => {
   const a = { id: 'off-' + Date.now(), name, type: 'offline', auth: offlineAuth(name) }
-  store.set('accounts', [...store.get('accounts', []), a]); store.set('active', a.id); return a.id
+  store.set('accounts', [...store.get('accounts', []), a]); switchAccount(a.id); return a.id
 })
 ipcMain.handle('acc:ms', async () => { try {
   const { Auth } = require('msmc') // msmc v5 API; adjust if you install another major
   const x = await new Auth('select_account').launch('electron')
   const mc = await x.getMinecraft()
   const a = { id: 'ms-' + mc.profile.id, name: mc.profile.name, type: 'microsoft', auth: mc.mclc(), refresh: x.save() }
-  store.set('accounts', [...store.get('accounts', []).filter((v) => v.id !== a.id), a]); store.set('active', a.id); return a.id
+  store.set('accounts', [...store.get('accounts', []).filter((v) => v.id !== a.id), a]); switchAccount(a.id); return a.id
   } catch (e) { const m = String(e?.message || e || '')
     if (/gui\.closed|closed|cancel/i.test(m)) return { cancelled: true, info: 'Вход через Microsoft отменён' }
     if (/no\.?mc|not.?own|xbox|child|ban/i.test(m)) return { error: 'На этом аккаунте Microsoft нет лицензии Minecraft (или он не прошёл проверку Xbox)' }
@@ -424,7 +448,7 @@ function useAccountTextures() { try { const acc = store.get('accounts', []).find
     if (!others) { for (const f of TEX_FILES) if (fs.existsSync(path.join(dst, f))) fs.copyFileSync(path.join(dst, f), path.join(src, f)); return } // the very first account keeps the files it already had
     for (const f of TEX_FILES) fs.rmSync(path.join(dst, f), { force: true }); return } // a new account starts clean: it never gets the skin / cape of another one
   for (const f of TEX_FILES) { const a = path.join(src, f), b = path.join(dst, f); if (fs.existsSync(a)) fs.copyFileSync(a, b); else fs.rmSync(b, { force: true }) } } catch {} }
-ipcMain.handle('acc:select', (_, id) => { store.set('active', id); useAccountTextures(); return true })
+ipcMain.handle('acc:select', (_, id) => { switchAccount(id); useAccountTextures(); return true })
 ipcMain.handle('acc:textures', () => useAccountTextures())
 ipcMain.handle('acc:remove', (_, id) => store.set('accounts', store.get('accounts', []).filter((a) => a.id !== id)))
 ipcMain.handle('dir:open', () => shell.openPath(settings().dir))
@@ -584,10 +608,14 @@ ipcMain.handle('game:alt', async (_, { accountId, version, join }) => {
   const opts = { root: s.dir, overrides: { gameDirectory: dir }, authorization: acc.type === 'offline' ? offlineAuth(acc.name) : acc.auth, version: { number: version, type: 'release', ...(wantFabric && fab ? { custom: fab } : {}) },
     memory: { max: Math.max(2048, Math.round(s.ramMb * 0.75)) + 'M', min: '1024M' }, customLaunchArgs: ['--width', '1100', '--height', '640'], javaPath,
     customArgs: [...s.jvm.split(/\s+/).filter(Boolean), '-Djava.net.useSystemProxies=true', '-Dasteria.launcher=1', '-Dasteria.api=' + apiBase(), '-Dasteria.user=' + acc.name, '-Dasteria.gamedir=' + dir, '-Dasteria.root=' + s.dir,
-      '-Dasteria.skin=' + path.join(tex, 'current.png'), '-Dasteria.cape=' + path.join(tex, 'cape.png'), ...(acc.type === 'offline' ? OFFLINE : LICENSED), ...relayArgs(relay)],
+      '-Dasteria.skin=' + path.join(tex, 'current.png'), '-Dasteria.cape=' + path.join(tex, 'cape.png'), '-Dasteria.cosm=' + cosmFile(dir, acc.name), ...(acc.type === 'offline' ? OFFLINE : LICENSED), ...relayArgs(relay)],
     ...(join ? { quickPlay: { type: /^(1\.2\d|2\d\.)/.test(version) ? 'multiplayer' : 'legacy', identifier: HOST + ':' + PORT } } : {}) }
+  ensureAccCosm(acc.name.toLowerCase()); setAccCosm(acc.name.toLowerCase(), accCosm(acc.name.toLowerCase()) || {})
   try { const p = await l.launch(opts); if (!p) return { error: 'Не удалось запустить' }
-    alts.set(accountId, p); p.on('close', () => { alts.delete(accountId); try { win?.webContents.send('alts', [...alts.keys()]) } catch {} }); try { win?.webContents.send('alts', [...alts.keys()]) } catch {}
+    const tok = await getToken(acc.name).catch(() => null), altBeat = () => { const v = withCosm(store.get('visuals', null) || { modules: {} }, acc.name.toLowerCase())
+      fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...(store.get('accCosm', {})[acc.name.toLowerCase()]?.launcher || {}), pet: petOfVis(v, s.dir), fx: fxOfVis(v), ver: version, host: '', srv: liveServer(dir) || (join ? HOST : '') }) }).catch(() => {}) }
+    altBeat(); const altHb = setInterval(altBeat, 20000)
+    alts.set(accountId, p); p.on('close', () => { clearInterval(altHb); alts.delete(accountId); try { win?.webContents.send('alts', [...alts.keys()]) } catch {} }); try { win?.webContents.send('alts', [...alts.keys()]) } catch {}
     return { ok: true } } catch (e) { return { error: 'Не удалось запустить: ' + (e?.message || e) } } })
 ipcMain.handle('game:alts', () => [...alts.keys()])
 // the whole process tree: java may sit under a helper process, so a plain kill() left the window open
@@ -744,6 +772,12 @@ let hostNow = '', beatNow = null // beatNow: send the heartbeat at once (cosmeti
 // requests go through the Asteria server under the active account; new notices (request / accepted / declined) are pushed to the window
 let friendsLast = null
 /** where the running game is: the server address from the mod's asteria-status.json ("mp:host:port", fresh this session), '' in a menu / own world, null if unknown */
+/** what other players see: the pet ("<kind>:<size>", ":m" = mini-me with a skin from the launcher) and the effects, from a visuals config */
+function petOfVis(v, sdir) { const p = v?.modules?.pet; if (!p?.on) return ''
+  const mini = +p.s?.kind === 9 && +p.s?.miniskin === 1 && fs.existsSync(path.join(sdir, 'skins', 'mini.png'))
+  return `${+p.s?.kind || 0}:${(+p.s?.size || 1).toFixed(2)}${mini ? ':m' : ''}` }
+function fxOfVis(v) { const m = v?.modules || {}; const c = m.cosmetics; const cos = c?.on ? `c:${+c.s?.wings || 0}.${+c.s?.hat || 0}.${+c.s?.back || 0}${c.s?.tint === false && c.s?.color ? '.' + String(c.s.color).replace('#', 'ff') : ''}` : ''
+  return [m.halo?.on && 'halo', m.chinahat?.on && 'hat', m.trails?.on && 'trail', cos].filter(Boolean).join(',') }
 function liveServer(dir, since) { try { const j = JSON.parse(fs.readFileSync(path.join(dir, 'asteria-status.json'), 'utf8')); if (!j.ts || j.ts < (since || 0) - 5000 || Date.now() - j.ts > 30000) return null
   return String(j.state || '').startsWith('mp:') ? String(j.state).slice(3).toLowerCase().replace(/:25565$/, '') : '' } catch { return null } }
 // a friend's profile: skin, cape and cosmetics from the Asteria server (5 min cache), the head falls back to the licence skin by nick
@@ -821,13 +855,19 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
       if (modern || core) { send('Fabric', 5, '', 2); custom = await prepareFabric(s, version, (st, p) => send('Fabric', p, st, 2), legacy).catch(() => null) } }
     if (custom && core) fs.copyFileSync(core, path.join(md, 'asteria-core.jar'))
     if (custom && vis && store.get('visualsOn', true) !== false) fs.copyFileSync(vis, path.join(md, 'asteria-visuals.jar')) // 'Visuals off' = play without the mod
+    ensureAccCosm(acc.name.toLowerCase()); setAccCosm(acc.name.toLowerCase(), accCosm(acc.name.toLowerCase()) || {}) // the account's cosmetics file in this game folder too
     let togetherWarn = ''; hostNow = ''
     if (together) { if (!custom) togetherWarn = 'Игра вместе работает через Fabric-мод e4mc — Fabric не установился'; else { send('e4mc', 8, '', 2); await installSlug('e4mc', version, md).catch(() => { togetherWarn = 'Мод e4mc для ' + version + ' не найден — для игры вместе выберите 1.20.1 или 1.21.4' }) } }
+    { // e4mc stays only while "play together" is on (once put in, it never left). With it Krypton is rested: both rewrite the login to the
+      // integrated server, Mixin skipped one of them and joining your own world ended on "Disconnected". A Krypton turned off by hand stays off
+      const e4 = path.join(md, 'mod-e4mc.jar'), kr = path.join(md, 'mod-krypton.jar'), krOff = kr + '.disabled', key = 'krRested:' + version
+      if (together && custom) { if (fs.existsSync(kr)) { fs.rmSync(krOff, { force: true }); fs.renameSync(kr, krOff); store.set(key, true) } }
+      else { fs.rmSync(e4, { force: true }); fs.rmSync(e4 + '.disabled', { force: true }); if (store.get(key) && fs.existsSync(krOff) && !fs.existsSync(kr)) fs.renameSync(krOff, kr); store.delete(key) } }
     const warn = (wantFabric && modern && !custom ? 'Fabric не установился (нет связи с meta.fabricmc.net?) — игра запущена без модов: без звезды, визуалов и FPS-буста' : '') || togetherWarn
     writeVisuals(dir); writePresets(dir); writeBg(dir); writeVoice(dir); writeModels(dir); const relay = await relayStart()
     const opts = { root: s.dir, overrides: { gameDirectory: dir }, authorization: acc.type === 'offline' ? offlineAuth(acc.name) : acc.auth, version: { number: version, type: 'release', ...(custom ? { custom } : {}) },
       memory: { max: s.ramMb + 'M', min: Math.min(s.ramMb, 2048) + 'M' }, customLaunchArgs: ['--width', String(winW), '--height', String(winH), ...(s.fullscreen ? ['--fullscreen'] : [])], javaPath,
-      customArgs: [...s.jvm.split(/\s+/).filter(Boolean), '-Djava.net.useSystemProxies=true' /* skins, Mojang keys and our API go through the Windows proxy, like in the browser */, '-Dasteria.launcher=1', '-Dasteria.api=' + apiBase(), '-Dasteria.user=' + acc.name, '-Dasteria.gamedir=' + dir, '-Dasteria.root=' + s.dir,
+      customArgs: [...s.jvm.split(/\s+/).filter(Boolean), '-Djava.net.useSystemProxies=true' /* skins, Mojang keys and our API go through the Windows proxy, like in the browser */, '-Dasteria.launcher=1', '-Dasteria.api=' + apiBase(), '-Dasteria.user=' + acc.name, '-Dasteria.gamedir=' + dir, '-Dasteria.root=' + s.dir, '-Dasteria.cosm=' + cosmFile(dir, acc.name),
         ...(acc.type === 'offline' ? OFFLINE : LICENSED), ...relayArgs(relay)],
       // 'Join SafiMine': MCLC ignores the old server option, quickPlay works (1.20+ understands --quickPlayMultiplayer, older versions --server/--port)
       ...(join ? { quickPlay: { type: /^(1\.2\d|2\d\.)/.test(version) ? 'multiplayer' : 'legacy', identifier: srv.host + ':' + srv.port } } : {}),
@@ -850,11 +890,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
       playNow = null; try { send('', 0); win?.webContents.send('game', false); if (win?.isMinimized()) win.restore() } catch {} })
     let tok = await getToken(acc.name).catch(() => null) // null when the backend was asleep: asked again with the next heartbeats
     const visNow = () => { try { return JSON.parse(fs.readFileSync(path.join(dir, 'config', 'asteria-visuals.json'), 'utf8')) } catch { return null } }
-    const petOf = () => { const p = visNow()?.modules?.pet; if (!p?.on) return '' // other Asteria players see your pet (":m" = mini-me with a skin from the launcher)
-      const mini = +p.s?.kind === 9 && +p.s?.miniskin === 1 && fs.existsSync(path.join(s.dir, 'skins', 'mini.png'))
-      return `${+p.s?.kind || 0}:${(+p.s?.size || 1).toFixed(2)}${mini ? ':m' : ''}` }
-    const fxOf = () => { const m = visNow()?.modules || {}; const c = m.cosmetics; const cos = c?.on ? `c:${+c.s?.wings || 0}.${+c.s?.hat || 0}.${+c.s?.back || 0}${c.s?.tint === false && c.s?.color ? '.' + String(c.s.color).replace('#', 'ff') : ''}` : ''
-      return [m.halo?.on && 'halo', m.chinahat?.on && 'hat', m.trails?.on && 'trail', cos].filter(Boolean).join(',') }
+    const petOf = () => petOfVis(withCosm(visNow(), acc.name.toLowerCase()), s.dir), fxOf = () => fxOfVis(withCosm(visNow(), acc.name.toLowerCase())) // this account's own cosmetics
     const beat = async () => { if (!tok) tok = await getToken(acc.name).catch(() => null)
       const live = liveServer(dir, t0) ?? (join ? srv.host + (srv.port && srv.port !== 25565 ? ':' + srv.port : '') : ''); if (playNow) playNow.srv = live // "invite to my server" and the friends' "join him" follow where you really are
       const j = await fetch(apiBase() + '/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: acc.name, token: tok, ...store.get('cosmetics', {}), pet: petOf(), fx: fxOf(), ver: version, host: hostNow, srv: live }) }).then((x) => x.json()).catch(() => null); healTex(acc, tok, j?.has) }; playNow = { ver: version, srv: join ? srv.host + (srv.port && srv.port !== 25565 ? ':' + srv.port : '') : '' }; beat(); beatNow = beat; let cfgM = 0; const cfgF = path.join(dir, 'config', 'asteria-visuals.json')

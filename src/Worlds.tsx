@@ -16,7 +16,7 @@ export function Worlds({ ver, versions, play, say, running, initial }: { initial
   const [view, setView] = useState<'mine' | 'maps' | 'friends'>(initial === 'maps' ? 'mine' : initial || 'mine')
   const [worlds, setWorlds] = useState<World[]>([]), [maps, setMaps] = useState<MapItem[]>([]), [target, setTarget] = useState(ver), [busy, setBusy] = useState('')
   const [together, setTogether0] = useState(() => { try { return localStorage.getItem('asteria.together') === '1' } catch { return false } }), [q, setQ] = useState(''), [ask, setAsk] = useState<World | null>(null)
-  const setTogether = (v: boolean) => { setTogether0(v); try { localStorage.setItem('asteria.together', v ? '1' : '0') } catch {} say(v ? 'Игра вместе включена: при запуске поставится мод e4mc. В мире нажмите ESC → «Открыть для сети», и друзья увидят кнопку «Присоединиться»' : 'Игра вместе выключена', 'info') }
+  const setTogether = (v: boolean) => { setTogether0(v); try { localStorage.setItem('asteria.together', v ? '1' : '0') } catch {} say(v ? 'Игра вместе включена: при запуске поставится мод e4mc. В мире нажмите ESC → «Открыть для сети», и друзья увидят кнопку «Присоединиться»' : 'Игра вместе выключена: мод e4mc уберётся при следующем запуске игры' + (running ? ' (сейчас игра уже идёт)' : ''), 'info') }
   const load = () => api.worlds().then(setWorlds)
   useEffect(() => { load(); api.maps().then(setMaps); return api.onFiles?.((d: any) => { if (d.kind === 'saves') load() }) }, []) // worlds made or deleted in the game appear at once
   const instKey = (v: string) => v // instances are named after the version
