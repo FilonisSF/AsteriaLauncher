@@ -21,7 +21,7 @@ export function Worlds({ ver, versions, play, say, running, initial }: { initial
   const [view, setView] = useState<'mine' | 'maps' | 'friends'>(initial === 'maps' ? 'mine' : initial || 'mine')
   const [worlds, setWorlds] = useState<World[]>([]), [maps, setMaps] = useState<MapItem[]>([]), [target, setTarget] = useState(ver), [busy, setBusy] = useState('')
   const [together, setTogether0] = useState(() => { try { return localStorage.getItem('asteria.together') === '1' } catch { return false } }), [q, setQ] = useState(''), [ask, setAsk] = useState<World | null>(null)
-  const setTogether = (v: boolean) => { setTogether0(v); try { localStorage.setItem('asteria.together', v ? '1' : '0') } catch {} say(v ? 'Игра вместе включена: при запуске поставится мод e4mc. В мире нажмите ESC → «Открыть для сети», и друзья увидят кнопку «Присоединиться»' : 'Игра вместе выключена: мод e4mc уберётся при следующем запуске игры' + (running ? ' (сейчас игра уже идёт)' : ''), 'info') }
+  const setTogether = (v: boolean) => { setTogether0(v); try { localStorage.setItem('asteria.together', v ? '1' : '0') } catch {} say(v ? 'Игра вместе включена: в мире нажмите ESC → «Открыть для сети», и друзья увидят кнопку «Присоединиться». Работает через сервер Asteria из любой страны' : 'Игра вместе выключена' + (running ? ' (сейчас игра уже идёт)' : ''), 'info') }
   const load = () => api.worlds().then(setWorlds)
   useEffect(() => { load(); api.maps().then(setMaps); return api.onFiles?.((d: any) => { if (d.kind === 'saves') load() }) }, []) // worlds made or deleted in the game appear at once
   const instKey = (v: string) => v // instances are named after the version
@@ -39,7 +39,7 @@ export function Worlds({ ver, versions, play, say, running, initial }: { initial
         <div className="relative w-64"><input className="w-full !pl-10" placeholder="Поиск мира" value={q} onChange={(e) => setQ(e.target.value)} /><span className="absolute left-3 top-2.5 muted"><Icon n="search" s={18} /></span></div>
         <button className="btn-add" onClick={imp}><span className="ic"><Icon n="plus" s={14} /></span>Добавить мир</button>
         <button className="pill" onClick={() => api.worldOpenSaves(instKey(target))}><Icon n="folder" s={13} />Папка миров {target}</button>
-        <div className="ml-auto w-[330px]"><Switch on={together} set={setTogether} label="Играть вместе с друзьями" hint="Ставит мод e4mc. В игре: ESC → «Открыть для сети»" /></div></div>
+        <div className="ml-auto w-[330px]"><Switch on={together} set={setTogether} label="Играть вместе с друзьями" hint="Через сервер Asteria — из любой страны и сети. В игре: ESC → «Открыть для сети»" /></div></div>
       {!shown.length && <div className="card rounded-3xl p-8 text-center muted">Миров пока нет — создайте мир в игре, добавьте свой архив или скачайте карту</div>}
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
         {shown.map((w) => <div key={w.path} className="card rounded-3xl p-3 flex gap-3 items-center">

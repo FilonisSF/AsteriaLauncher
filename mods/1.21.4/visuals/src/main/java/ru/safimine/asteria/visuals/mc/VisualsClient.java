@@ -40,6 +40,10 @@ public class VisualsClient implements ClientModInitializer {
         try {
             V.tick();
             if (TEST_SHOT != null && (c.currentScreen instanceof net.minecraft.client.gui.screen.TitleScreen || c.currentScreen instanceof net.minecraft.client.gui.screen.DisconnectedScreen) && ++shotTick == 100) testShot(c);
+            if (System.getProperty("asteria.test.lan") != null && c.currentScreen instanceof net.minecraft.client.gui.screen.TitleScreen && c.getServer() == null && ++titleTick == 40) // test runs only: load the world
+                c.createIntegratedServerLoader().start(System.getProperty("asteria.test.world", "Новый мир"), () -> {});
+            if (System.getProperty("asteria.test.lan") != null && c.getServer() != null && c.player != null && ++lanTick == 60) { int port = net.minecraft.util.NetworkUtils.findLocalPort(); // test runs only: the world opened to friends at once
+                System.out.println("[Asteria test] lan " + c.getServer().openToLan(net.minecraft.world.GameMode.SURVIVAL, false, port) + " port " + port); }
             if (TEST_SHOT != null && System.getProperty("asteria.test.disc") != null && shotTick == 50) c.setScreen(new net.minecraft.client.gui.screen.DisconnectedScreen(c.currentScreen, net.minecraft.text.Text.literal("Не удалось подключиться к серверу"), net.minecraft.text.Text.literal("Тест: соединение потеряно"))); // test runs only // test runs only (-Dasteria.test.shot=<png>)
             while (MENU.wasPressed()) if (c.currentScreen == null) c.setScreen(new AsteriaScreen());
             Fx.zoomKey(ZOOM.isPressed() && c.currentScreen == null);
@@ -96,7 +100,7 @@ public class VisualsClient implements ClientModInitializer {
     public static float ttfShadow(Object glyph, float o) { return V.allFont && V.font > 0 && glyph != null && TTF.get(glyph.getClass()) ? o * 0.5f : o; }
     /** a glyph atlas of our fonts (asteria_visuals:f<N>s<k>/<page>, f<N>h<k>/<page>): drawn with smooth filtering */
     public static boolean smoothFont(Identifier id) { String p = id.getPath(); return "asteria_visuals".equals(id.getNamespace()) && p.length() > 1 && p.charAt(0) == 'f' && Character.isDigit(p.charAt(1)); }
-    private static final String TEST_SHOT = System.getProperty("asteria.test.shot"); private static int shotTick;
+    private static final String TEST_SHOT = System.getProperty("asteria.test.shot"); private static int shotTick, lanTick, titleTick;
     /** test runs only: the game's picture (main framebuffer) to a PNG, to look at fonts and the HUD without a person at the screen */
     private static void testShot(MinecraftClient c) {
         try { Class<?>[] pre = {net.minecraft.client.gui.screen.ingame.InventoryScreen.class, net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen.class, net.minecraft.client.gui.screen.ingame.GenericContainerScreen.class, net.minecraft.client.gui.screen.ingame.ShulkerBoxScreen.class, net.minecraft.client.gui.screen.ingame.CraftingScreen.class, net.minecraft.client.gui.screen.ingame.FurnaceScreen.class, net.minecraft.client.gui.screen.ingame.BrewingStandScreen.class, net.minecraft.client.gui.screen.ingame.AnvilScreen.class, net.minecraft.client.gui.screen.ingame.EnchantmentScreen.class, net.minecraft.client.gui.screen.ingame.BeaconScreen.class, net.minecraft.client.gui.screen.ingame.HorseScreen.class}; System.out.println("[Asteria test] screens loaded: " + pre.length); } catch (Throwable t) { t.printStackTrace(); } // their mixins apply on load: -Dmixin.debug.countInjections shows any that missed

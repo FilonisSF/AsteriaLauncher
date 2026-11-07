@@ -237,7 +237,7 @@ const server = http.createServer((req, res) => {
         const isFriend = me.f.some((x) => x.toLowerCase() === w)
         if (j.act === 'invite') { if (!isFriend) return json({ error: 'not friend' }, 400); const p = j.where || {}
           const where = { kind: p.kind === 'world' ? 'world' : 'server', host: String(p.host || '').toLowerCase(), port: Math.max(1, Math.min(65535, +p.port || 25565)), ver: MC.test(String(p.ver || '')) ? String(p.ver) : '', label: String(p.label || '').slice(0, 40) }
-          if (!/^([a-z0-9-]+\.)+[a-z0-9-]{2,}$/.test(where.host) || where.host.length > 80) return json({ error: 'bad address' }, 400)
+          if (!/^(([a-z0-9-]+\.)+[a-z0-9-]{2,}|asteria:[a-z2-9]{6})$/.test(where.host) || where.host.length > 80) return json({ error: 'bad address' }, 400) // asteria:<code> = a world opened through our relay
           note(w, 'invite', j.name, { where }); return json({ ok: true }) }
         if (j.act === 'msg') { if (!isFriend) return json({ error: 'not friend' }, 400); const text = String(j.text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 500); if (!text) return json({ error: 'empty' }, 400)
           const k = pair(n, w), m = { f: j.name, x: text, t: Date.now() }; chats[k] = [...(chats[k] || []), m].slice(-300); chatsDirty = true; note(w, 'msg', j.name, { text: text.slice(0, 140) }); return json({ ok: true, m }) }
@@ -251,7 +251,7 @@ const server = http.createServer((req, res) => {
     if (url === '/heartbeat') {
       adopt(n, j.token)
       if (tokens[n] && !authed(n, j.token)) return json({ error: 'owned' }, 403)
-      online.set(n, Date.now()); seenDb[n] = Date.now(); presence.set(n, { ver: /^[0-9.]{3,10}$/.test(String(j.ver || '')) ? String(j.ver) : '', host: /^([a-z0-9-]+\.)+e4mc\.link$/.test(String(j.host || '')) ? String(j.host) : '', srv: /^[a-z0-9.-]{0,60}(:\d{1,5})?$/i.test(String(j.srv || '')) ? String(j.srv || '').toLowerCase() : '' }); setCosm(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?(:m)?$/.test(String(j.pet || '')) ? String(j.pet) : '', fx: /^[a-z0-9:.,]{0,60}$/.test(String(j.fx || '')) ? String(j.fx || '') : '' }) // pet: "<kind>:<size>" from the visuals, '' = none
+      online.set(n, Date.now()); seenDb[n] = Date.now(); presence.set(n, { ver: /^[0-9.]{3,10}$/.test(String(j.ver || '')) ? String(j.ver) : '', host: /^(([a-z0-9-]+\.)+e4mc\.link|asteria:[A-Z2-9]{6})$/.test(String(j.host || '')) ? String(j.host) : '', srv: /^[a-z0-9.-]{0,60}(:\d{1,5})?$/i.test(String(j.srv || '')) ? String(j.srv || '').toLowerCase() : '' }); setCosm(n, { cape: String(j.cape || ''), badge: String(j.badge || ''), pet: /^\d{1,2}:\d(\.\d+)?(:m)?$/.test(String(j.pet || '')) ? String(j.pet) : '', fx: /^[a-z0-9:.,]{0,60}$/.test(String(j.fx || '')) ? String(j.fx || '') : '' }) // pet: "<kind>:<size>" from the visuals, '' = none
       const has = {}; for (const k of ['skin', 'cape', 'mini']) has[k] = fs.existsSync(path.join(DATA, 'skins', `${k}-${n}.png`))
       return json({ ok: true, ...planOf(n), has }) // the launcher uploads again what is missing (a wiped backend)
     }
@@ -276,6 +276,10 @@ const server = http.createServer((req, res) => {
     json({ error: 'not found' }, 404)
   })
 })
+// "play together": the relay between a host's opened world and the friends joining it (electron/tunnel.cjs), over this same HTTPS address
+const tunnel = require('../electron/tunnel.cjs').relay((name, token) => { const n = String(name).toLowerCase(); if (!NAME.test(n)) return false; adopt(n, token); return authed(n, token) })
+server.on('upgrade', (req, sock, head) => { sock.on('error', () => {}); const u = new URL(req.url, 'http://x'), url = u.pathname.replace(/\/+$/, '').replace(/^\/asteria(?=\/|$)/, '') || '/'
+  if (!tunnel(req, sock, head, url, u.searchParams)) sock.destroy() })
 const PORT = +process.env.PORT || 8080
 server.on('error', (e) => {
   if (e.code === 'EADDRINUSE') { console.log(`\n!! Порт ${PORT} уже занят: сервер Asteria (возможно, старой версии из другой папки) уже запущен.\n   Закройте его окно и запустите start-backend.bat ещё раз — он сам закроет старый сервер.`); process.exit(1) }

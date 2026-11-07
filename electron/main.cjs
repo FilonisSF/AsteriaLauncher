@@ -6,6 +6,7 @@ const os = require('os'), crypto = require('crypto')
 const path = require('path'), fs = require('fs')
 const Store = require('electron-store')
 const { Client, Authenticator } = require('minecraft-launcher-core')
+const tunnel = require('./tunnel.cjs') // play together: our own relay
 const store = new Store({ encryptionKey: 'safimine-local-key' }) // tokens stay in main process
 const HOST = 'mc.safimine.ru', PORT = 25565
 const API_DEFAULT = process.env.ASTERIA_API || 'https://asteria-api-1ndm.onrender.com/asteria' // the Asteria server on Render (render.yaml): online list, tab icon, skins, pets, config codes
@@ -767,24 +768,30 @@ ipcMain.handle('maps:cf', async (_, mod, file, ver, name) => { await resolveApi(
     const res = await net.fetch(j.url); if (!res.ok) throw new Error('HTTP ' + res.status); fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer()))
     return { name: unpackWorld(tmp, ver, String(name || '').replace(/[\/:*?"<>|]/g, '').slice(0, 60) || undefined) } }
   catch (e) { return { error: 'Не скачалось: ' + e.message } } finally { fs.rmSync(tmp, { force: true }) } })
-// ------------------------------------------------------------------ friends: a local list, presence (in game, version, e4mc address) from the Asteria server
-let hostNow = '', beatNow = null // beatNow: send the heartbeat at once (cosmetics changed in the launcher) // the e4mc address of the world this player opened to friends
+// ------------------------------------------------------------------ friends: a local list, presence (in game, version, the code of an opened world) from the Asteria server
+let hostNow = '', beatNow = null // beatNow: send the heartbeat at once (cosmetics changed in the launcher) // "asteria:<code>" of the world this player opened to friends
 // requests go through the Asteria server under the active account; new notices (request / accepted / declined) are pushed to the window
 let friendsLast = null
-/** e4mc in the game log: the domain given to the opened world (never the broker the mod connects to, which friends cannot join),
- *  its error (nothing to join: say why instead of handing out a dead address), and the world being closed */
+/** "play together" through our own relay (electron/tunnel.cjs on the Asteria backend, plain HTTPS: any country, any network).
+ *  The game log says the port of a world opened to the network ("Local game hosted on port [N]"): the world gets a code, friends
+ *  see "asteria:<code>" and their launcher connects them through the relay. Closing the world closes it */
+let hostTunnel = null, joinTunnels = [], gameAcc = '', gameTogether = false
+function stopHostTunnel() { if (hostTunnel) { hostTunnel.close(); hostTunnel = null } if (hostNow) { hostNow = ''; try { win?.webContents.send('together', { host: '' }) } catch {} beatNow?.() } }
+async function startHostTunnel(port) { stopHostTunnel(); if (!gameAcc) return
+  const token = await getToken(gameAcc).catch(() => null); await resolveApi().catch(() => {})
+  hostTunnel = tunnel.host(apiBase(), gameAcc, token, port, (code) => { hostNow = 'asteria:' + code; try { win?.webContents.send('together', { host: hostNow }) } catch {} beatNow?.() },
+    (e) => { try { win?.webContents.send('together', { host: '', error: 'Не получилось открыть мир для друзей: сервер Asteria не ответил (' + (e?.message || e) + '). Проверьте интернет и снова ESC → «Открыть для сети»' }) } catch {} }) }
 function togetherLog(line) {
-  // (a friend's domain we connect to, or the broker we ping, is not our world)
-  if (!/Connecting to|\bping\b|Unknown host|Connect(ed|ing) to server/i.test(line)) for (const m of line.matchAll(/\b((?:[a-z0-9-]+\.)+e4mc\.link)\b/gi)) { const d = m[1].toLowerCase(); if (/^broker\./.test(d) || d === hostNow) continue
-    hostNow = d; try { win?.webContents.send('together', { host: d }) } catch {} beatNow?.() }
-  if (/error occurred in e4mc|e4mc.*(exception|failed|error)/i.test(line) && !/\bat [a-z]/.test(line)) { const was = hostNow; hostNow = ''
-    try { win?.webContents.send('together', { host: '', error: 'e4mc не смог открыть мир для друзей: его сервер недоступен из вашей сети (часто блокирует провайдер). Попробуйте VPN или другую сеть и снова ESC → «Открыть для сети»' }) } catch {} if (was) beatNow?.() }
-  if (hostNow && /Stopping server|Stopping singleplayer server|Saving worlds/i.test(line)) { hostNow = ''; try { win?.webContents.send('together', { host: '' }) } catch {} beatNow?.() } }
+  const p = /(?:hosted on port|локального сервера|Started serving on)\D{0,12}(\d{2,5})/i.exec(line); if (p && gameTogether && !/\bat [a-z]/.test(line)) { startHostTunnel(+p[1]); return } // only with "play together" on
+  if (/Stopping server|Stopping singleplayer server/i.test(line)) stopHostTunnel() }
+/** a friend's world "asteria:<code>" becomes a local port our relay connects (kept while the game runs) */
+async function friendAddr(srv) { if (!/^asteria:/i.test(srv.host)) return srv; await resolveApi().catch(() => {})
+  const j = await tunnel.join(apiBase(), srv.host.slice(8).toUpperCase()); joinTunnels.push(j); return { host: '127.0.0.1', port: j.port } }
 /** "join a friend" while the game runs: the core mod connects the running game (asteria-join.json); a different version cannot */
-ipcMain.handle('game:joinLive', (_, { host, port, ver }) => { if (!game || !gameDirNow) return { error: 'Игра не запущена' }
+ipcMain.handle('game:joinLive', async (_, { host, port, ver }) => { if (!game || !gameDirNow) return { error: 'Игра не запущена' }
   if (ver && gameVer && ver !== gameVer) return { error: `Друг играет на ${ver}, а у вас запущена ${gameVer} — закройте игру, и лаунчер запустит нужную версию` }
-  if (!/^[a-z0-9.-]{1,120}$/i.test(String(host || ''))) return { error: 'Неверный адрес' }
-  try { fs.writeFileSync(path.join(gameDirNow, 'asteria-join.json'), JSON.stringify({ host: String(host), port: +port || 25565, t: Date.now() })); return { ok: true } } catch (e) { return { error: 'Не получилось: ' + e.message } } })
+  if (!/^([a-z0-9.-]{1,120}|asteria:[a-z2-9]{6})$/i.test(String(host || ''))) return { error: 'Неверный адрес' }
+  try { const a = await friendAddr({ host: String(host), port: +port || 25565 }); fs.writeFileSync(path.join(gameDirNow, 'asteria-join.json'), JSON.stringify({ host: a.host, port: a.port, t: Date.now() })); return { ok: true } } catch (e) { return { error: 'Не получилось: ' + e.message } } })
 /** where the running game is: the server address from the mod's asteria-status.json ("mp:host:port", fresh this session), '' in a menu / own world, null if unknown */
 /** what other players see: the pet ("<kind>:<size>", ":m" = mini-me with a skin from the launcher) and the effects, from a visuals config */
 function petOfVis(v, sdir) { const p = v?.modules?.pet; if (!p?.on) return ''
@@ -845,7 +852,8 @@ ipcMain.handle('friends:msg', (_, who, text) => friendsCall('msg', String(who ||
 ipcMain.handle('friends:chat', (_, who, after) => friendsCall('chat', String(who || ''), false, '', { after: +after || 0 }))
 ipcMain.handle('friends:where', () => { if (playNow && gameDirNow) { const l = liveServer(gameDirNow); if (l !== null) playNow.srv = l } return { world: !!hostNow, here: playNow?.srv || '', ver: playNow?.ver || '' } })
 ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, together }) => {
-  const srv = server && server.host ? { host: String(server.host), port: +server.port || 25565 } : { host: HOST, port: PORT }
+  let srv = server && server.host ? { host: String(server.host), port: +server.port || 25565 } : { host: HOST, port: PORT }
+  if (/^asteria:/i.test(srv.host)) try { srv = await friendAddr(srv) } catch (e) { return { error: 'Не получилось подключиться к миру друга: ' + (e?.message || e) } } // a world opened through our relay
   if (game) return { error: 'Игра уже запущена' }
   const ext = await externalGame(true); if (ext) { try { win?.webContents.send('game', true) } catch {} return { error: `Minecraft ${ext.version || ''} уже запущен — закройте его или нажмите «Остановить»` } }
   const s = settings(), acc = store.get('accounts', []).find((a) => a.id === store.get('active'))
@@ -871,12 +879,9 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
     if (custom && vis && store.get('visualsOn', true) !== false) fs.copyFileSync(vis, path.join(md, 'asteria-visuals.jar')) // 'Visuals off' = play without the mod
     ensureAccCosm(acc.name.toLowerCase()); setAccCosm(acc.name.toLowerCase(), accCosm(acc.name.toLowerCase()) || {}) // the account's cosmetics file in this game folder too
     let togetherWarn = ''; hostNow = ''
-    if (together) { if (!custom) togetherWarn = 'Игра вместе работает через Fabric-мод e4mc — Fabric не установился'; else { send('e4mc', 8, '', 2); await installSlug('e4mc', version, md).catch(() => { togetherWarn = 'Мод e4mc для ' + version + ' не найден — для игры вместе выберите 1.20.1 или 1.21.4' }) } }
-    { // e4mc stays only while "play together" is on (once put in, it never left). With it Krypton is rested: both rewrite the login to the
-      // integrated server, Mixin skipped one of them and joining your own world ended on "Disconnected". A Krypton turned off by hand stays off
-      const e4 = path.join(md, 'mod-e4mc.jar'), kr = path.join(md, 'mod-krypton.jar'), krOff = kr + '.disabled', key = 'krRested:' + version
-      if (together && custom) { if (fs.existsSync(kr)) { fs.rmSync(krOff, { force: true }); fs.renameSync(kr, krOff); store.set(key, true) } }
-      else { fs.rmSync(e4, { force: true }); fs.rmSync(e4 + '.disabled', { force: true }); if (store.get(key) && fs.existsSync(krOff) && !fs.existsSync(kr)) fs.renameSync(krOff, kr); store.delete(key) } }
+    gameAcc = acc.name; gameTogether = !!together // "play together" goes through our relay (electron/tunnel.cjs): nothing to install in the game
+    { const md2 = md, e4 = path.join(md2, 'mod-e4mc.jar'), kr = path.join(md2, 'mod-krypton.jar'), key = 'krRested:' + version // e4mc (the old way) leaves; a Krypton rested for it comes back
+      fs.rmSync(e4, { force: true }); fs.rmSync(e4 + '.disabled', { force: true }); if (store.get(key) && fs.existsSync(kr + '.disabled') && !fs.existsSync(kr)) fs.renameSync(kr + '.disabled', kr); store.delete(key) }
     const warn = (wantFabric && modern && !custom ? 'Fabric не установился (нет связи с meta.fabricmc.net?) — игра запущена без модов: без звезды, визуалов и FPS-буста' : '') || togetherWarn
     writeVisuals(dir); writePresets(dir); writeBg(dir); writeVoice(dir); writeModels(dir); const relay = await relayStart()
     const opts = { root: s.dir, overrides: { gameDirectory: dir }, authorization: acc.type === 'offline' ? offlineAuth(acc.name) : acc.auth, version: { number: version, type: 'release', ...(custom ? { custom } : {}) },
@@ -893,10 +898,10 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
     l.on('debug', (m) => { logBuf.push(String(m)); if (logBuf.length > 1000) logBuf.splice(0, 300) })
     l.on('data', (m) => { // NOTE: no per-line IPC — joining a world prints thousands of lines
       logBuf.push(String(m).trimEnd()); if (logBuf.length > 1000) logBuf.splice(0, 300)
-      togetherLog(String(m)) // the world opened to friends (its e4mc domain), e4mc failing, the world closed
+      togetherLog(String(m)) // a world opened to friends (its port goes through our relay), the world closed
       if (!started) { started = true; t0 = Date.now(); gameDirNow = dir; coverWritten = {}; rpcGame(version, dir, join ? srv.host : null); send('', 0); try { win?.webContents.send('game', true) } catch {}; if (s.hideOnLaunch !== false) win?.minimize() } })
     l.on('close', (code) => { const playedMs = t0 ? Date.now() - t0 : 0; if (code && playedMs < 120000) crashReason(dir, code) // a crash right at the start: tell the player why
-      if (hb) clearInterval(hb); beatNow = null; game = null; gameVer = null; gameDirNow = null; hostNow = ''
+      if (hb) clearInterval(hb); stopHostTunnel(); for (const j of joinTunnels.splice(0)) j.close(); gameAcc = ''; beatNow = null; game = null; gameVer = null; gameDirNow = null; hostNow = ''
       fs.rmSync(path.join(dir, 'asteria-live.flag'), { force: true })
       if (Object.keys(pendingOpts).length) { setOpts(dir, pendingOpts); pendingOpts = {} } // the game may rewrite options.txt on exit: keep what was changed in the launcher
       if (t0) { const el = Date.now() - t0, pv = store.get('perVer', {}); store.set('playMs', store.get('playMs', 0) + el); pv[version] = (pv[version] || 0) + el; store.set('perVer', pv); store.set('launches', store.get('launches', 0) + 1) }
