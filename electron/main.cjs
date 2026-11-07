@@ -1,5 +1,5 @@
 const zlib = require('zlib')
-const { app, BrowserWindow, ipcMain, shell, dialog, net, nativeImage, clipboard, screen, Notification, session } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, dialog, net, nativeImage, clipboard, screen, Notification, session, safeStorage } = require('electron')
 const { spawnSync, execFileSync } = require('child_process')
 app.commandLine.appendSwitch('proxy-bypass-list', '<local>')
 const os = require('os'), crypto = require('crypto')
@@ -418,6 +418,34 @@ ipcMain.handle('mods:list', async (_, ver) => {
 ipcMain.handle('mods:toggle', (_, file, ver) => { const d = path.join(inst(settings(), ver), 'mods'), f = path.join(d, path.basename(file))
   fs.renameSync(f, f.endsWith('.disabled') ? f.slice(0, -9) : f + '.disabled') })
 ipcMain.handle('mods:remove', (_, file, ver) => fs.rmSync(path.join(inst(settings(), ver), 'mods', path.basename(file)), { force: true }))
+// ------------------------------------------------------------------ the safimine.ru account: the inventory (prizes, rewards, vouchers), purchases and the balance
+// The site's own Supabase project; the key is the public one the site itself ships. The session is kept encrypted by Windows (safeStorage).
+const SITE = { url: 'https://zgzetqupgqbtxipcqkjd.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpnemV0cXVwZ3FidHhpcGNxa2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4MTA5ODgsImV4cCI6MjEwMjM4Njk4OH0.in7KfnmJTbOB_n95xHboYh0yOSZm2rmuarL7uiZNuW4' }
+const siteSave = (s) => { if (!s) return store.delete('siteSession'); try { store.set('siteSession', safeStorage.isEncryptionAvailable() ? 'enc:' + safeStorage.encryptString(JSON.stringify(s)).toString('base64') : JSON.stringify(s)) } catch {} }
+const siteLoad = () => { const v = store.get('siteSession', null); if (!v) return null; try { return JSON.parse(String(v).startsWith('enc:') ? safeStorage.decryptString(Buffer.from(String(v).slice(4), 'base64')) : v) } catch { return null } }
+let siteRefreshing = null
+async function siteFetch(pathq, opt = {}, auth = true) { let s = auth ? siteLoad() : null; if (auth && !s) throw new Error('Войдите в аккаунт safimine.ru')
+  if (s && Date.now() > s.exp - 60000) { siteRefreshing = siteRefreshing || siteAuth('refresh_token', { refresh_token: s.refresh }).catch(() => null).finally(() => { setTimeout(() => { siteRefreshing = null }, 0) }) // one refresh for all the requests: a refresh token works once
+    const r = await siteRefreshing; if (!r) { siteSave(null); throw new Error('Сессия истекла — войдите снова') } s = r }
+  const r = await net.fetch(SITE.url + pathq, { ...opt, headers: { apikey: SITE.key, authorization: 'Bearer ' + (s ? s.access : SITE.key), 'content-type': 'application/json', ...(opt.headers || {}) }, signal: AbortSignal.timeout(15000) })
+  const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null } catch {}
+  if (!r.ok) throw new Error(j?.message || j?.error_description || j?.msg || ('Сайт ответил ' + r.status)); return j }
+async function siteAuth(grant, body) { const r = await net.fetch(`${SITE.url}/auth/v1/token?grant_type=${grant}`, { method: 'POST', headers: { apikey: SITE.key, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) })
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(/invalid login|invalid_grant|credentials/i.test(JSON.stringify(j)) ? 'Неверная почта или пароль' : /not confirmed/i.test(JSON.stringify(j)) ? 'Подтвердите почту по ссылке из письма' : (j.error_description || j.msg || 'Не получилось войти'))
+  const s = { access: j.access_token, refresh: j.refresh_token, exp: Date.now() + (j.expires_in || 3600) * 1000, uid: j.user?.id, email: j.user?.email }; siteSave(s); return s }
+ipcMain.handle('site:login', async (_, email, pass) => { try { await siteAuth('password', { email: String(email || '').trim(), password: String(pass || '') }); return { ok: true } } catch (e) { return { error: e.message } } })
+ipcMain.handle('site:logout', () => { siteSave(null); return true })
+/** everything the Inventory tab shows: the account, stored and taken items, purchases, the balance */
+ipcMain.handle('site:inventory', async () => { const s = siteLoad(); if (!s) return { signedIn: false }
+  try { const uid = (siteLoad() || s).uid
+    const [me, items, orders, wallet] = await Promise.all([siteFetch(`/rest/v1/profiles?select=nick,nick_verified&id=eq.${uid}`), siteFetch('/rest/v1/inventory?select=id,title,icon,rarity,source,status,created_at,claimed_at&order=created_at.desc&limit=300'),
+      siteFetch('/rest/v1/orders?select=id,title,price,status,kind,created_at&order=created_at.desc&limit=100'), siteFetch(`/rest/v1/wallets?select=balance&user_id=eq.${uid}`)])
+    return { signedIn: true, email: (siteLoad() || s).email, nick: me?.[0]?.nick || '', verified: !!me?.[0]?.nick_verified, items: items || [], orders: orders || [], balance: +(wallet?.[0]?.balance || 0) }
+  } catch (e) { return { signedIn: !!siteLoad(), error: e.message } } })
+ipcMain.handle('site:claim', async (_, ids) => { const done = [], errors = []
+  for (const id of [].concat(ids || []).slice(0, 100)) try { const r = await siteFetch('/rest/v1/rpc/inventory_claim', { method: 'POST', body: JSON.stringify({ p_id: +id }) }); done.push(r?.title || id) } catch (e) { errors.push(e.message); if (/подтвердите ник|Войдите|Сессия/i.test(e.message)) break }
+  return { done, error: errors[0] || '' } })
+ipcMain.handle('site:voucher', async (_, code) => { try { return { ok: true, r: await siteFetch('/rest/v1/rpc/redeem_voucher', { method: 'POST', body: JSON.stringify({ p_code: String(code || '').trim() }) }) } } catch (e) { return { error: e.message } } })
 ipcMain.handle('cosm:set', (_, c) => { store.set('cosmetics', c); const n = activeName(); if (n) { const all = store.get('accCosm', {}); all[n] = { ...(all[n] || {}), launcher: c }; store.set('accCosm', all) } beatNow?.() })
 app.whenReady().then(() => { create(); poll().then(() => !lastSt?.online && setTimeout(poll, 4000)); setInterval(poll, 20000) })
 ipcMain.on('win', (_, a) => { if (a === 'min') win.minimize(); else if (a === 'max') win.isMaximized() ? win.unmaximize() : win.maximize(); else win.close() })

@@ -14,6 +14,7 @@ import GameSettings from './GameSettings'
 import VisualsTab, { visDefaults, petPic } from './VisualsTab'
 import { MapsCatalog } from './MapsCatalog'
 import { Worlds, joinFriend } from './Worlds'
+import { Inventory } from './Inventory'
 import { LookPreview } from './LookPreview'
 import { BackupCard, UninstallCard } from './Backup'
 import { LegalCard } from './Legal'
@@ -39,8 +40,8 @@ const OVR: Record<string, string> = Object.fromEntries(Object.entries({ ...(impo
 /** news without an uploaded picture get official Minecraft key art that fits the topic */
 const NEWSART: Record<string, string[]> = { wipe: ['26.1', '1.21.11', '1.21.4'], news: ['1.20.1', '1.20.4'], ender: ['1.19.4', '1.19'], spawners: ['1.21.4', '1.21'], apiary: ['1.15.2', '1.15'], about: ['1.18.2', '1.18'] }
 const CAPES = glob(cos, 'cape-'), SKINS = glob(cos, 'skin-'), POSTERS = Object.fromEntries(glob(pos, 'v-'))
-const NAV: [string, string][] = [['home', 'home'], ['versions', 'versions'], ['mods', 'mods'], ['visuals', 'sparkles'], ['skins', 'skins'], ['worlds', 'cube'], ['profile', 'user'], ['servers', 'servers'], ['screenshots', 'image'], ['settings', 'settings']]
-const SHORT: Record<string, string> = { home: 'Главная', versions: 'Версии', mods: 'Моды', visuals: 'Визуалы', skins: 'Скины', worlds: 'Миры', profile: 'Профиль', servers: 'Серверы', screenshots: 'Скрины', settings: 'Настройки' }
+const NAV: [string, string][] = [['home', 'home'], ['versions', 'versions'], ['mods', 'mods'], ['visuals', 'sparkles'], ['skins', 'skins'], ['worlds', 'cube'], ['inventory', 'gift'], ['profile', 'user'], ['servers', 'servers'], ['screenshots', 'image'], ['settings', 'settings']]
+const SHORT: Record<string, string> = { home: 'Главная', versions: 'Версии', mods: 'Моды', visuals: 'Визуалы', skins: 'Скины', worlds: 'Миры', inventory: 'Инвентарь', profile: 'Профиль', servers: 'Серверы', screenshots: 'Скрины', settings: 'Настройки' }
 const ACCENTS: Record<string, [string, string]> = { aqua: ['#0ea5e9', '#22d3ee'], blue: ['#2563eb', '#60a5fa'], violet: ['#7c3aed', '#c084fc'], pink: ['#db2777', '#f9a8d4'], rose: ['#e11d48', '#fb7185'],
   red: ['#dc2626', '#f87171'], orange: ['#ea580c', '#fdba74'], amber: ['#d97706', '#fcd34d'], lime: ['#65a30d', '#bef264'], emerald: ['#059669', '#34d399'], teal: ['#0d9488', '#5eead4'], slate: ['#475569', '#cbd5e1'],
   // two-colour gradients
@@ -652,6 +653,7 @@ export default function App() {
                 <div className="flex gap-4 flex-wrap text-sm mb-3">{storage.items.map((x: any, i: number) => <span key={x.key}><span className="inline-block w-2.5 h-2.5 rounded-full mr-1.5" style={{ background: ['#22d3ee', '#a855f7', '#f59e0b', '#f43f5e'][i] }} />{t(['profiles', 'gameFiles', 'java', 'cache'][i])} — {(x.bytes / 1048576).toFixed(0)} MB</span>)}</div>
                 {storage.profiles.map((p: any) => <div key={p.name} className="row !cursor-default"><span className="flex-1">Minecraft {p.name}</span><span className="muted text-sm">{(p.bytes / 1048576).toFixed(0)} MB</span></div>)}</>}</div>
           </div>}
+          {tab === 'inventory' && <Inventory say={say} />}
           {tab === 'worlds' && <Worlds key={worldsView} initial={worldsView as any} ver={ver} versions={verOpts} play={play} say={say} running={running} />}
           {tab === 'visuals' && <VisualsTab plan="PREMIUM" bg={visBg} say={say} ver={ASTERIA[ver] === 'full' ? ver : rec} onBuy={shop} />}
         </main>
