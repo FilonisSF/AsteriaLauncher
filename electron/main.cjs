@@ -287,6 +287,7 @@ const relayStart = () => relayPort ? Promise.resolve(relayPort) : new Promise((o
 })
 const relayArgs = (port) => port ? [`-Dminecraft.api.session.host=http://127.0.0.1:${port}/session`, `-Dminecraft.api.services.host=http://127.0.0.1:${port}/services`] : []
 const ENC = encodeURIComponent
+const modcheck = require('./modcheck.cjs'); let modNotes = [] // what the mod check changed before this launch
 const mrJ = async (u) => (await net.fetch(u, { headers: { 'user-agent': 'AsteriaLauncher/1.0' } })).json()
 const instKey = (ver) => { const a = store.get('activeProfile'); return a && a.version === ver ? a.id : ver }
 const inst = (s, ver) => path.join(s.dir, 'instances', instKey(ver))
@@ -335,6 +336,9 @@ async function prepareFabric(s, ver, send, legacy = false) { // legacy = Legacy 
       if (on) { if (fs.existsSync(file(slug) + '.disabled')) fs.renameSync(file(slug) + '.disabled', file(slug))
         if (!fs.existsSync(file(slug))) { send('Mods: ' + slug, 60); await installSlug(slug, ver, md).catch(() => undefined) } }
       else if (fs.existsSync(file(slug))) fs.renameSync(file(slug), file(slug) + '.disabled') } }
+  // every mod's own requirements against the game, the loader and each other (Modrinth tags alone let Iris for 26.1.2 meet Sodium for 26.1.1)
+  send('Проверка модов', 90); const loaderVer = (/fabric-loader-([^-]+)-/.exec(id) || [])[1] || '0.20.1'
+  modNotes = await modcheck.fixMods(md, ver, loaderVer, mrJ, async (u) => Buffer.from(await (await net.fetch(u)).arrayBuffer()), (t) => send('Моды: ' + t, 92)).catch(() => [])
   return id
 }
 const trCache = new Map()
@@ -897,7 +901,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
   const md = path.join(dir, 'mods'); fs.mkdirSync(md, { recursive: true })
   for (const f of ['asteria-mod.jar', 'asteria-core.jar', 'asteria-visuals.jar']) fs.rmSync(path.join(md, f), { force: true })
   try {
-    send('Подготовка', 0, '', 0); let custom = null, core = null, vis = null; await stopPrefetch(); useAccountTextures(); await resolveApi().catch(() => {})
+    send('Подготовка', 0, '', 0); modNotes = []; let custom = null, core = null, vis = null; await stopPrefetch(); useAccountTextures(); await resolveApi().catch(() => {})
     const javaPath = await ensureJava(s, version, send); await cacheVanillaJson(s, version)
     const modern = /^(1\.(1[6-9]|2\d)|26\.)/.test(version), legacy = /^1\.(8|12)\./.test(version)
     const wantFabric = (s.loaders || {})[version] ? s.loaders[version] === 'fabric' : s.fabric !== false
@@ -911,7 +915,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
     gameAcc = acc.name; gameTogether = !!together // "play together" goes through our relay (electron/tunnel.cjs): nothing to install in the game
     { const md2 = md, e4 = path.join(md2, 'mod-e4mc.jar'), kr = path.join(md2, 'mod-krypton.jar'), key = 'krRested:' + version // e4mc (the old way) leaves; a Krypton rested for it comes back
       fs.rmSync(e4, { force: true }); fs.rmSync(e4 + '.disabled', { force: true }); if (store.get(key) && fs.existsSync(kr + '.disabled') && !fs.existsSync(kr)) fs.renameSync(kr + '.disabled', kr); store.delete(key) }
-    const warn = (wantFabric && modern && !custom ? 'Fabric не установился (нет связи с meta.fabricmc.net?) — игра запущена без модов: без звезды, визуалов и FPS-буста' : '') || togetherWarn
+    const warn = (wantFabric && modern && !custom ? 'Fabric не установился (нет связи с meta.fabricmc.net?) — игра запущена без модов: без звезды, визуалов и FPS-буста' : '') || togetherWarn || (modNotes.length ? 'Моды подобраны под ' + version + ': ' + modNotes.join('; ') : '')
     writeVisuals(dir); writePresets(dir); writeBg(dir); writeVoice(dir); writeModels(dir); const relay = await relayStart()
     const opts = { root: s.dir, overrides: { gameDirectory: dir }, authorization: acc.type === 'offline' ? offlineAuth(acc.name) : acc.auth, version: { number: version, type: 'release', ...(custom ? { custom } : {}) },
       memory: { max: s.ramMb + 'M', min: Math.min(s.ramMb, 2048) + 'M' }, customLaunchArgs: ['--width', String(winW), '--height', String(winH), ...(s.fullscreen ? ['--fullscreen'] : [])], javaPath,

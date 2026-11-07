@@ -5,7 +5,7 @@ import { VINFO } from './versionInfo'
 
 // Version families like in Lunar: one card per major version, the exact release is picked in the card.
 export const FAMILIES: { id: string; subs: string[] }[] = [
-  { id: '26', subs: ['26.1'] }, { id: '1.21', subs: ['1.21.11', '1.21.4'] }, { id: '1.20', subs: ['1.20.1'] }, { id: '1.19', subs: ['1.19.4'] }, { id: '1.18', subs: ['1.18.2'] },
+  { id: '26', subs: ['26.3', '26.2', '26.1.2', '26.1'] }, { id: '1.21', subs: ['1.21.11', '1.21.4'] }, { id: '1.20', subs: ['1.20.1'] }, { id: '1.19', subs: ['1.19.4'] }, { id: '1.18', subs: ['1.18.2'] },
   { id: '1.17', subs: ['1.17.1'] }, { id: '1.16', subs: ['1.16.5'] }, { id: '1.12', subs: ['1.12.2'] }, { id: '1.8', subs: ['1.8.9'] },
 ]
 export const ALL_VERSIONS = FAMILIES.flatMap((f) => f.subs)
