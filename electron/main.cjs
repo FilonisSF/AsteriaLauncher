@@ -1,5 +1,5 @@
 const zlib = require('zlib')
-const { app, BrowserWindow, ipcMain, shell, dialog, net, nativeImage, clipboard, screen, Notification } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, dialog, net, nativeImage, clipboard, screen, Notification, session } = require('electron')
 const { spawnSync, execFileSync } = require('child_process')
 app.commandLine.appendSwitch('proxy-bypass-list', '<local>')
 const os = require('os'), crypto = require('crypto')
@@ -776,17 +776,18 @@ let friendsLast = null
  *  The game log says the port of a world opened to the network ("Local game hosted on port [N]"): the world gets a code, friends
  *  see "asteria:<code>" and their launcher connects them through the relay. Closing the world closes it */
 let hostTunnel = null, joinTunnels = [], gameAcc = '', gameTogether = false
+const proxyOf = (u) => session.defaultSession.resolveProxy(u) // the tunnel takes the same way to the backend as the rest of the launcher (system proxy / VPN)
 function stopHostTunnel() { if (hostTunnel) { hostTunnel.close(); hostTunnel = null } if (hostNow) { hostNow = ''; try { win?.webContents.send('together', { host: '' }) } catch {} beatNow?.() } }
 async function startHostTunnel(port) { stopHostTunnel(); if (!gameAcc) return
   const token = await getToken(gameAcc).catch(() => null); await resolveApi().catch(() => {})
   hostTunnel = tunnel.host(apiBase(), gameAcc, token, port, (code) => { hostNow = 'asteria:' + code; try { win?.webContents.send('together', { host: hostNow }) } catch {} beatNow?.() },
-    (e) => { try { win?.webContents.send('together', { host: '', error: 'Не получилось открыть мир для друзей: сервер Asteria не ответил (' + (e?.message || e) + '). Проверьте интернет и снова ESC → «Открыть для сети»' }) } catch {} }) }
+    (e) => { try { win?.webContents.send('together', { host: '', error: 'Не получилось открыть мир для друзей: сервер Asteria не ответил (' + (e?.message || e) + '). Проверьте интернет и снова ESC → «Открыть для сети»' }) } catch {} }, proxyOf) }
 function togetherLog(line) {
   const p = /(?:hosted on port|локального сервера|Started serving on)\D{0,12}(\d{2,5})/i.exec(line); if (p && gameTogether && !/\bat [a-z]/.test(line)) { startHostTunnel(+p[1]); return } // only with "play together" on
   if (/Stopping server|Stopping singleplayer server/i.test(line)) stopHostTunnel() }
 /** a friend's world "asteria:<code>" becomes a local port our relay connects (kept while the game runs) */
 async function friendAddr(srv) { if (!/^asteria:/i.test(srv.host)) return srv; await resolveApi().catch(() => {})
-  const j = await tunnel.join(apiBase(), srv.host.slice(8).toUpperCase()); joinTunnels.push(j); return { host: '127.0.0.1', port: j.port } }
+  const j = await tunnel.join(apiBase(), srv.host.slice(8).toUpperCase(), proxyOf); joinTunnels.push(j); return { host: '127.0.0.1', port: j.port } }
 /** "join a friend" while the game runs: the core mod connects the running game (asteria-join.json); a different version cannot */
 ipcMain.handle('game:joinLive', async (_, { host, port, ver }) => { if (!game || !gameDirNow) return { error: 'Игра не запущена' }
   if (ver && gameVer && ver !== gameVer) return { error: `Друг играет на ${ver}, а у вас запущена ${gameVer} — закройте игру, и лаунчер запустит нужную версию` }

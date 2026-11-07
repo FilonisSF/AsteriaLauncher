@@ -4,7 +4,7 @@
 //         \--ws /tunnel/data?sid--> (one per joining player, piped to the joiner's socket) --tcp--> host's LAN port
 // Used by the launcher (electron/main.cjs) and by the backend (backend/server.cjs): only Node's own modules, a minimal WebSocket
 // (binary frames, ping / pong / close) is enough because both ends are ours.
-const crypto = require('crypto'), net = require('net'), http = require('http'), https = require('https'), { EventEmitter } = require('events')
+const crypto = require('crypto'), net = require('net'), http = require('http'), https = require('https'), tls = require('tls'), { EventEmitter } = require('events')
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 
 /** a WebSocket over a socket: emits 'message' (Buffer), 'close'; send(Buffer | string) */
@@ -35,10 +35,25 @@ function accept(req, sock, head) {
   sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + crypto.createHash('sha1').update(key + GUID).digest('base64') + '\r\n\r\n')
   const ws = new Ws(sock, false); if (head && head.length) sock.emit('data', head); return ws
 }
-/** client side: opens ws(s)://... (an https:// or http:// base works too) */
-function connect(url) { return new Promise((ok, no) => {
-  const u = new URL(url.replace(/^ws/, 'http')), key = crypto.randomBytes(16).toString('base64'), mod = u.protocol === 'https:' ? https : http
-  const req = mod.request({ hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80), path: u.pathname + u.search, headers: { Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Key': key, 'Sec-WebSocket-Version': '13', 'User-Agent': 'AsteriaLauncher' }, timeout: 20000 })
+/** a raw connection to host:port through a proxy: "PROXY h:p" (HTTP CONNECT) or "SOCKS5 h:p" / "SOCKS h:p", as Chromium names them */
+function viaProxy(proxy, host, port) { return new Promise((ok, no) => {
+  const m = /^(PROXY|HTTPS|SOCKS5?|SOCKS4)\s+\[?([^\]\s]+?)\]?:(\d+)/i.exec(String(proxy).trim()); if (!m) return no(new Error('proxy ' + proxy))
+  const s = net.connect(+m[3], m[2]); s.setTimeout(20000, () => s.destroy(new Error('proxy timeout'))); s.once('error', no)
+  if (/^PROXY|^HTTPS/i.test(m[1])) { s.once('connect', () => s.write(`CONNECT ${host}:${port} HTTP/1.1\r\nHost: ${host}:${port}\r\n\r\n`)); let b = ''
+    const on = (d) => { b += d.toString('latin1'); const e = b.indexOf('\r\n\r\n'); if (e < 0) return; s.off('data', on); if (!/^HTTP\/1\.\d 200/.test(b)) return no(new Error('proxy said ' + b.split('\r\n')[0])); s.setTimeout(0); ok(s) }
+    s.on('data', on); return }
+  // SOCKS5: no auth, connect by name
+  s.once('connect', () => s.write(Buffer.from([5, 1, 0]))); let step = 0, b = Buffer.alloc(0)
+  const on = (d) => { b = Buffer.concat([b, d])
+    if (step === 0 && b.length >= 2) { if (b[1] !== 0) return no(new Error('socks auth')); b = b.subarray(2); step = 1; const h = Buffer.from(host); s.write(Buffer.concat([Buffer.from([5, 1, 0, 3, h.length]), h, Buffer.from([port >> 8, port & 255])])) }
+    if (step === 1 && b.length >= 10) { if (b[1] !== 0) return no(new Error('socks refused ' + b[1])); s.off('data', on); s.setTimeout(0); ok(s) } }
+  s.on('data', on) }) }
+/** client side: opens ws(s)://... (an https:// or http:// base works too); proxy = how Chromium reaches it ("DIRECT", "PROXY h:p", "SOCKS5 h:p") */
+function connect(url, proxy) { return new Promise(async (ok, no) => {
+  const u = new URL(url.replace(/^ws/, 'http')), key = crypto.randomBytes(16).toString('base64'), mod = u.protocol === 'https:' ? https : http, port = +u.port || (u.protocol === 'https:' ? 443 : 80)
+  let createConnection; const p = String(proxy || 'DIRECT').split(';').map((x) => x.trim()).find((x) => x && !/^DIRECT$/i.test(x))
+  if (p) try { const raw = await viaProxy(p, u.hostname, port); createConnection = () => u.protocol === 'https:' ? tls.connect({ socket: raw, servername: u.hostname }) : raw } catch (e) { return no(e) } // the VPN / proxy the system uses: a direct line may be blocked
+  const req = mod.request({ hostname: u.hostname, port, path: u.pathname + u.search, createConnection, headers: { Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Key': key, 'Sec-WebSocket-Version': '13', 'User-Agent': 'AsteriaLauncher' }, timeout: 20000 })
   req.on('upgrade', (res, sock, head) => { if (res.headers['sec-websocket-accept'] !== crypto.createHash('sha1').update(key + GUID).digest('base64')) { sock.destroy(); return no(new Error('bad handshake')) }
     const ws = new Ws(sock, true); if (head && head.length) sock.emit('data', head); ok(ws) })
   req.on('response', (res) => { no(new Error('relay answered ' + res.statusCode)); res.resume() })
@@ -72,18 +87,18 @@ function relay(authHost) {
 // ------------------------------------------------------------------ the two launchers
 /** the host: keeps a control line to the relay, and for every friend who joins opens a data line piped to the local LAN port.
  *  onCode(code) once the relay names this world; returns { close() } */
-function host(base, name, token, lanPort, onCode, onError) {
-  let ctrl = null, closed = false
-  const start = async () => { try { ctrl = await connect(`${base}/tunnel/host?name=${encodeURIComponent(name)}&token=${encodeURIComponent(token || '')}`) } catch (e) { if (!closed) onError?.(e); return }
+function host(base, name, token, lanPort, onCode, onError, proxyOf) {
+  let ctrl = null, closed = false; const px = async () => proxyOf ? await proxyOf(base).catch(() => null) : null
+  const start = async () => { try { ctrl = await connect(`${base}/tunnel/host?name=${encodeURIComponent(name)}&token=${encodeURIComponent(token || '')}`, await px()) } catch (e) { if (!closed) onError?.(e); return }
     ctrl.on('message', async (d) => { let m; try { m = JSON.parse(String(d)) } catch { return }
       if (m.code) onCode(m.code)
-      if (m.open) { const tcp = net.connect(lanPort, '127.0.0.1'); tcp.on('error', () => {}); try { const ws = await connect(`${base}/tunnel/data?sid=${m.open}`); pipe(ws, tcp) } catch { tcp.destroy() } } })
+      if (m.open) { const tcp = net.connect(lanPort, '127.0.0.1'); tcp.on('error', () => {}); try { const ws = await connect(`${base}/tunnel/data?sid=${m.open}`, await px()); pipe(ws, tcp) } catch { tcp.destroy() } } })
     ctrl.on('close', () => { if (!closed) setTimeout(start, 3000) }) } // the relay restarted (or slept): open the world again, a new code follows
   start(); return { close() { closed = true; ctrl?.close() } }
 }
 /** the joiner: a local port the game connects to; every connection goes through the relay to the friend's world. Resolves the port */
-function join(base, code) { return new Promise((ok, no) => {
-  const srv = net.createServer(async (tcp) => { tcp.pause(); try { const ws = await connect(`${base}/tunnel/join?code=${encodeURIComponent(code)}`); pipe(ws, tcp); tcp.resume() } catch { tcp.destroy() } })
+function join(base, code, proxyOf) { return new Promise((ok, no) => {
+  const srv = net.createServer(async (tcp) => { tcp.pause(); try { const ws = await connect(`${base}/tunnel/join?code=${encodeURIComponent(code)}`, proxyOf ? await proxyOf(base).catch(() => null) : null); pipe(ws, tcp); tcp.resume() } catch { tcp.destroy() } })
   srv.on('error', no); srv.listen(0, '127.0.0.1', () => { ok({ port: srv.address().port, close: () => srv.close() }) }) }) }
 
 module.exports = { Ws, accept, connect, pipe, relay, host, join }
