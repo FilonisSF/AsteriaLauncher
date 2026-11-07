@@ -106,7 +106,7 @@ async function fetchJar(urls, file, maxAgeMs) {
 const LOG4J = '<?xml version="1.0" encoding="UTF-8"?>\n<Configuration status="WARN" packages="">\n <Appenders>\n  <Console name="SysOut" target="SYSTEM_OUT"><PatternLayout pattern="[%d{HH:mm:ss}] [%t/%level]: %msg%n"/></Console>\n  <RollingRandomAccessFile name="File" fileName="logs/latest.log" filePattern="logs/%d{yyyy-MM-dd}-%i.log.gz"><PatternLayout pattern="[%d{HH:mm:ss}] [%t/%level]: %msg%n"/><Policies><TimeBasedTriggeringPolicy/><OnStartupTriggeringPolicy/></Policies></RollingRandomAccessFile>\n </Appenders>\n <Loggers><Root level="info"><AppenderRef ref="SysOut"/><AppenderRef ref="File"/></Root></Loggers>\n</Configuration>\n'
 function fixLog4j(root) { for (const n of ['log4j2_112-116.xml', 'log4j2_17-111.xml']) { const f = path.join(root, n); try { if (!fs.existsSync(f) || fs.statSync(f).size < 50) fs.writeFileSync(f, LOG4J) } catch {} } }
 async function coreMod(version) {
-  const name = `asteria-core-${version}.jar`
+  const name = /^26\./.test(version) ? 'asteria-core-26.jar' /* one jar for every 26.x: live settings, join a friend */ : `asteria-core-${version}.jar`
   const local = [path.join(process.resourcesPath || '', 'mods', name), path.join(__dirname, '..', 'mods', 'dist', name)].find((f) => fs.existsSync(f))
   if (local) return local // a jar you built yourself wins (mods/dist/ while developing)
   const miss = store.get('modMiss', {}); if (miss[version] && Date.now() - miss[version] < 3600000 && !fs.existsSync(path.join(modCache(), name))) return null
@@ -288,6 +288,17 @@ const relayStart = () => relayPort ? Promise.resolve(relayPort) : new Promise((o
 const relayArgs = (port) => port ? [`-Dminecraft.api.session.host=http://127.0.0.1:${port}/session`, `-Dminecraft.api.services.host=http://127.0.0.1:${port}/services`] : []
 const ENC = encodeURIComponent
 const modcheck = require('./modcheck.cjs'); let modNotes = [] // what the mod check changed before this launch
+// Minecraft settings shared by all versions (electron/sharedopts.cjs); store 'optsOwn' = versions that keep their own settings
+const sharedopts = require('./sharedopts.cjs')
+const ownOpts = (ver) => !!(store.get('optsOwn', {}) || {})[ver]
+/** the shared set; the first time it is taken from the options.txt last written by any version, so nothing changes for the player */
+function sharedSet() { let sh = store.get('optsShared'); if (sh && typeof sh === 'object') return sh
+  let best = null; try { const b = path.join(settings().dir, 'instances'); for (const n of fs.readdirSync(b)) { if (!/^\d+\.\d+/.test(n)) continue; const f = path.join(b, n, 'options.txt'); try { const t = fs.statSync(f).mtimeMs; if (!best || t > best.t) best = { t, f, v: n } } catch {} } } catch {}
+  sh = best ? sharedopts.normalize(sharedopts.read(best.f), best.v) : {}; store.set('optsShared', sh); return sh }
+/** writes the shared settings into this version's options.txt (unless it keeps its own); returns what changed */
+function applyShared(dir, ver) { if (ownOpts(ver)) return {}; const patch = sharedopts.forVersion(sharedSet(), ver, sharedopts.read(path.join(dir, 'options.txt'))); if (Object.keys(patch).length) setOpts(dir, patch); return patch }
+/** settings changed by version ver (in the launcher or in the game) become the shared ones */
+function takeShared(patch, ver) { if (ownOpts(ver)) return; const n = sharedopts.normalize(patch, ver); if (Object.keys(n).length) store.set('optsShared', { ...sharedSet(), ...n }) }
 const mrJ = async (u) => (await net.fetch(u, { headers: { 'user-agent': 'AsteriaLauncher/1.0' } })).json()
 const instKey = (ver) => { const a = store.get('activeProfile'); return a && a.version === ver ? a.id : ver }
 const inst = (s, ver) => path.join(s.dir, 'instances', instKey(ver))
@@ -896,6 +907,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
   const wa = screen.getPrimaryDisplay().workAreaSize
   const winW = s.fullscreen ? Math.round(wa.width * 0.72) : Math.min(+s.width || 1280, wa.width - 40), winH = s.fullscreen ? Math.round(wa.height * 0.72) : Math.min(+s.height || 720, wa.height - 70)
   const dir = inst(s, version); fs.mkdirSync(dir, { recursive: true }); setOpts(dir, { lang: LANGMAP[lang] || 'en_us', fullscreen: !!s.fullscreen, overrideWidth: 0, overrideHeight: 0 })
+  applyShared(dir, version) // the settings shared by all versions (unless this one keeps its own)
   fixLog4j(s.dir)
   const l = new Client(); let started = false, t0 = 0, hb = null; logBuf = []; pendingOpts = {}
   const md = path.join(dir, 'mods'); fs.mkdirSync(md, { recursive: true })
@@ -937,6 +949,7 @@ ipcMain.handle('game:launch', async (_, { version, join, lang, server, world, to
       if (hb) clearInterval(hb); stopHostTunnel(); for (const j of joinTunnels.splice(0)) j.close(); gameAcc = ''; beatNow = null; game = null; gameVer = null; gameDirNow = null; hostNow = ''
       fs.rmSync(path.join(dir, 'asteria-live.flag'), { force: true })
       if (Object.keys(pendingOpts).length) { setOpts(dir, pendingOpts); pendingOpts = {} } // the game may rewrite options.txt on exit: keep what was changed in the launcher
+      try { takeShared(sharedopts.read(path.join(dir, 'options.txt')), version) } catch {} // changed in the game's own menu: the other versions get it too
       if (t0) { const el = Date.now() - t0, pv = store.get('perVer', {}); store.set('playMs', store.get('playMs', 0) + el); pv[version] = (pv[version] || 0) + el; store.set('perVer', pv); store.set('launches', store.get('launches', 0) + 1) }
       rpcIdle()
       playNow = null; try { send('', 0); win?.webContents.send('game', false); if (win?.isMinimized()) win.restore() } catch {} })
@@ -1147,10 +1160,19 @@ setInterval(() => { if (!win) return; const s = settings()
     if (old !== undefined && m !== old) try { win.webContents.send('files', { kind, dir: d, ver: path.basename(d) }) } catch {} } }, 1000)
 /** the folder the settings of this version live in: the running game's own folder when it plays this version (a profile has its own) */
 const optsDir = (ver) => game && gameDirNow && (gameVer === ver || path.resolve(gameDirNow) === path.resolve(inst(settings(), ver))) ? gameDirNow : inst(settings(), ver)
-ipcMain.handle('opts:get', (_, ver) => { const f = path.join(optsDir(ver), 'options.txt'), o = {}; try { for (const l of fs.readFileSync(f, 'utf8').split(/\r?\n/)) { const i = l.indexOf(':'); if (i > 0) o[l.slice(0, i)] = l.slice(i + 1) } } catch {} return o })
-ipcMain.handle('opts:set', (_, ver, patch) => { const d = optsDir(ver); fs.mkdirSync(d, { recursive: true }); setOpts(d, patch)
+ipcMain.handle('opts:get', (_, ver) => { const o = sharedopts.read(path.join(optsDir(ver), 'options.txt')); return ownOpts(ver) ? o : { ...o, ...sharedopts.forVersion(sharedSet(), ver, o) } }) // what the game will get at its next start
+ipcMain.handle('opts:mode', (_, ver) => ({ own: ownOpts(ver) }))
+/** own = true: this version keeps its own settings (starting from what it shows now); false: back to the shared ones */
+ipcMain.handle('opts:setMode', (_, ver, own) => { const d = optsDir(ver); fs.mkdirSync(d, { recursive: true }); const cur = sharedopts.read(path.join(d, 'options.txt'))
+  const patch = sharedopts.forVersion(sharedSet(), ver, cur), all = { ...(store.get('optsOwn', {}) || {}) }; if (own) all[ver] = true; else delete all[ver]; store.set('optsOwn', all)
+  if (Object.keys(patch).length) { setOpts(d, patch); if (!own && game && d === gameDirNow) { pendingOpts = { ...pendingOpts, ...patch }; try { fs.writeFileSync(path.join(d, 'asteria-live.flag'), String(Date.now())) } catch {} } }
+  return { own: !!own } })
+ipcMain.handle('opts:set', (_, ver, patch) => { const d = optsDir(ver); fs.mkdirSync(d, { recursive: true }); setOpts(d, patch); takeShared(patch, ver)
   const ext = !game && extGame && alive(extGame.pid) && extGame.dir && path.resolve(extGame.dir) === path.resolve(d)
   if ((game && d === gameDirNow) || ext) { if (game) pendingOpts = { ...pendingOpts, ...patch }; try { fs.writeFileSync(path.join(d, 'asteria-live.flag'), String(Date.now())) } catch {} return { live: true, running: true } }
+  if (game && gameDirNow && gameVer && !ownOpts(ver) && !ownOpts(gameVer)) { // shared settings: the running game of another version gets them too
+    const p = sharedopts.forVersion(sharedopts.normalize(patch, ver), gameVer, sharedopts.read(path.join(gameDirNow, 'options.txt')))
+    if (Object.keys(p).length) { setOpts(gameDirNow, p); pendingOpts = { ...pendingOpts, ...p }; try { fs.writeFileSync(path.join(gameDirNow, 'asteria-live.flag'), String(Date.now())) } catch {} return { live: true, running: true } } }
   return { live: false, running: !!game } })
 ipcMain.handle('game:state', async () => { if (game) return { running: true, version: gameVer }; const e = await externalGame(); return { running: !!e, version: e?.version || null, external: !!e } })
 ipcMain.handle('rpc:test', () => ({ id: !!rpcId(), connected: !!rpc?.user }))

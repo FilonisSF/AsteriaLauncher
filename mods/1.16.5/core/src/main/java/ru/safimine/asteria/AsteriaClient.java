@@ -55,6 +55,7 @@ public class AsteriaClient implements ClientModInitializer {
         int view = o.viewDistance, blend = o.biomeBlendRadius, mip = o.mipmapLevels;
         Object gfx = o.graphicsMode, ao = o.ao;
         o.load();
+        try { System.out.println("[Asteria] settings from the launcher applied: view " + o.viewDistance + ", fov " + Math.round(o.fov) + ", gui " + o.guiScale); } catch (Throwable ignored) {}
         c.getWindow().setFramerateLimit(o.maxFps);
         c.getWindow().setVsync(o.enableVsync);
         if (c.getWindow().isFullscreen() != o.fullscreen) c.getWindow().toggleFullscreen();

@@ -48,11 +48,14 @@ function Seg({ label, items, value, pick }: { label: string; items: [string | nu
 export default function GameSettings({ ver, versions, setVer, say }: { ver: string; versions: string[]; setVer: (v: string) => void; say: (m: string) => void }) {
   const [o, setO] = useState<O | null>(null), [sec, setSec] = useState('video'), [listen, setListen] = useState(''), [running, setRunning] = useState<any>({}), timers = useRef<Record<string, any>>({})
   const L = legacyKeys(ver), n = vnum(ver)
-  useEffect(() => { setO(null); window.api.optsGet(ver).then(setO); window.api.gameState().then(setRunning) }, [ver])
+  const [own, setOwn] = useState(false) // false: the settings are shared by every version; true: this version keeps its own
+  useEffect(() => { setO(null); window.api.optsGet(ver).then(setO); window.api.optsMode?.(ver).then((m: any) => setOwn(!!m?.own)); window.api.gameState().then(setRunning) }, [ver])
+  const pickMode = async (v: boolean) => { if (v === own) return; setOwn(v); await window.api.optsSetMode(ver, v); setO(await window.api.optsGet(ver))
+    say(v ? 'Теперь у ' + ver + ' свои настройки' : 'Теперь ' + ver + ' использует общие настройки') }
   useEffect(() => { const id = setInterval(() => window.api.gameState().then(setRunning), 3000); return () => clearInterval(id) }, [])
   const lastSet = useRef(0) // the game rewrote options.txt (menu, F11...): show it right away, unless we are the ones writing it
   useEffect(() => window.api.onFiles?.((d: any) => { if (d.kind === 'opts' && Date.now() - lastSet.current > 1500) window.api.optsGet(ver).then(setO) }), [ver])
-  const live = running.running && running.version === ver
+  const live = running.running && running.version === ver // (in shared mode the running game of another version gets the changes too)
   /** writes right away in the UI; to disk (and into the running game) after a short pause, so sliders stay smooth */
   const set = (patch: O) => {
     setO((x) => ({ ...(x || {}), ...patch })); lastSet.current = Date.now()
@@ -85,7 +88,11 @@ export default function GameSettings({ ver, versions, setVer, say }: { ver: stri
       <div className="font-bold text-lg flex items-center gap-2"><Icon n="sliders" s={18} />Игровые настройки</div>
       <Dropdown value={ver} set={setVer} w={240} className="!py-1.5" options={versions.map((v) => ({ value: v, label: 'Minecraft ' + v, hint: VINFO[v]?.name }))} />
       <span className="pill ml-auto" style={live ? { background: 'rgba(16,185,129,.16)', color: '#059669' } : {}}><span className="inline-block w-2 h-2 rounded-full" style={{ background: live ? '#10b981' : 'var(--muted)' }} />
-        {live ? 'Игра запущена — применяется сразу' : running.running ? 'Запущена другая версия — применится при её запуске' : 'Сохраняется автоматически'}</span></div>
+        {live ? 'Игра запущена — применяется сразу' : running.running ? (own ? 'Запущена другая версия — применится при запуске этой' : 'Игра запущена — общие настройки применяются сразу') : 'Сохраняется автоматически'}</span></div>
+    <div className="flex items-center gap-3 flex-wrap mb-4"><div className="seg flex">
+      <button className={!own ? 'on' : ''} onClick={() => pickMode(false)} title="Одни настройки для всех версий Minecraft: изменили здесь или в игре — остальные версии получат то же"><Icon n="versions" s={14} /> Общие для всех версий</button>
+      <button className={own ? 'on' : ''} onClick={() => pickMode(true)} title="Эта версия хранит свои настройки и не меняется вместе с остальными">Только для {ver}</button></div>
+      <span className="muted text-xs">{own ? 'Изменения касаются только этой версии.' : 'Изменения сразу получают все версии, где это возможно (клавиши, графика, звук…).'}</span></div>
     <div className="seg flex mb-5">{SECS.map(([k, l, ic]) => <button key={k} className={'flex-1 flex items-center justify-center gap-2 ' + (sec === k ? 'on' : '')} onClick={() => setSec(k)}><Icon n={ic} s={15} />{l}</button>)}</div>
 
     {sec === 'video' && <div className="grid grid-cols-2 gap-x-8 gap-y-5">
